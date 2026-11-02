@@ -1,6 +1,6 @@
 # Release Checklist
 
-Status of WindowCraft 0.1.0 as of 2026-11-02. Nothing has been published yet.
+Status of WindowCraft 0.1.0 as of 2026-11-02. It is published as a pre-release.
 
 Recommendation: publish 0.1.0 as a GitHub pre-release. Do not mark it stable until
 section 4 is done, because the system-changing features have never run outside a test sandbox.
@@ -12,7 +12,7 @@ section 4 is done, because the system-changing features have never run outside a
 - [x] Use the GitHub `noreply` commit email, which keeps a personal one private.
 - [x] Create the repository at <https://github.com/ycangignacy/WindowCraft>.
 - [x] Run `git init` on branch `main` and make the first commit. CI only triggers on `main`.
-- [ ] Push `main` to GitHub.
+- [x] Push `main` to GitHub.
 - [x] Check that the name WindowCraft is free on GitHub, winget and in the Microsoft Store.
 - [x] Set the repository URL in `Cargo.toml`, `packaging/build.ps1`, the README and the
       installers. It leads nowhere until the repository exists.
@@ -44,7 +44,7 @@ The workflows have never run. Expect fixes on the first run.
       there, and the `wimgapi` test ran its capture, export and split for the first time.
 - [ ] Confirm no test changes the runner when it runs elevated. Every local run so far was
       unelevated.
-- [ ] Run `release.yml` with tag `v0.1.0`. Confirm clang is on PATH for ARM64, that both
+- [x] Run `release.yml` with tag `v0.1.0`. Confirm clang is on PATH for ARM64, that both
       architectures build, and that the release gets all 6 files plus `SHA256SUMS.txt` and `THIRD-PARTY-NOTICES.md`.
 - [x] Pin the toolchain with `rust-toolchain.toml`, because `dtolnay/rust-toolchain@stable` moves.
 - [x] Pin GitHub Actions to commit hashes. They use moving tags such as `@v4`.
