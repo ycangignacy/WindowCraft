@@ -167,7 +167,7 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 378 pass, 2 network tests are opt-in and pass, clippy clean with `-D warnings` |
+| Unit and integration tests | 379 pass, 2 network tests are opt-in and pass, clippy clean with `-D warnings` |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |
 | Install and uninstall, x64 | Final packages: 2 rounds each of MSI and `setup.exe`, 66 of 66 checks, nothing left behind, including data folder, Package Cache, `%TEMP%`, PATH, services and tasks. An install in real use also uninstalled cleanly. |

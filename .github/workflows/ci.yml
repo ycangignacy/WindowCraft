@@ -23,4 +23,4 @@ jobs:
       - run: cargo check --workspace --all-targets --locked
       - run: cargo check --target aarch64-pc-windows-msvc --locked -p windowcraft-app -p windowcraft-cli
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+      - run: cargo test --workspace --locked --no-fail-fast

@@ -59,6 +59,10 @@ impl Channel {
             }
             MotionMode::Reduced => {
                 let from = self.value();
+                // A fade to where the value already is would only burn frames.
+                if self.is_settled() && from == target {
+                    return;
+                }
                 self.spring.release(from, 0.0, target, SpringConfig::UI);
                 self.fade = Some(Fade { from, elapsed: 0.0 });
             }
@@ -200,6 +204,14 @@ mod tests {
         }
         assert_eq!(timeline.channels[0].value(), 1.0);
         assert!(now <= 0.23, "fade took {now}s");
+    }
+
+    #[test]
+    fn reduced_motion_ignores_a_target_it_already_holds() {
+        let mut timeline = Timeline::new([1.0]);
+        timeline.mode = MotionMode::Reduced;
+        timeline.channels[0].animate_to(1.0, MotionMode::Reduced);
+        assert!(!timeline.needs_frame());
     }
 
     #[test]
