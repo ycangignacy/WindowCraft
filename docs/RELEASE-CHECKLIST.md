@@ -13,7 +13,7 @@ written to be copied into the release notes.
 - [x] Add `.mcp.json` and `tools/` to `.gitignore`. They are local development tooling, and
       `.mcp.json` contains a local path.
 - [x] Use the GitHub `noreply` commit email, which keeps a personal one private.
-- [ ] Create the repository at <https://github.com/ycangignacy/WindowCraft>.
+- [x] Create the repository at <https://github.com/ycangignacy/WindowCraft>.
 - [x] Run `git init` on branch `main` and make the first commit. CI only triggers on `main`.
 - [ ] Push `main` to GitHub.
 - [ ] Check that the name WindowCraft is free on GitHub, winget and in the Microsoft Store.
