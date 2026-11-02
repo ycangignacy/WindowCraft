@@ -40,9 +40,8 @@ section 4 is done, because the system-changing features have never run outside a
 
 The workflows have never run. Expect fixes on the first run.
 
-- [ ] Run `ci.yml` on GitHub. GitHub runners are elevated Windows Server machines, so tests may
-      behave differently there, in particular `real_machine_probe.rs` and the tests that read
-      AppX, Task Scheduler and power plans.
+- [x] Run `ci.yml` on GitHub. The runners are elevated Windows Server 2025 machines. All tests pass
+      there, and the `wimgapi` test ran its capture, export and split for the first time.
 - [ ] Confirm no test changes the runner when it runs elevated. Every local run so far was
       unelevated.
 - [ ] Run `release.yml` with tag `v0.1.0`. Confirm clang is on PATH for ARM64, that both
@@ -168,6 +167,7 @@ These do not need repeating unless the code changes.
 | Area | Result |
 | :--- | :--- |
 | Unit and integration tests | 379 pass, 2 network tests are opt-in and pass, clippy clean with `-D warnings` |
+| GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |
 | Install and uninstall, x64 | Final packages: 2 rounds each of MSI and `setup.exe`, 66 of 66 checks, nothing left behind, including data folder, Package Cache, `%TEMP%`, PATH, services and tasks. An install in real use also uninstalled cleanly. |
