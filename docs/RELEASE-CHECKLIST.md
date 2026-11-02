@@ -70,12 +70,12 @@ The workflows have never run. Expect fixes on the first run.
 
 ### Installers
 
-- [ ] **Run `packaging/verify-install.ps1` on the final packages, with no WindowCraft installed.**
-      The packages changed after the last full run: they gained `windowcraft-cli.exe` and
-      `THIRD-PARTY-NOTICES.md`.
+- [x] Run `packaging/verify-install.ps1` on the final packages, with no WindowCraft installed.
 - [ ] **Upgrade from one version to the next, with both MSI and `setup.exe`.** Time Machine data
       must survive. This has never been tested, and the failure mode is lost history.
 - [ ] Interactive `setup.exe`: logo, license page, install, launch, uninstall from Settings.
+- [ ] First launch from the Start menu. The shortcut is advertised, so time it: the event log showed
+      two unexplained Windows Installer "installed" events 15 seconds apart during a manual test.
 - [ ] Interactive MSI: banner and panel images, license page, the "Launch WindowCraft" checkbox.
 - [ ] Settings shows exactly one WindowCraft entry after `setup.exe`.
 - [ ] Uninstall with two user profiles: data must go from both. Only one was tested.
@@ -173,7 +173,7 @@ These do not need repeating unless the code changes.
 | Unit and integration tests | 378 pass, 2 network tests are opt-in and pass, clippy clean with `-D warnings` |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |
-| Install and uninstall, x64 | 3 rounds each of MSI and `setup.exe`, nothing left behind, including data folder, Package Cache, `%TEMP%`, PATH, services and tasks. Run on the build before `windowcraft-cli.exe` was added. |
+| Install and uninstall, x64 | Final packages: 2 rounds each of MSI and `setup.exe`, 66 of 66 checks, nothing left behind, including data folder, Package Cache, `%TEMP%`, PATH, services and tasks. An install in real use also uninstalled cleanly. |
 | Background footprint | No service, task, Run entry, registry key, child process or startup network traffic |
 | Memory and startup | 26 MB against a 30 MB budget. Titled window in 62 to 89 ms over 6 runs, against a 50 ms budget, so startup misses it. |
 | Autoruns | No Windows binary is reported as unsigned |
