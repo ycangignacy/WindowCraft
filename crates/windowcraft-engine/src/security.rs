@@ -125,9 +125,17 @@ pub fn apply_sddl(path: &Path, sddl: &str) -> Result<()> {
     unsafe { GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted) }
         .map_err(|error| EngineError::windows("GetSecurityDescriptorDacl", sddl, &error))?;
 
-    let protected = sddl.split('(').next().is_some_and(|flags| flags.contains('P'));
-    let flag = if protected { PROTECTED_DACL_SECURITY_INFORMATION } else { UNPROTECTED_DACL_SECURITY_INFORMATION };
-    write_dacl(path, dacl, DACL_SECURITY_INFORMATION | flag)
+    // Unprotecting also sets the auto-inherited flag, so only a DACL that had
+    // it asks for that. A restore must reproduce what it read.
+    let flags = sddl.split('(').next().unwrap_or_default();
+    let inheritance = if flags.contains('P') {
+        PROTECTED_DACL_SECURITY_INFORMATION
+    } else if flags.contains("AI") {
+        UNPROTECTED_DACL_SECURITY_INFORMATION
+    } else {
+        OBJECT_SECURITY_INFORMATION(0)
+    };
+    write_dacl(path, dacl, DACL_SECURITY_INFORMATION | inheritance)
 }
 
 /// Adds an explicit DENY entry.

@@ -251,7 +251,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("content");
         std::fs::create_dir(&source).unwrap();
-        std::fs::write(source.join("setup.exe"), vec![7u8; 256 * 1024]).unwrap();
+        // Incompressible, so the image stays larger than one split part.
+        let mut state = 0x2545_F491_u32;
+        let noise: Vec<u8> = (0..8 * 1024 * 1024)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 24) as u8
+            })
+            .collect();
+        std::fs::write(source.join("setup.exe"), noise).unwrap();
 
         let original = dir.path().join("install.wim");
         {
@@ -276,8 +284,9 @@ mod tests {
         assert_eq!(WimFile::open(&exported).unwrap().image_count().unwrap(), 1);
 
         let parts = dir.path().join("install.swm");
-        wim.split(&parts, 64 * 1024 * 1024).unwrap();
+        wim.split(&parts, 2 * 1024 * 1024).unwrap();
         assert!(parts.exists());
+        assert!(dir.path().join("install2.swm").exists(), "the image must span several parts");
     }
 
     const SAMPLE: &str = "<IMAGE INDEX=\"6\"><NAME>Windows 11 Pro</NAME><WINDOWS><ARCH>9</ARCH>\
