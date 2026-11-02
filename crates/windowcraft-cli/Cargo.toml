@@ -1,0 +1,15 @@
+# Made by ycangignacy
+[package]
+name = "windowcraft-cli"
+description = "Console launcher for the WindowCraft command line"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "windowcraft-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true

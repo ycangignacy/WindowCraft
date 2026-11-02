@@ -1,0 +1,61 @@
+{
+  "minimal": [
+    "consumer-features",
+    "wpbt",
+    "services",
+    "telemetry"
+  ],
+  "standard": [
+    "activity",
+    "consumer-features",
+    "disable-explorer-auto-discovery",
+    "wpbt",
+    "location",
+    "services",
+    "telemetry",
+    "delivery-optimization",
+    "disk-cleanup",
+    "delete-temp-files",
+    "end-task-on-taskbar",
+    "restore-point"
+  ],
+  "advanced": [
+    "restore-point",
+    "activity",
+    "consumer-features",
+    "disable-explorer-auto-discovery",
+    "wpbt",
+    "location",
+    "services",
+    "telemetry",
+    "delivery-optimization",
+    "delete-temp-files",
+    "end-task-on-taskbar",
+    "disable-store-search",
+    "revert-start-menu",
+    "widget",
+    "remove-one-drive",
+    "windows-ai",
+    "right-click-menu"
+  ],
+  "appx_default": [
+    "microsoft-windows-feedback-hub",
+    "microsoft-get-help",
+    "microsoft-microsoft-office-hub",
+    "microsoft-windows-calculator",
+    "clipchamp-clipchamp",
+    "microsoft-windows-alarms",
+    "microsoft-corporation-ii-quick-assist",
+    "microsoft-windows-sound-recorder",
+    "microsoft-microsoft-sticky-notes",
+    "microsoft-todos",
+    "microsoft-microsoft-solitaire-collection",
+    "microsoft-power-automate-desktop",
+    "microsoft-windows-dev-home",
+    "microsoft-bing-weather",
+    "microsoft-start-experiences-app",
+    "microsoft-bing-news",
+    "microsoft-copilot",
+    "microsoft-bing-search"
+  ]
+}

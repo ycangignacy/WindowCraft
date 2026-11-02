@@ -1,0 +1,11 @@
+# Made by ycangignacy
+[package]
+name = "windowcraft-physics"
+description = "Spring solver, velocity tracking, momentum projection and pointer gestures"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true

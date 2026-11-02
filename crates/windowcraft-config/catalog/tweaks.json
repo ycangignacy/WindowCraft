@@ -1,0 +1,2031 @@
+[
+  {
+    "id": "activity",
+    "legacy_id": "WPFTweaksActivity",
+    "name": "Activity History - Disable",
+    "description": "Stops Windows from publishing or uploading user activities while preserving clipboard history.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "name": "EnableActivityFeed",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "name": "PublishUserActivities",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "name": "UploadUserActivities",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "hiber",
+    "legacy_id": "WPFTweaksHiber",
+    "name": "Hibernation - Disable",
+    "description": "Turns hibernation off and removes hiberfil.sys, which frees disk space equal to a share of installed RAM.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\System\\CurrentControlSet\\Control\\Session Manager\\Power",
+        "name": "HibernateEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FlyoutMenuSettings",
+        "name": "ShowHibernateOption",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      }
+    ],
+    "apply": [
+      {
+        "op": "hibernate",
+        "enabled": false
+      }
+    ],
+    "undo": [
+      {
+        "op": "hibernate",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "widget",
+    "legacy_id": "WPFTweaksWidget",
+    "name": "Widgets - Remove",
+    "description": "Removes the Widgets board and its runtime packages from the taskbar.",
+    "group": "essential",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "kill_processes",
+        "pattern": "*Widget*"
+      },
+      {
+        "op": "remove_appx",
+        "pattern": "Microsoft.WidgetsPlatformRuntime"
+      },
+      {
+        "op": "remove_appx",
+        "pattern": "MicrosoftWindows.Client.WebExperience"
+      },
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "winget_install",
+        "id": "9MSSGKG348SP"
+      }
+    ]
+  },
+  {
+    "id": "revert-start-menu",
+    "legacy_id": "WPFTweaksRevertStartMenu",
+    "name": "Start Menu Previous Layout - Enable",
+    "description": "Bring back the old Start Menu layout from before the gradual rollout of the new one in 25H2. On newer versions of Windows !!THIS TWEAK WILL NOT WORK!!",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\ControlSet001\\Control\\FeatureManagement\\Overrides\\8\\3036241548",
+        "name": "EnabledState",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "apply": [
+      {
+        "op": "require_kb_absent",
+        "kb": "KB5089573"
+      }
+    ],
+    "notice": "Has no effect on builds that include KB5089573 or later."
+  },
+  {
+    "id": "disable-store-search",
+    "legacy_id": "WPFTweaksDisableStoreSearch",
+    "name": "Microsoft Store Recommended Search Results - Disable",
+    "description": "Will not display recommended Microsoft Store apps when searching for apps in the Start menu.",
+    "group": "essential",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "acl_deny",
+        "path": "%LOCALAPPDATA%\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db",
+        "sid": "S-1-1-0",
+        "rights": "full"
+      }
+    ],
+    "undo": [
+      {
+        "op": "acl_clear_deny",
+        "path": "%LOCALAPPDATA%\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db",
+        "sid": "S-1-1-0"
+      }
+    ]
+  },
+  {
+    "id": "location",
+    "legacy_id": "WPFTweaksLocation",
+    "name": "Location Tracking - Disable",
+    "description": "Disables Location Tracking.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location",
+        "name": "Value",
+        "kind": "String",
+        "value": "Deny",
+        "original": "Allow"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Overrides\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}",
+        "name": "SensorPermissionState",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKLM\\SYSTEM\\Maps",
+        "name": "AutoUpdateEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      }
+    ],
+    "services": [
+      {
+        "name": "lfsvc",
+        "startup": "Disabled",
+        "original": "Manual",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "services",
+    "legacy_id": "WPFTweaksServices",
+    "name": "Services - Set to Manual",
+    "description": "Sets some services to Manual startup.",
+    "group": "essential",
+    "kind": "check",
+    "services": [
+      {
+        "name": "CscService",
+        "startup": "Disabled",
+        "original": "Manual",
+        "optional": false
+      },
+      {
+        "name": "DiagTrack",
+        "startup": "Disabled",
+        "original": "Automatic",
+        "optional": false
+      },
+      {
+        "name": "MapsBroker",
+        "startup": "Manual",
+        "original": "Automatic",
+        "optional": false
+      },
+      {
+        "name": "StorSvc",
+        "startup": "Manual",
+        "original": "Automatic",
+        "optional": false
+      },
+      {
+        "name": "SharedAccess",
+        "startup": "Disabled",
+        "original": "Automatic",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "svc-host-splitting",
+    "legacy_id": "WPFTweaksSvcHostSplitting",
+    "name": "svchost.exe Splitting - Disable",
+    "description": "Disables service-host splitting to reduce the number of svchost.exe processes and modestly lower memory overhead. Recommended for low-performance systems with 12 GB of RAM or less. Can interfere with Xbox services. Restart Windows after changing this setting.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control",
+        "name": "SvcHostSplitThresholdInKB",
+        "kind": "DWord",
+        "value": "{ram_kb}",
+        "original": "3670016"
+      }
+    ],
+    "notice": "Restart Windows after changing this setting."
+  },
+  {
+    "id": "brave-debloat",
+    "legacy_id": "WPFTweaksBraveDebloat",
+    "name": "Brave Browser - Debloat",
+    "description": "Disables various annoyances like Brave Rewards, Leo AI, Crypto Wallet and VPN.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveRewardsDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveWalletDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveVPNDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveAIChatEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveStatsPingEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveNewsDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveTalkDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "TorDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "BraveP3AEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "UrlKeyedAnonymizedDataCollectionEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "SafeBrowsingExtendedReportingEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
+        "name": "MetricsReportingEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "disable-warning-for-unsigned-rdp",
+    "legacy_id": "WPFTweaksDisableWarningForUnsignedRdp",
+    "name": "RDP Unsigned File Warnings - Disable",
+    "description": "Disables warnings shown when launching unsigned RDP files introduced with the latest Windows 10 and 11 updates.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services\\Client",
+        "name": "RedirectionWarningDialogVersion",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\SOFTWARE\\Microsoft\\Terminal Server Client",
+        "name": "RdpLaunchConsentAccepted",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "edge-debloat",
+    "legacy_id": "WPFTweaksEdgeDebloat",
+    "name": "Microsoft Edge - Debloat",
+    "description": "Disables various telemetry options, popups, and other annoyances in Edge.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+        "name": "CreateDesktopShortcutDefault",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "PersonalizationReportingEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallBlocklist",
+        "name": "1",
+        "kind": "String",
+        "value": "ofefcgjbeghpigppfmkologfjadafddi",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "ShowRecommendationsEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "HideFirstRunExperience",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "UserFeedbackAllowed",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "ConfigureDoNotTrack",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "AlternateErrorPagesEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "EdgeCollectionsEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "EdgeShoppingAssistantEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "MicrosoftEdgeInsiderPromotionEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "ShowMicrosoftRewards",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "WebWidgetAllowed",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "DiagnosticData",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "EdgeAssetDeliveryServiceEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "WalletDonationEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "name": "DefaultBrowserSettingsCampaignEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "consumer-features",
+    "legacy_id": "WPFTweaksConsumerFeatures",
+    "name": "ConsumerFeatures - Disable",
+    "description": "Stops promoted app installs and reduces app suggestions from Microsoft Store content.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+        "name": "DisableWindowsConsumerFeatures",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "telemetry",
+    "legacy_id": "WPFTweaksTelemetry",
+    "name": "Telemetry - Disable",
+    "description": "Disables Microsoft Telemetry.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
+        "name": "Enabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy",
+        "name": "TailoredExperiencesWithDiagnosticDataEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Speech_OneCore\\Settings\\OnlineSpeechPrivacy",
+        "name": "HasAccepted",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Input\\TIPC",
+        "name": "Enabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\InputPersonalization",
+        "name": "RestrictImplicitInkCollection",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\InputPersonalization",
+        "name": "RestrictImplicitTextCollection",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\InputPersonalization\\TrainedDataStore",
+        "name": "HarvestContacts",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Personalization\\Settings",
+        "name": "AcceptedPrivacyPolicy",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection",
+        "name": "AllowTelemetry",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "Start_TrackProgs",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "name": "PublishUserActivities",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Siuf\\Rules",
+        "name": "NumberOfSIUFInPeriod",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Siuf\\Rules",
+        "name": "PeriodInNanoSeconds",
+        "kind": "DWord",
+        "value": "<RemoveEntry>",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Spynet",
+        "name": "SubmitSamplesConsent",
+        "kind": "DWord",
+        "value": "2",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+        "name": "POWERSHELL_TELEMETRY_OPTOUT",
+        "kind": "String",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "services": [
+      {
+        "name": "diagtrack",
+        "startup": "Disabled",
+        "original": "Automatic",
+        "optional": false
+      },
+      {
+        "name": "WerSvc",
+        "startup": "Disabled",
+        "original": "Manual",
+        "optional": false
+      }
+    ],
+    "apply": [
+      {
+        "op": "broadcast_environment"
+      }
+    ],
+    "undo": [
+      {
+        "op": "broadcast_environment"
+      }
+    ]
+  },
+  {
+    "id": "delivery-optimization",
+    "legacy_id": "WPFTweaksDeliveryOptimization",
+    "name": "Delivery Optimization - Disable",
+    "description": "Stops Windows from using your bandwidth to upload updates to other PCs on the internet or local network.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+        "name": "DODownloadMode",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "remove-edge",
+    "legacy_id": "WPFTweaksRemoveEdge",
+    "name": "Microsoft Edge - Remove",
+    "description": "Uninstalls Microsoft Edge by creating dummy MicrosoftEdge.exe file in the legacy Edge folder. This tricks Windows into unlocking the official Edge uninstaller allowing for a system-level removal.",
+    "group": "advanced",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "remove_edge"
+      }
+    ],
+    "undo": [
+      {
+        "op": "winget_install",
+        "id": "Microsoft.Edge"
+      }
+    ]
+  },
+  {
+    "id": "disable-bit-locker",
+    "legacy_id": "WPFTweaksDisableBitLocker",
+    "name": "BitLocker - Disable",
+    "description": "Disables BitLocker.",
+    "group": "essential",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "bitlocker_decrypt"
+      }
+    ],
+    "notice": "Decryption runs in the background. Re-enable from Settings, Privacy & security, Device encryption.",
+    "irreversible": true
+  },
+  {
+    "id": "utc",
+    "legacy_id": "WPFTweaksUTC",
+    "name": "Date & Time - Set Time to UTC",
+    "description": "Essential for computers that are dual booting. Fixes the time sync with Linux systems.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation",
+        "name": "RealTimeIsUniversal",
+        "kind": "QWord",
+        "value": "1",
+        "original": "0"
+      }
+    ]
+  },
+  {
+    "id": "remove-one-drive",
+    "legacy_id": "WPFTweaksRemoveOneDrive",
+    "name": "Microsoft OneDrive - Remove",
+    "description": "Protects the OneDrive folder with a temporary deny rule, runs the OneDrive uninstaller, then restores the original permissions.",
+    "group": "advanced",
+    "kind": "check",
+    "services": [
+      {
+        "name": "OneSyncSvc",
+        "startup": "Disabled",
+        "original": "Automatic",
+        "optional": true
+      }
+    ],
+    "apply": [
+      {
+        "op": "remove_onedrive"
+      }
+    ],
+    "undo": [
+      {
+        "op": "winget_install",
+        "id": "Microsoft.OneDrive"
+      }
+    ]
+  },
+  {
+    "id": "remove-home-and-gallery",
+    "legacy_id": "WPFTweaksRemoveHomeAndGallery",
+    "name": "File Explorer Home and Gallery - Disable",
+    "description": "Removes the Home and Gallery from Explorer and sets This PC as default.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+        "name": "System.IsPinnedToNameSpaceTree",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+        "name": "System.IsPinnedToNameSpaceTree",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "LaunchTo",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "display",
+    "legacy_id": "WPFTweaksDisplay",
+    "name": "Visual Effects - Set to Best Performance",
+    "description": "Sets the system preferences to performance. You can do this manually with sysdm.cpl as well.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Control Panel\\Desktop",
+        "name": "DragFullWindows",
+        "kind": "String",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Control Panel\\Desktop",
+        "name": "MenuShowDelay",
+        "kind": "String",
+        "value": "200",
+        "original": "400"
+      },
+      {
+        "path": "HKCU\\Control Panel\\Desktop\\WindowMetrics",
+        "name": "MinAnimate",
+        "kind": "String",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Control Panel\\Keyboard",
+        "name": "KeyboardDelay",
+        "kind": "String",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "ListviewAlphaSelect",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "ListviewShadow",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "TaskbarAnimations",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
+        "name": "VisualFXSetting",
+        "kind": "DWord",
+        "value": "3",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\DWM",
+        "name": "EnableAeroPeek",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "TaskbarMn",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKCU\\Control Panel\\Desktop",
+        "name": "UserPreferencesMask",
+        "kind": "Binary",
+        "value": "9012038010000000",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "reserved-storage",
+    "legacy_id": "WPFTweaksReservedStorage",
+    "name": "Disable Reserved Storage",
+    "description": "Disables Windows Reserved Storage (7-10 GB held for updates/temp files). Recommended only on small drives. Re-enable before major Windows feature updates to avoid installation failures.",
+    "group": "advanced",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "reserved_storage",
+        "enabled": false
+      }
+    ],
+    "undo": [
+      {
+        "op": "reserved_storage",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "restore-point",
+    "legacy_id": "WPFTweaksRestorePoint",
+    "name": "Restore Point - Create",
+    "description": "Creates a System Restore point before other changes are applied.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore",
+        "name": "SystemRestorePointCreationFrequency",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1440"
+      }
+    ],
+    "apply": [
+      {
+        "op": "restore_point"
+      }
+    ]
+  },
+  {
+    "id": "end-task-on-taskbar",
+    "legacy_id": "WPFTweaksEndTaskOnTaskbar",
+    "name": "End Task With Right Click - Enable",
+    "description": "Enables option to end task when right-clicking a program in the taskbar.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+        "name": "TaskbarEndTask",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "storage",
+    "legacy_id": "WPFTweaksStorage",
+    "name": "Storage Sense - Disable",
+    "description": "Storage Sense deletes temp files automatically.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy",
+        "name": "01",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      }
+    ]
+  },
+  {
+    "id": "windows-ai",
+    "legacy_id": "WPFTweaksWindowsAI",
+    "name": "Windows AI - Disable And Remove",
+    "description": "Removes and disables all AI features/packages",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+        "name": "SettingsPageVisibility",
+        "kind": "String",
+        "value": "hide:aicomponents",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\WindowsNotepad",
+        "name": "DisableAIFeatures",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "services": [
+      {
+        "name": "WSAIFabricSvc",
+        "startup": "Disabled",
+        "original": "Manual",
+        "optional": true
+      }
+    ],
+    "apply": [
+      {
+        "op": "mark_appx_end_of_life",
+        "pattern": "MicrosoftWindows.Client.CoreAI"
+      },
+      {
+        "op": "remove_appx",
+        "pattern": "*Copilot*"
+      },
+      {
+        "op": "remove_appx",
+        "pattern": "Microsoft.MicrosoftOfficeHub"
+      },
+      {
+        "op": "remove_appx",
+        "pattern": "MicrosoftWindows.Client.CoreAI"
+      },
+      {
+        "op": "disable_feature",
+        "name": "Recall"
+      }
+    ],
+    "irreversible": true
+  },
+  {
+    "id": "wpbt",
+    "legacy_id": "WPFTweaksWPBT",
+    "name": "Windows Platform Binary Table (WPBT) - Disable",
+    "description": "If enabled, WPBT allows your computer vendor to execute programs at boot time, such as anti-theft software, software drivers, as well as force install software without user consent. Poses potential security risk.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager",
+        "name": "DisableWpbtExecution",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "prevent-device-metadata-from-network",
+    "legacy_id": "WPFTweaksPreventDeviceMetadataFromNetwork",
+    "name": "Prevent Device Companion Apps",
+    "description": "Prevents additional software from being installed when plugging in devices (e.g. Ads when plugging in a monitor). Poses potential security risk.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata",
+        "name": "PreventDeviceMetadataFromNetwork",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "razer-block",
+    "legacy_id": "WPFTweaksRazerBlock",
+    "name": "Razer Software Auto-Install - Disable",
+    "description": "Blocks Razer software auto-installation. The hardware keeps working without it.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
+        "name": "SearchOrderConfig",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Installer",
+        "name": "DisableCoInstallers",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0"
+      }
+    ],
+    "apply": [
+      {
+        "op": "block_directory",
+        "path": "%SystemRoot%\\Installer\\Razer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "unblock_directory",
+        "path": "%SystemRoot%\\Installer\\Razer"
+      }
+    ]
+  },
+  {
+    "id": "logi-block",
+    "legacy_id": "WPFTweaksLogiBlock",
+    "name": "Logitech Download Assistant Auto-Install - Disable",
+    "description": "Blocks the Logi Download Assistant that Windows Update keeps reinstalling with Logitech device drivers. Logitech hardware keeps working without it.",
+    "group": "advanced",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "kill_processes",
+        "pattern": "logi_download_assistant"
+      },
+      {
+        "op": "block_directory",
+        "path": "%ProgramW6432%\\LogiDownloadAssistant"
+      }
+    ],
+    "undo": [
+      {
+        "op": "unblock_directory",
+        "path": "%ProgramW6432%\\LogiDownloadAssistant"
+      }
+    ]
+  },
+  {
+    "id": "disable-notifications",
+    "legacy_id": "WPFTweaksDisableNotifications",
+    "name": "System Tray Notifications & Calendar - Disable",
+    "description": "Disables all Notifications INCLUDING Calendar.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+        "name": "DisableNotificationCenter",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
+        "name": "ToastEnabled",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1"
+      }
+    ]
+  },
+  {
+    "id": "block-adobe-net",
+    "legacy_id": "WPFTweaksBlockAdobeNet",
+    "name": "Adobe URL Block List - Enable",
+    "description": "Reduces user interruptions by selectively blocking connections to Adobe's activation and telemetry servers. Credit: Ruddernation-Designs",
+    "group": "advanced",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "hosts_block",
+        "section": "ADOBE",
+        "url": "https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts"
+      }
+    ],
+    "undo": [
+      {
+        "op": "hosts_unblock",
+        "section": "ADOBE"
+      }
+    ]
+  },
+  {
+    "id": "right-click-menu",
+    "legacy_id": "WPFTweaksRightClickMenu",
+    "name": "Right-Click Menu Previous Layout - Enable",
+    "description": "Restores the classic context menu when right-clicking in File Explorer, replacing the simplified Windows 11 version.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32",
+        "name": "",
+        "kind": "String",
+        "value": "",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "apply": [
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "reg_delete_tree",
+        "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
+      },
+      {
+        "op": "restart_explorer"
+      }
+    ]
+  },
+  {
+    "id": "disk-cleanup",
+    "legacy_id": "WPFTweaksDiskCleanup",
+    "name": "Disk Cleanup - Run",
+    "description": "Runs Disk Cleanup on Drive C: and removes old Windows Updates.",
+    "group": "essential",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "disk_cleanup"
+      }
+    ]
+  },
+  {
+    "id": "delete-temp-files",
+    "legacy_id": "WPFTweaksDeleteTempFiles",
+    "name": "Temporary Files - Remove",
+    "description": "Erases TEMP Folders.",
+    "group": "essential",
+    "kind": "check",
+    "apply": [
+      {
+        "op": "temp_cleanup"
+      }
+    ]
+  },
+  {
+    "id": "ipv46",
+    "legacy_id": "WPFTweaksIPv46",
+    "name": "IPv6 - Set IPv4 as Preferred",
+    "description": "Setting the IPv4 preference can have latency and security benefits on private networks where IPv6 is not configured.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "name": "DisabledComponents",
+        "kind": "DWord",
+        "value": "32",
+        "original": "0"
+      }
+    ],
+    "exclusive": "ipv6"
+  },
+  {
+    "id": "teredo",
+    "legacy_id": "WPFTweaksTeredo",
+    "name": "Teredo - Disable",
+    "description": "Teredo network tunneling is an IPv6 feature that can cause additional latency, but may cause problems with some games.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "name": "DisabledComponents",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0"
+      }
+    ],
+    "apply": [
+      {
+        "op": "teredo",
+        "enabled": false
+      }
+    ],
+    "undo": [
+      {
+        "op": "teredo",
+        "enabled": true
+      }
+    ],
+    "exclusive": "ipv6"
+  },
+  {
+    "id": "disable-ipv6",
+    "legacy_id": "WPFTweaksDisableIPv6",
+    "name": "IPv6 - Disable",
+    "description": "Disables IPv6.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "name": "DisabledComponents",
+        "kind": "DWord",
+        "value": "255",
+        "original": "0"
+      }
+    ],
+    "apply": [
+      {
+        "op": "ipv6_binding",
+        "enabled": false
+      }
+    ],
+    "undo": [
+      {
+        "op": "ipv6_binding",
+        "enabled": true
+      }
+    ],
+    "notice": "Restart Windows after changing this setting.",
+    "exclusive": "ipv6"
+  },
+  {
+    "id": "disable-bgapps",
+    "legacy_id": "WPFTweaksDisableBGapps",
+    "name": "Background Apps - Disable",
+    "description": "Disables all Microsoft Store apps from running in the background, which has to be done individually since Windows 11.",
+    "group": "advanced",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications",
+        "name": "GlobalUserDisabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0"
+      }
+    ]
+  },
+  {
+    "id": "disable-explorer-auto-discovery",
+    "legacy_id": "WPFTweaksDisableExplorerAutoDiscovery",
+    "name": "File Explorer Automatic Folder Discovery - Disable",
+    "description": "Windows Explorer automatically tries to guess the type of the folder based on its contents, slowing down the browsing experience. WARNING! Will disable File Explorer grouping.",
+    "group": "essential",
+    "kind": "check",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell",
+        "name": "FolderType",
+        "kind": "String",
+        "value": "NotSpecified",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "prepare": [
+      {
+        "op": "reg_delete_tree",
+        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags"
+      },
+      {
+        "op": "reg_delete_tree",
+        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU"
+      }
+    ],
+    "undo": [
+      {
+        "op": "reg_delete_tree",
+        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags"
+      },
+      {
+        "op": "reg_delete_tree",
+        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU"
+      }
+    ],
+    "notice": "Sign out or restart for the change to take effect."
+  },
+  {
+    "id": "detailed-bso-d",
+    "legacy_id": "WPFToggleDetailedBSoD",
+    "name": "BSoD Verbose Mode",
+    "description": "Gives more information when you blue screen.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+        "name": "DisplayParameters",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": false
+      },
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+        "name": "DisableEmoticon",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "battery-percentage",
+    "legacy_id": "WPFToggleBatteryPercentage",
+    "name": "System Tray Battery Percentage",
+    "description": "Shows numeric battery percentage next to the battery icon in the system tray.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "IsBatteryPercentageEnabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "dark-mode",
+    "legacy_id": "WPFToggleDarkMode",
+    "name": "Dark Theme for Windows",
+    "description": "Dark Mode for the system and applications.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "name": "AppsUseLightTheme",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": false
+      },
+      {
+        "path": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "name": "SystemUsesLightTheme",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": false
+      }
+    ],
+    "apply": [
+      {
+        "op": "refresh_shell"
+      }
+    ],
+    "undo": [
+      {
+        "op": "refresh_shell"
+      }
+    ]
+  },
+  {
+    "id": "show-ext",
+    "legacy_id": "WPFToggleShowExt",
+    "name": "File Explorer File Extensions",
+    "description": "Shows .file extensions in Explorer (.exe, .png, etc.)",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "HideFileExt",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": false
+      }
+    ],
+    "apply": [
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "restart_explorer"
+      }
+    ]
+  },
+  {
+    "id": "hidden-files",
+    "legacy_id": "WPFToggleHiddenFiles",
+    "name": "File Explorer Hidden Files",
+    "description": "Reveals hidden files in Explorer.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "Hidden",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": false
+      }
+    ],
+    "apply": [
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "restart_explorer"
+      }
+    ]
+  },
+  {
+    "id": "verbose-logon",
+    "legacy_id": "WPFToggleVerboseLogon",
+    "name": "Logon Verbose Mode",
+    "description": "Show detailed messages during startup/shutdown.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+        "name": "VerboseStatus",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "new-outlook",
+    "legacy_id": "WPFToggleNewOutlook",
+    "name": "Microsoft Outlook New Version",
+    "description": "This will ensure the new Outlook application is used.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
+        "name": "UseNewOutlook",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
+        "name": "HideNewOutlookToggle",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": true
+      },
+      {
+        "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
+        "name": "DoNewOutlookAutoMigration",
+        "kind": "DWord",
+        "value": "0",
+        "original": "0",
+        "default_on": false
+      },
+      {
+        "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
+        "name": "NewOutlookMigrationUserSetting",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "scrollbars",
+    "legacy_id": "WPFToggleScrollbars",
+    "name": "Scrollbars Always Visible",
+    "description": "If enabled, scrollbars will always be visible. If disabled, Windows will automatically hide scrollbars when not in use.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Control Panel\\Accessibility",
+        "name": "DynamicScrollbars",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "multiplane-overlay",
+    "legacy_id": "WPFMultiplaneOverlay",
+    "name": "Multiplane Overlay",
+    "description": "Multiplane Overlay composes multiple image layers, which can sometimes cause issues with graphics cards. Changes to this preference are applied immediately.",
+    "group": "preferences",
+    "kind": "segmented",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm",
+        "name": "OverlayTestMode",
+        "kind": "DWord",
+        "values": {
+          "Enabled": "<RemoveEntry>",
+          "Disabled (Compatibility)": "5",
+          "Fully Disabled": "5"
+        }
+      },
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+        "name": "DisableOverlays",
+        "kind": "DWord",
+        "values": {
+          "Enabled": "<RemoveEntry>",
+          "Disabled (Compatibility)": "<RemoveEntry>",
+          "Fully Disabled": "1"
+        }
+      }
+    ],
+    "options": [
+      {
+        "label": "Enabled",
+        "description": "Uses Windows' default overlay behavior."
+      },
+      {
+        "label": "Disabled (Compatibility)",
+        "description": "Disables MPO using OverlayTestMode=5, the less aggressive compatibility method."
+      },
+      {
+        "label": "Fully Disabled",
+        "description": "Disables MPO using OverlayTestMode=5 and DisableOverlays=1, the more aggressive method."
+      }
+    ]
+  },
+  {
+    "id": "mouse-acceleration",
+    "legacy_id": "WPFToggleMouseAcceleration",
+    "name": "Mouse Acceleration",
+    "description": "Makes it so Cursor movement is affected by the speed of your physical mouse movements.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Control Panel\\Mouse",
+        "name": "MouseSpeed",
+        "kind": "String",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      },
+      {
+        "path": "HKCU\\Control Panel\\Mouse",
+        "name": "MouseThreshold1",
+        "kind": "String",
+        "value": "6",
+        "original": "0",
+        "default_on": true
+      },
+      {
+        "path": "HKCU\\Control Panel\\Mouse",
+        "name": "MouseThreshold2",
+        "kind": "String",
+        "value": "10",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "num-lock",
+    "legacy_id": "WPFToggleNumLock",
+    "name": "Num Lock on Startup",
+    "description": "Toggle the Num Lock key state when your computer starts.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKU\\.Default\\Control Panel\\Keyboard",
+        "name": "InitialKeyboardIndicators",
+        "kind": "String",
+        "value": "2",
+        "original": "0",
+        "default_on": false
+      },
+      {
+        "path": "HKCU\\Control Panel\\Keyboard",
+        "name": "InitialKeyboardIndicators",
+        "kind": "String",
+        "value": "2",
+        "original": "0",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "window-snapping",
+    "legacy_id": "WPFToggleWindowSnapping",
+    "name": "Window Snapping",
+    "description": "Toggles the window snapping feature when dragging windows.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Control Panel\\Desktop",
+        "name": "WindowArrangementActive",
+        "kind": "String",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "standby-fix",
+    "legacy_id": "WPFToggleStandbyFix",
+    "name": "S0 Sleep Network Connectivity",
+    "description": "Toggles network connectivity during S0 Sleep which is low power idle in modern laptops.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9",
+        "name": "ACSettingIndex",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "s3-sleep",
+    "legacy_id": "WPFToggleS3Sleep",
+    "name": "S3 Sleep",
+    "description": "Toggles between Modern Standby and S3 Sleep, which cuts off power to the CPU while continuing to refresh the memory.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+        "name": "PlatformAoAcOverride",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "hide-settings-home",
+    "legacy_id": "WPFToggleHideSettingsHome",
+    "name": "Settings Home Page",
+    "description": "Toggles the Home Page in the Windows Settings app.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+        "name": "SettingsPageVisibility",
+        "kind": "String",
+        "value": "show:home",
+        "original": "hide:home",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "bing-search",
+    "legacy_id": "WPFToggleBingSearch",
+    "name": "Start Menu Bing Search",
+    "description": "Toggles Bing web search results in Windows Search.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "name": "BingSearchEnabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "login-blur",
+    "legacy_id": "WPFToggleLoginBlur",
+    "name": "Logon Screen Acrylic Blur",
+    "description": "Toggles the acrylic blur effect on login screen background.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "name": "DisableAcrylicBackgroundOnLogon",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "disable-lockscreen",
+    "legacy_id": "WPFToggleDisableLockscreen",
+    "name": "Lock Screen - Disable",
+    "description": "Skips the lock screen entirely and goes directly to the sign-in screen on boot and wake.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
+        "name": "NoLockScreen",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      }
+    ]
+  },
+  {
+    "id": "start-menu-recommendations",
+    "legacy_id": "WPFToggleStartMenuRecommendations",
+    "name": "Start Menu Recommendations",
+    "description": "Toggles the recommendations section in the Start Menu. WARNING: This will also disable Windows Spotlight on your Lock Screen as a side effect.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Start",
+        "name": "HideRecommendedSection",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": true
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Education",
+        "name": "IsEducationEnvironment",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": true
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
+        "name": "HideRecommendedSection",
+        "kind": "DWord",
+        "value": "0",
+        "original": "1",
+        "default_on": true
+      }
+    ],
+    "apply": [
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "restart_explorer"
+      }
+    ]
+  },
+  {
+    "id": "sticky-keys",
+    "legacy_id": "WPFToggleStickyKeys",
+    "name": "Sticky Keys",
+    "description": "Toggles the Sticky Keys, which activate when clicking shift rapidly.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Control Panel\\Accessibility\\StickyKeys",
+        "name": "Flags",
+        "kind": "DWord",
+        "value": "506",
+        "original": "58",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "taskbar-alignment",
+    "legacy_id": "WPFToggleTaskbarAlignment",
+    "name": "Taskbar Centered Icons",
+    "description": "Toggles the Taskbar alignment either to the left or center.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "TaskbarAl",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ],
+    "apply": [
+      {
+        "op": "restart_explorer"
+      }
+    ],
+    "undo": [
+      {
+        "op": "restart_explorer"
+      }
+    ]
+  },
+  {
+    "id": "taskbar-search",
+    "legacy_id": "WPFToggleTaskbarSearch",
+    "name": "Taskbar Search Icon",
+    "description": "Toggles the Search Button on the Taskbar.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "name": "SearchboxTaskbarMode",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "task-view",
+    "legacy_id": "WPFToggleTaskView",
+    "name": "Taskbar Task View Icon",
+    "description": "Toggles the Task View Button in the Taskbar.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "name": "ShowTaskViewButton",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "game-mode",
+    "legacy_id": "WPFToggleGameMode",
+    "name": "Game Mode",
+    "description": "Toggles Windows prioritizes gaming performance by allocating system resources to games.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKCU\\Software\\Microsoft\\GameBar",
+        "name": "AllowAutoGameMode",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      },
+      {
+        "path": "HKCU\\Software\\Microsoft\\GameBar",
+        "name": "AutoGameModeEnabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": true
+      }
+    ]
+  },
+  {
+    "id": "long-paths",
+    "legacy_id": "WPFToggleLongPaths",
+    "name": "Enable Long Paths",
+    "description": "Toggles support for file paths longer than 260 characters in Explorer.",
+    "group": "preferences",
+    "kind": "toggle",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+        "name": "LongPathsEnabled",
+        "kind": "DWord",
+        "value": "1",
+        "original": "0",
+        "default_on": false
+      }
+    ]
+  },
+  {
+    "id": "oosubutton",
+    "legacy_id": "WPFOOSUbutton",
+    "name": "O&O ShutUp10++ - Run",
+    "description": "Downloads O&O ShutUp10++ (about 82 MB) from oo-software.com on every click and launches it. Nothing is installed; the file is saved under %LocalAppData%\\winutil.",
+    "group": "advanced",
+    "kind": "action",
+    "apply": [
+      {
+        "op": "download_and_run",
+        "url": "https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe",
+        "file": "OOSU10.exe"
+      }
+    ]
+  },
+  {
+    "id": "changedns",
+    "legacy_id": "WPFchangedns",
+    "name": "DNS - Set to:",
+    "description": "",
+    "group": "advanced",
+    "kind": "dns",
+    "options": [
+      {
+        "label": "Default",
+        "description": ""
+      },
+      {
+        "label": "DHCP",
+        "description": ""
+      },
+      {
+        "label": "Fastest",
+        "description": ""
+      },
+      {
+        "label": "Google",
+        "description": ""
+      },
+      {
+        "label": "Cloudflare",
+        "description": ""
+      },
+      {
+        "label": "Cloudflare_Malware",
+        "description": ""
+      },
+      {
+        "label": "Cloudflare_Malware_Adult",
+        "description": ""
+      },
+      {
+        "label": "Open_DNS",
+        "description": ""
+      },
+      {
+        "label": "Quad9",
+        "description": ""
+      },
+      {
+        "label": "AdGuard_Ads_Trackers",
+        "description": ""
+      },
+      {
+        "label": "AdGuard_Ads_Trackers_Malware_Adult",
+        "description": ""
+      }
+    ]
+  },
+  {
+    "id": "add-ult-perf",
+    "legacy_id": "WPFAddUltPerf",
+    "name": "Ultimate Performance Profile - Enable",
+    "description": "",
+    "group": "performance",
+    "kind": "action",
+    "apply": [
+      {
+        "op": "ultimate_performance",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "remove-ult-perf",
+    "legacy_id": "WPFRemoveUltPerf",
+    "name": "Ultimate Performance Profile - Disable",
+    "description": "",
+    "group": "performance",
+    "kind": "action",
+    "apply": [
+      {
+        "op": "ultimate_performance",
+        "enabled": false
+      }
+    ]
+  }
+]

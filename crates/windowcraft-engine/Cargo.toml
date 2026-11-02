@@ -1,0 +1,28 @@
+# Made by ycangignacy
+[package]
+name = "windowcraft-engine"
+description = "Native Windows adapters, transactional snapshots, drift detection and system inspection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+windowcraft-config.workspace = true
+rayon.workspace = true
+redb.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+windows.workspace = true
+windows-collections.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,118 @@
+# Made by ycangignacy
+[workspace]
+resolver = "3"
+members = [
+    "crates/windowcraft-physics",
+    "crates/windowcraft-config",
+    "crates/windowcraft-engine",
+    "crates/windowcraft-iso",
+    "crates/windowcraft-app",
+    "crates/windowcraft-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["ycangignacy"]
+description = "Windows 11 administration, debloating, optimization and ISO mastering tool in Rust."
+repository = "https://github.com/ycangignacy/WindowCraft"
+rust-version = "1.99"
+
+[workspace.dependencies]
+windowcraft-physics = { path = "crates/windowcraft-physics" }
+windowcraft-config = { path = "crates/windowcraft-config" }
+windowcraft-engine = { path = "crates/windowcraft-engine" }
+windowcraft-iso = { path = "crates/windowcraft-iso" }
+
+clap = { version = "4.6", features = ["derive"] }
+iced = { version = "0.14", default-features = false, features = ["tiny-skia", "svg", "tokio", "advanced", "crisp"] }
+rayon = "1.12"
+redb = "4.4"
+# http2 stays: Quad9's DoH endpoint does not answer over HTTP/1.1.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+windows-collections = "0.3.2"
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Management_Deployment",
+    "ApplicationModel",
+    "UI_ViewManagement",
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_NetworkManagement_WindowsFirewall",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Security_Cryptography_Catalog",
+    "Win32_Security_Cryptography_Sip",
+    "Win32_Security_WinTrust",
+    "Win32_Storage_FileSystem",
+    "Win32_Storage_Vhd",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Power",
+    "Win32_System_Registry",
+    "Win32_System_Restore",
+    "Win32_System_Rpc",
+    "Win32_System_Services",
+    "Win32_System_SystemInformation",
+    "Win32_System_TaskScheduler",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_System_Wmi",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+multiple_unsafe_ops_per_block = "allow"
+
+# `panic = "abort"` is deliberately absent. The ACL rollback guards in
+# windowcraft-engine must run while a panic unwinds.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
+overflow-checks = true
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 1
+debug = false
+
+# The rasterizer runs every frame, so it trades size for speed.
+[profile.release.package.tiny-skia]
+opt-level = 3
+
+[profile.release.package.tiny-skia-path]
+opt-level = 3
+
+[profile.release.package.iced_tiny_skia]
+opt-level = 3

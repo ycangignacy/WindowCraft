@@ -1,0 +1,74 @@
+[
+  {
+    "id": "Google",
+    "primary": "8.8.8.8",
+    "secondary": "8.8.4.4",
+    "primary6": "2001:4860:4860::8888",
+    "secondary6": "2001:4860:4860::8844",
+    "doh_template": "https://dns.google/dns-query",
+    "benchmark": true
+  },
+  {
+    "id": "Cloudflare",
+    "primary": "1.1.1.1",
+    "secondary": "1.0.0.1",
+    "primary6": "2606:4700:4700::1111",
+    "secondary6": "2606:4700:4700::1001",
+    "doh_template": "https://cloudflare-dns.com/dns-query",
+    "benchmark": true
+  },
+  {
+    "id": "Cloudflare_Malware",
+    "primary": "1.1.1.2",
+    "secondary": "1.0.0.2",
+    "primary6": "2606:4700:4700::1112",
+    "secondary6": "2606:4700:4700::1002",
+    "doh_template": "https://security.cloudflare-dns.com/dns-query",
+    "benchmark": false
+  },
+  {
+    "id": "Cloudflare_Malware_Adult",
+    "primary": "1.1.1.3",
+    "secondary": "1.0.0.3",
+    "primary6": "2606:4700:4700::1113",
+    "secondary6": "2606:4700:4700::1003",
+    "doh_template": "https://family.cloudflare-dns.com/dns-query",
+    "benchmark": false
+  },
+  {
+    "id": "Open_DNS",
+    "primary": "208.67.222.222",
+    "secondary": "208.67.220.220",
+    "primary6": "2620:119:35::35",
+    "secondary6": "2620:119:53::53",
+    "doh_template": "https://doh.opendns.com/dns-query",
+    "benchmark": false
+  },
+  {
+    "id": "Quad9",
+    "primary": "9.9.9.9",
+    "secondary": "149.112.112.112",
+    "primary6": "2620:fe::fe",
+    "secondary6": "2620:fe::9",
+    "doh_template": "https://dns.quad9.net/dns-query",
+    "benchmark": false
+  },
+  {
+    "id": "AdGuard_Ads_Trackers",
+    "primary": "94.140.14.14",
+    "secondary": "94.140.15.15",
+    "primary6": "2a10:50c0::ad1:ff",
+    "secondary6": "2a10:50c0::ad2:ff",
+    "doh_template": "https://dns.adguard-dns.com/dns-query",
+    "benchmark": false
+  },
+  {
+    "id": "AdGuard_Ads_Trackers_Malware_Adult",
+    "primary": "94.140.14.15",
+    "secondary": "94.140.15.16",
+    "primary6": "2a10:50c0::bad1:ff",
+    "secondary6": "2a10:50c0::bad2:ff",
+    "doh_template": "https://family.adguard-dns.com/dns-query",
+    "benchmark": false
+  }
+]

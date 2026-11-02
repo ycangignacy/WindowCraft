@@ -1,0 +1,307 @@
+[
+  {
+    "id": "microsoft-windows-feedback-hub",
+    "legacy_id": "WPFAppxMicrosoft_WindowsFeedbackHub",
+    "name": "Feedback Hub",
+    "category": "Microsoft Apps",
+    "description": "Allows users to submit bug reports, feature suggestions, and diagnostic data directly to Microsoft.",
+    "package_id": "Microsoft.WindowsFeedbackHub",
+    "store_id": "9NBLGGH4R32N"
+  },
+  {
+    "id": "microsoft-get-help",
+    "legacy_id": "WPFAppxMicrosoft_GetHelp",
+    "name": "Get Help",
+    "category": "Microsoft Apps",
+    "description": "Provides access to automated troubleshooting guides, support documentation, and direct Microsoft customer assistance.",
+    "package_id": "Microsoft.GetHelp",
+    "store_id": "9PKDZBMV1H3T"
+  },
+  {
+    "id": "microsoft-outlook-for-windows",
+    "legacy_id": "WPFAppxMicrosoft_OutlookForWindows",
+    "name": "Outlook for Windows",
+    "category": "Microsoft Apps",
+    "description": "Provides modern email management, calendar scheduling, and contact organization features.",
+    "package_id": "Microsoft.OutlookForWindows",
+    "store_id": "9NRX63209R7B"
+  },
+  {
+    "id": "msteams",
+    "legacy_id": "WPFAppxMSTeams",
+    "name": "Microsoft Teams",
+    "category": "Microsoft Apps",
+    "description": "Facilitates instant messaging, video conferencing, file sharing, and workspace collaboration.",
+    "package_id": "MSTeams",
+    "store_id": "XP8BT8DW290MPQ"
+  },
+  {
+    "id": "clipchamp-clipchamp",
+    "legacy_id": "WPFAppxClipchamp_Clipchamp",
+    "name": "Clipchamp",
+    "category": "Utilities & Productivity",
+    "description": "Provides a user-friendly video editor with built-in templates, effects, and timeline editing tools.",
+    "package_id": "Clipchamp.Clipchamp",
+    "store_id": "9P1J8S7CCWWT"
+  },
+  {
+    "id": "microsoft-microsoft-office-hub",
+    "legacy_id": "WPFAppxMicrosoft_MicrosoftOfficeHub",
+    "name": "Microsoft 365",
+    "category": "Microsoft Apps",
+    "description": "Serves as a centralized launcher and dashboard for accessing cloud-based Microsoft 365 apps and recent documents.",
+    "package_id": "Microsoft.MicrosoftOfficeHub",
+    "store_id": "9WZDNCRD29V9"
+  },
+  {
+    "id": "microsoft-zune-music",
+    "legacy_id": "WPFAppxMicrosoft_ZuneMusic",
+    "name": "Media Player",
+    "category": "Utilities & Productivity",
+    "description": "Plays local audio and video files with modern playlist management and casting capabilities.",
+    "package_id": "Microsoft.ZuneMusic",
+    "store_id": "9WZDNCRFJ3PT"
+  },
+  {
+    "id": "microsoft-bing-search",
+    "legacy_id": "WPFAppxMicrosoft_BingSearch",
+    "name": "Bing Search",
+    "category": "Bing & Web Services",
+    "description": "Integrates Microsoft Bing search capabilities and web services directly into the operating system.",
+    "package_id": "Microsoft.BingSearch",
+    "store_id": "9NZBF4GT040C"
+  },
+  {
+    "id": "microsoft-corporation-ii-quick-assist",
+    "legacy_id": "WPFAppxMicrosoftCorporationII_QuickAssist",
+    "name": "Quick Assist",
+    "category": "Utilities & Productivity",
+    "description": "Enables secure remote technical support and screen sharing over an internet connection.",
+    "package_id": "MicrosoftCorporationII.QuickAssist",
+    "store_id": "9P7BP5VNWKX5"
+  },
+  {
+    "id": "microsoft-windows-dev-home",
+    "legacy_id": "WPFAppxMicrosoft_WindowsDevHome",
+    "name": "Dev Home",
+    "category": "Developer Tools",
+    "description": "Provides a specialized dashboard for software developer environment setups, repository syncing, and hardware widgets.",
+    "package_id": "Microsoft.Windows.DevHome",
+    "store_id": "9N8MHTPHNGVV"
+  },
+  {
+    "id": "microsoft-windows-cross-device",
+    "legacy_id": "WPFAppxMicrosoft_WindowsCrossDevice",
+    "name": "Mobile Devices",
+    "category": "Microsoft Ecosystem",
+    "description": "Manages system-level background connectivity with paired mobile devices. Removing this may disable cross-device features such as phone screen mirroring, file transfer, and mobile hotspot handoff integrated into Windows Settings.",
+    "package_id": "MicrosoftWindows.CrossDevice",
+    "store_id": "9NTXGKQ8P7N0"
+  },
+  {
+    "id": "microsoft-todos",
+    "legacy_id": "WPFAppxMicrosoft_Todos",
+    "name": "To Do",
+    "category": "Utilities & Productivity",
+    "description": "Creates, tracks, and synchronizes personal tasks, smart lists, and daily reminders.",
+    "package_id": "Microsoft.Todos",
+    "store_id": "9NBLGGH5R558"
+  },
+  {
+    "id": "microsoft-power-automate-desktop",
+    "legacy_id": "WPFAppxMicrosoft_PowerAutomateDesktop",
+    "name": "Power Automate",
+    "category": "Developer Tools",
+    "description": "Automates repetitive workflows and desktop tasks using low-code visual scripting.",
+    "package_id": "Microsoft.PowerAutomateDesktop",
+    "store_id": "9NFTCH6J7FHV"
+  },
+  {
+    "id": "microsoft-your-phone",
+    "legacy_id": "WPFAppxMicrosoft_YourPhone",
+    "name": "Phone Link",
+    "category": "Microsoft Ecosystem",
+    "description": "Synchronizes text messages, phone notifications, photos, and calls from a mobile device to the desktop.",
+    "package_id": "Microsoft.YourPhone",
+    "store_id": "9NMPJ99VJBWV"
+  },
+  {
+    "id": "microsoft-microsoft-sticky-notes",
+    "legacy_id": "WPFAppxMicrosoft_MicrosoftStickyNotes",
+    "name": "Sticky Notes",
+    "category": "Utilities & Productivity",
+    "description": "Creates quick, floating text notes on the desktop that automatically sync across devices.",
+    "package_id": "Microsoft.MicrosoftStickyNotes",
+    "store_id": "9NBLGGH4QGHW"
+  },
+  {
+    "id": "microsoft-windows-sound-recorder",
+    "legacy_id": "WPFAppxMicrosoft_WindowsSoundRecorder",
+    "name": "Sound Recorder",
+    "category": "Utilities & Productivity",
+    "description": "Records and trims live audio inputs with simple microphone adjustment controls.",
+    "package_id": "Microsoft.WindowsSoundRecorder",
+    "store_id": "9WZDNCRFHWKN"
+  },
+  {
+    "id": "microsoft-windows-alarms",
+    "legacy_id": "WPFAppxMicrosoft_WindowsAlarms",
+    "name": "Clock",
+    "category": "Utilities & Productivity",
+    "description": "Features world clocks, alarms, countdown timers, stopwatches, and dedicated focus session tracking.",
+    "package_id": "Microsoft.WindowsAlarms",
+    "store_id": "9WZDNCRFJ3PR"
+  },
+  {
+    "id": "microsoft-paint",
+    "legacy_id": "WPFAppxMicrosoft_Paint",
+    "name": "Paint",
+    "category": "Utilities & Productivity",
+    "description": "Provides built-in digital sketching, basic image editing, and pixel-level graphic manipulation tools.",
+    "package_id": "Microsoft.Paint",
+    "store_id": "9PCFS5B6T72H"
+  },
+  {
+    "id": "microsoft-windows-notepad",
+    "legacy_id": "WPFAppxMicrosoft_WindowsNotepad",
+    "name": "Notepad",
+    "category": "Utilities & Productivity",
+    "description": "Provides a lightweight text editor with multi-tab support for plain text files and code snippets.",
+    "package_id": "Microsoft.WindowsNotepad",
+    "store_id": "9MSMLRH6LZF3"
+  },
+  {
+    "id": "microsoft-screen-sketch",
+    "legacy_id": "WPFAppxMicrosoft_ScreenSketch",
+    "name": "Snipping Tool",
+    "category": "Utilities & Productivity",
+    "description": "Captures screenshots or screen recordings with built-in markup, image cropping, and optical character recognition (OCR).",
+    "package_id": "Microsoft.ScreenSketch",
+    "store_id": "9MZ95KL8MR0L"
+  },
+  {
+    "id": "microsoft-copilot",
+    "legacy_id": "WPFAppxMicrosoft_Copilot",
+    "name": "Copilot",
+    "category": "Bing & Web Services",
+    "description": "Launches the Microsoft AI companion for contextual answers, creative writing assistance, and intelligent web search.",
+    "package_id": "Microsoft.Copilot",
+    "store_id": "9NHT9RB2F4HD"
+  },
+  {
+    "id": "microsoft-windows-calculator",
+    "legacy_id": "WPFAppxMicrosoft_WindowsCalculator",
+    "name": "Calculator",
+    "category": "Utilities & Productivity",
+    "description": "Performs standard arithmetic, scientific operations, programming calculations, and unit conversions.",
+    "package_id": "Microsoft.WindowsCalculator",
+    "store_id": "9WZDNCRFHVN5"
+  },
+  {
+    "id": "microsoft-windows-camera",
+    "legacy_id": "WPFAppxMicrosoft_WindowsCamera",
+    "name": "Camera",
+    "category": "Utilities & Productivity",
+    "description": "Captures photographs and records video files via connected webcams or imaging hardware.",
+    "package_id": "Microsoft.WindowsCamera",
+    "store_id": "9WZDNCRFJBBG"
+  },
+  {
+    "id": "microsoft-windows-photos",
+    "legacy_id": "WPFAppxMicrosoft_WindowsPhotos",
+    "name": "Photos",
+    "category": "Utilities & Productivity",
+    "description": "Organizes, views, and crops local images with basic color adjustment and album creation tools.",
+    "package_id": "Microsoft.Windows.Photos",
+    "store_id": "9WZDNCRFJBH4"
+  },
+  {
+    "id": "microsoft-bing-news",
+    "legacy_id": "WPFAppxMicrosoft_BingNews",
+    "name": "News",
+    "category": "Bing & Web Services",
+    "description": "Aggregates breaking news headlines, personalized article feeds, and world current events.",
+    "package_id": "Microsoft.BingNews",
+    "store_id": "9WZDNCRFHVFW"
+  },
+  {
+    "id": "microsoft-bing-weather",
+    "legacy_id": "WPFAppxMicrosoft_BingWeather",
+    "name": "Weather",
+    "category": "Bing & Web Services",
+    "description": "Displays local real-time weather tracking, radar maps, and historical meteorological forecasts.",
+    "package_id": "Microsoft.BingWeather",
+    "store_id": "9WZDNCRFJ3Q2"
+  },
+  {
+    "id": "microsoft-gaming-app",
+    "legacy_id": "WPFAppxMicrosoft_GamingApp",
+    "name": "Xbox App",
+    "category": "Xbox & Gaming",
+    "description": "Serves as the primary gaming library manager, social community interface, and PC Game Pass dashboard.",
+    "package_id": "Microsoft.GamingApp",
+    "store_id": "9MV0B5HZVK9Z"
+  },
+  {
+    "id": "microsoft-xbox-gaming-overlay",
+    "legacy_id": "WPFAppxMicrosoft_XboxGamingOverlay",
+    "name": "Xbox Game Bar",
+    "category": "Xbox & Gaming",
+    "description": "Provides customizable in-game status widgets, audio balancing sliders, system monitoring tools, and gameplay recording.",
+    "package_id": "Microsoft.XboxGamingOverlay",
+    "store_id": "9NZKPSTSNW4P"
+  },
+  {
+    "id": "microsoft-xbox-identity-provider",
+    "legacy_id": "WPFAppxMicrosoft_XboxIdentityProvider",
+    "name": "Xbox Identity Provider",
+    "category": "Xbox & Gaming",
+    "description": "Manages Xbox network user authentication and background account validation for connected titles.",
+    "package_id": "Microsoft.XboxIdentityProvider",
+    "store_id": "9WZDNCRD1HKW",
+    "warning": "removing this may break Microsoft account sign-in for non-Xbox games and apps that rely on this authentication pipeline."
+  },
+  {
+    "id": "microsoft-xbox-speech-to-text-overlay",
+    "legacy_id": "WPFAppxMicrosoft_XboxSpeechToTextOverlay",
+    "name": "Xbox Speech To Text Overlay",
+    "category": "Xbox & Gaming",
+    "description": "Provides system-level live accessibility captions and voice-to-text translation for gaming chat networks.",
+    "package_id": "Microsoft.XboxSpeechToTextOverlay"
+  },
+  {
+    "id": "microsoft-xbox-tcui",
+    "legacy_id": "WPFAppxMicrosoft_Xbox_TCUI",
+    "name": "Xbox TCUI",
+    "category": "Xbox & Gaming",
+    "description": "Provides core account connection UI modules for single sign-on flows within game titles.",
+    "package_id": "Microsoft.Xbox.TCUI",
+    "warning": "removing this may break Microsoft account authentication in games and apps that do not otherwise require the Xbox app."
+  },
+  {
+    "id": "microsoft-start-experiences-app",
+    "legacy_id": "WPFAppxMicrosoft_StartExperiencesApp",
+    "name": "Start Experiences App",
+    "category": "Bing & Web Services",
+    "description": "Powers the Windows Widgets board, delivering a personalized feed of news, weather, sports, and finance content.",
+    "package_id": "Microsoft.StartExperiencesApp",
+    "store_id": "9PC1H9VN18CM"
+  },
+  {
+    "id": "microsoft-microsoft-solitaire-collection",
+    "legacy_id": "WPFAppxMicrosoft_MicrosoftSolitaireCollection",
+    "name": "Solitaire Collection",
+    "category": "Xbox & Gaming",
+    "description": "Bundles built-in card game modes including Klondike, Spider, FreeCell, Pyramid, and TriPeaks alongside daily challenges.",
+    "package_id": "Microsoft.MicrosoftSolitaireCollection"
+  },
+  {
+    "id": "microsoft-zune-video",
+    "legacy_id": "WPFAppxMicrosoft_ZuneVideo",
+    "name": "Movies & TV",
+    "category": "Utilities & Productivity",
+    "description": "The default video player and storefront for purchasing or renting media.",
+    "package_id": "Microsoft.ZuneVideo",
+    "store_id": "9WZDNCRFJ3P2"
+  }
+]

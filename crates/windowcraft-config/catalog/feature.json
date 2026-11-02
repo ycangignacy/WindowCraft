@@ -1,0 +1,482 @@
+[
+  {
+    "id": "dotnet",
+    "legacy_id": "WPFFeaturesdotnet",
+    "name": ".NET Framework (Versions 2, 3, 4) - Enable",
+    "description": ".NET and .NET Framework is a developer platform made up of tools, programming languages, and libraries for building many different types of applications.",
+    "kind": "feature",
+    "features": [
+      "NetFx4-AdvSrvs",
+      "NetFx3"
+    ]
+  },
+  {
+    "id": "ntppool",
+    "legacy_id": "WPFFixesNTPPool",
+    "name": "NTP Server - Enable",
+    "description": "Points w32time at pool.ntp.org,0x8 and forces a resync.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "fix_ntp"
+      }
+    ]
+  },
+  {
+    "id": "hyperv",
+    "legacy_id": "WPFFeatureshyperv",
+    "name": "Hyper-V - Enable",
+    "description": "Hyper-V is a hardware virtualization product developed by Microsoft that allows users to create and manage virtual machines.",
+    "kind": "feature",
+    "features": [
+      "Microsoft-Hyper-V-All"
+    ]
+  },
+  {
+    "id": "legacymedia",
+    "legacy_id": "WPFFeatureslegacymedia",
+    "name": "Legacy Media Components (WMP, DirectPlay) - Enable",
+    "description": "Enables legacy programs from previous versions of Windows.",
+    "kind": "feature",
+    "features": [
+      "WindowsMediaPlayer",
+      "MediaPlayback",
+      "DirectPlay",
+      "LegacyComponents"
+    ]
+  },
+  {
+    "id": "wsl",
+    "legacy_id": "WPFFeaturewsl",
+    "name": "Windows Subsystem for Linux (WSL) - Enable",
+    "description": "Windows Subsystem for Linux is an optional feature of Windows that allows Linux programs to run natively on Windows without the need for a separate virtual machine or dual booting.",
+    "kind": "feature",
+    "features": [
+      "VirtualMachinePlatform",
+      "Microsoft-Windows-Subsystem-Linux"
+    ]
+  },
+  {
+    "id": "nfs",
+    "legacy_id": "WPFFeaturenfs",
+    "name": "Network File System (NFS) - Enable",
+    "description": "Network File System (NFS) is a mechanism for storing files on a network.",
+    "kind": "feature",
+    "features": [
+      "ServicesForNFS-ClientOnly",
+      "ClientForNFS-Infrastructure",
+      "NFS-Administration"
+    ],
+    "registry": [
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default",
+        "name": "AnonymousUID",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default",
+        "name": "AnonymousGID",
+        "kind": "DWord",
+        "value": "0",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "apply": [
+      {
+        "op": "nfs_configure"
+      }
+    ]
+  },
+  {
+    "id": "reg-backup",
+    "legacy_id": "WPFFeatureRegBackup",
+    "name": "Registry Backup (Daily Task 12:30am) - Enable",
+    "description": "Enables daily registry backup, previously disabled by Microsoft in Windows 10 1803.",
+    "kind": "feature",
+    "registry": [
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager",
+        "name": "EnablePeriodicBackup",
+        "kind": "DWord",
+        "value": "1",
+        "original": "<RemoveEntry>"
+      },
+      {
+        "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager",
+        "name": "BackupCount",
+        "kind": "DWord",
+        "value": "2",
+        "original": "<RemoveEntry>"
+      }
+    ],
+    "apply": [
+      {
+        "op": "create_registry_backup_task"
+      }
+    ],
+    "undo": [
+      {
+        "op": "remove_registry_backup_task"
+      }
+    ]
+  },
+  {
+    "id": "enable-legacy-recovery",
+    "legacy_id": "WPFFeatureEnableLegacyRecovery",
+    "name": "Legacy F8 Boot Recovery - Enable",
+    "description": "Enables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
+    "kind": "feature",
+    "apply": [
+      {
+        "op": "boot_menu_policy",
+        "legacy": true
+      }
+    ]
+  },
+  {
+    "id": "disable-legacy-recovery",
+    "legacy_id": "WPFFeatureDisableLegacyRecovery",
+    "name": "Legacy F8 Boot Recovery - Disable",
+    "description": "Disables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
+    "kind": "feature",
+    "apply": [
+      {
+        "op": "boot_menu_policy",
+        "legacy": false
+      }
+    ]
+  },
+  {
+    "id": "sandbox",
+    "legacy_id": "WPFFeaturesSandbox",
+    "name": "Windows Sandbox - Enable",
+    "description": "Windows Sandbox is a lightweight virtual machine that provides a temporary desktop environment to safely run applications and programs in isolation.",
+    "kind": "feature",
+    "features": [
+      "Containers-DisposableClientVM"
+    ]
+  },
+  {
+    "id": "install",
+    "legacy_id": "WPFFeatureInstall",
+    "name": "Install Features",
+    "description": "",
+    "kind": "feature"
+  },
+  {
+    "id": "autologin",
+    "legacy_id": "WPFPanelAutologin",
+    "name": "AutoLogon - Run",
+    "description": "Downloads Sysinternals Autologon and launches it.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "download_and_run",
+        "url": "https://live.sysinternals.com/Autologon.exe",
+        "file": "Autologon.exe",
+        "args": "/accepteula"
+      }
+    ]
+  },
+  {
+    "id": "update",
+    "legacy_id": "WPFFixesUpdate",
+    "name": "Windows Update - Reset",
+    "description": "Stops BITS, wuauserv, appidsvc and cryptsvc, clears qmgr*.dat, renames SoftwareDistribution\\Download, re-registers update DLLs, clears WSUS keys and resets WinSock.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "fix_windows_update",
+        "aggressive": false
+      }
+    ],
+    "options": [
+      {
+        "label": "Standard",
+        "description": "Renames SoftwareDistribution\\Download."
+      },
+      {
+        "label": "Aggressive",
+        "description": "Also renames DataStore and Catroot2."
+      }
+    ]
+  },
+  {
+    "id": "network",
+    "legacy_id": "WPFFixesNetwork",
+    "name": "Network - Reset",
+    "description": "Resets the WinSock catalog and the TCP/IPv4/IPv6 stack.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "fix_network"
+      }
+    ]
+  },
+  {
+    "id": "dism",
+    "legacy_id": "WPFPanelDISM",
+    "name": "System Corruption Scan - Run",
+    "description": "Runs chkdsk /scan /perf, sfc /scannow and dism /restorehealth in sequence.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "fix_system_scan"
+      }
+    ]
+  },
+  {
+    "id": "winget",
+    "legacy_id": "WPFFixesWinget",
+    "name": "WinGet - Reinstall",
+    "description": "Re-registers the App Installer package that provides WinGet.",
+    "kind": "fix",
+    "apply": [
+      {
+        "op": "fix_winget"
+      }
+    ]
+  },
+  {
+    "id": "panel-computer",
+    "legacy_id": "WPFPanelComputer",
+    "name": "Computer Management",
+    "description": "",
+    "kind": "panel",
+    "target": "compmgmt.msc",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "compmgmt.msc"
+      }
+    ]
+  },
+  {
+    "id": "panel-control",
+    "legacy_id": "WPFPanelControl",
+    "name": "Control Panel",
+    "description": "",
+    "kind": "panel",
+    "target": "control",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "control"
+      }
+    ]
+  },
+  {
+    "id": "panel-mouse",
+    "legacy_id": "WPFPanelMouse",
+    "name": "Mouse Properties",
+    "description": "",
+    "kind": "panel",
+    "target": "main.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "main.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-network",
+    "legacy_id": "WPFPanelNetwork",
+    "name": "Network Connections",
+    "description": "",
+    "kind": "panel",
+    "target": "ncpa.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "ncpa.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-power",
+    "legacy_id": "WPFPanelPower",
+    "name": "Power Panel",
+    "description": "",
+    "kind": "panel",
+    "target": "powercfg.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "powercfg.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-printer",
+    "legacy_id": "WPFPanelPrinter",
+    "name": "Printer Panel",
+    "description": "",
+    "kind": "panel",
+    "target": "shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}"
+      }
+    ]
+  },
+  {
+    "id": "panel-programs",
+    "legacy_id": "WPFPanelPrograms",
+    "name": "Programs and Features",
+    "description": "",
+    "kind": "panel",
+    "target": "appwiz.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "appwiz.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-region",
+    "legacy_id": "WPFPanelRegion",
+    "name": "Region",
+    "description": "",
+    "kind": "panel",
+    "target": "intl.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "intl.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-security",
+    "legacy_id": "WPFPanelSecurity",
+    "name": "Security and Maintenance",
+    "description": "",
+    "kind": "panel",
+    "target": "wscui.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "wscui.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-sound",
+    "legacy_id": "WPFPanelSound",
+    "name": "Sound Settings",
+    "description": "",
+    "kind": "panel",
+    "target": "mmsys.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "mmsys.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-system",
+    "legacy_id": "WPFPanelSystem",
+    "name": "System Properties",
+    "description": "",
+    "kind": "panel",
+    "target": "sysdm.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "sysdm.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-timedate",
+    "legacy_id": "WPFPanelTimedate",
+    "name": "Time and Date",
+    "description": "",
+    "kind": "panel",
+    "target": "timedate.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "timedate.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-firewall",
+    "legacy_id": "WPFPanelFirewall",
+    "name": "Windows Defender Firewall",
+    "description": "",
+    "kind": "panel",
+    "target": "firewall.cpl",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "firewall.cpl"
+      }
+    ]
+  },
+  {
+    "id": "panel-restore",
+    "legacy_id": "WPFPanelRestore",
+    "name": "Windows Restore",
+    "description": "",
+    "kind": "panel",
+    "target": "rstrui.exe",
+    "apply": [
+      {
+        "op": "launch",
+        "target": "rstrui.exe"
+      }
+    ]
+  },
+  {
+    "id": "install-psprofile",
+    "legacy_id": "WPFWinUtilInstallPSProfile",
+    "name": "CTT PowerShell Profile - Install",
+    "description": "Backs up the current PowerShell 7 profile and installs the CTT profile.",
+    "kind": "profile",
+    "apply": [
+      {
+        "op": "powershell_profile",
+        "install": true
+      }
+    ]
+  },
+  {
+    "id": "uninstall-psprofile",
+    "legacy_id": "WPFWinUtilUninstallPSProfile",
+    "name": "CTT PowerShell Profile - Remove",
+    "description": "Removes the CTT profile and restores the backup.",
+    "kind": "profile",
+    "apply": [
+      {
+        "op": "powershell_profile",
+        "install": false
+      }
+    ]
+  },
+  {
+    "id": "sshserver",
+    "legacy_id": "WPFWinUtilSSHServer",
+    "name": "OpenSSH Server - Enable",
+    "description": "Installs OpenSSH Server, opens TCP 22, migrates authorized keys and locks administrators_authorized_keys to Administrators and SYSTEM.",
+    "kind": "remote",
+    "apply": [
+      {
+        "op": "ssh_server"
+      }
+    ],
+    "undo": [
+      {
+        "op": "remove_ssh_firewall_rule"
+      }
+    ],
+    "irreversible": true
+  }
+]

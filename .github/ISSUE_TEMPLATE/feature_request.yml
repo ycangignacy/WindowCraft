@@ -1,0 +1,30 @@
+# Made by ycangignacy
+name: Feature Request
+description: Propose an addition or change to WindowCraft
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest an addition or modification to WindowCraft.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: What system setting or workflow needs change?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: What should WindowCraft do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other approaches or configurations considered.
+    validations:
+      required: false

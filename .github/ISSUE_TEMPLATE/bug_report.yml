@@ -1,0 +1,38 @@
+# Made by ycangignacy
+name: Bug Report
+description: File a bug report for WindowCraft
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill out the information below to report a defect.
+  - type: input
+    id: version
+    attributes:
+      label: WindowCraft Version
+      description: The version of WindowCraft.
+    validations:
+      required: true
+  - type: input
+    id: windows_build
+    attributes:
+      label: Windows Build
+      description: The Windows 11 build number from winver.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: The exact steps taken before the defect occurred.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Environment Report
+      description: Run windowcraft-cli --export-report report.json and paste the file here.
+      render: json
+    validations:
+      required: true

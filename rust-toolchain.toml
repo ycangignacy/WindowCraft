@@ -1,0 +1,5 @@
+# Made by ycangignacy
+[toolchain]
+channel = "1.99.1"
+components = ["clippy"]
+targets = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]

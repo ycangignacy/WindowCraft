@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made by ycangignacy -->
+<!--
+  Per-machine MSI. Program Files is deliberate: this tool runs elevated, so it
+  must live where standard users cannot replace the executable.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Product Id="*"
+           Name="WindowCraft"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="ycangignacy"
+           UpgradeCode="7D3C2E61-4A0B-4F5E-9C21-6B1E8A4F0D37">
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Platform="$(var.Platform)"
+             Description="WindowCraft $(var.Version)"
+             Comments="Windows 11 administration, debloating and ISO mastering" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of WindowCraft is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="WindowCraft.ico" SourceFile="$(var.Assets)\windowcraft.ico" />
+    <Property Id="ARPPRODUCTICON" Value="WindowCraft.ico" />
+    <Property Id="ARPHELPLINK" Value="$(var.ProjectUrl)" />
+    <Property Id="ARPURLINFOABOUT" Value="$(var.ProjectUrl)" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- msiexec sees a capped VersionNT on Windows 10 and later, so the real
+         build number has to come from the registry. -->
+    <Property Id="WINDOWSBUILD">
+      <RegistrySearch Id="WindowsBuildSearch" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" Win64="yes" />
+    </Property>
+    <Condition Message="WindowCraft requires Windows 11 or later.">
+      <![CDATA[Installed OR WINDOWSBUILD >= 22000]]>
+    </Condition>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="$(var.ProgramFilesFolder)">
+        <Directory Id="INSTALLFOLDER" Name="WindowCraft" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder" />
+    </Directory>
+
+    <ComponentGroup Id="Application" Directory="INSTALLFOLDER">
+      <Component Id="Executable" Guid="B6A1F0D4-0C52-4E93-8F3A-2D7C15E9A401" Win64="$(var.Win64)">
+        <File Id="WindowCraftExe" Source="$(var.Binary)" Name="windowcraft.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ProgramMenuFolder"
+                    Name="WindowCraft"
+                    Description="Windows 11 administration, debloating and ISO mastering"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="WindowCraft.ico"
+                    Advertise="yes" />
+        </File>
+      </Component>
+      <Component Id="ConsoleFrontEnd" Guid="F0E514D8-4A96-42D7-CD7E-61B059CDE845" Win64="$(var.Win64)">
+        <File Id="WindowCraftCli" Source="$(var.CliBinary)" Name="windowcraft-cli.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="License" Guid="C7B2E1A5-1D63-4FA4-9A4B-3E8D26FAB512" Win64="$(var.Win64)">
+        <File Id="LicenseFile" Source="$(var.Root)\LICENSE" Name="LICENSE.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="Notice" Guid="D8C3F2B6-2E74-40B5-AB5C-4F9E37ABC623" Win64="$(var.Win64)">
+        <File Id="NoticeFile" Source="$(var.Root)\NOTICE.md" Name="NOTICE.md" KeyPath="yes" />
+      </Component>
+      <Component Id="ThirdParty" Guid="0A1F6B2C-5D07-43E8-DE8F-72C16ADEF956" Win64="$(var.Win64)">
+        <File Id="ThirdPartyNotices" Source="$(var.Root)\THIRD-PARTY-NOTICES.md" Name="THIRD-PARTY-NOTICES.md" KeyPath="yes" />
+      </Component>
+      <Component Id="CommandLine" Guid="E9D403C7-3F85-41C6-BC6D-50AF48BCD734" Win64="$(var.Win64)">
+        <CreateFolder />
+        <Environment Id="PathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Complete" Title="WindowCraft" Level="1">
+      <ComponentGroupRef Id="Application" />
+    </Feature>
+
+    <!-- Uninstall leaves nothing behind. It runs as SYSTEM to reach every profile,
+         and an upgrade skips it so Time Machine history survives. -->
+    <SetProperty Id="PurgeUserData" Value="&quot;[INSTALLFOLDER]windowcraft.exe&quot; --purge-data"
+                 Before="PurgeUserData" Sequence="execute" />
+    <CustomAction Id="PurgeUserData" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="PurgeUserData" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+
+    <UI>
+      <UIRef Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">
+        WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed
+      </Publish>
+    </UI>
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.Assets)\wix-banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.Assets)\wix-dialog.bmp" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch WindowCraft" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#WindowCraftExe]" />
+    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
+  </Product>
+</Wix>

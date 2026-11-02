@@ -1,0 +1,37 @@
+# Made by ycangignacy
+[package]
+name = "windowcraft-app"
+description = "WindowCraft desktop application and CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "windowcraft_app"
+path = "src/lib.rs"
+
+# Elevation is requested at runtime, so the binary itself carries no harness.
+[[bin]]
+name = "windowcraft"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+windowcraft-config.workspace = true
+windowcraft-engine.workspace = true
+windowcraft-iso.workspace = true
+windowcraft-physics.workspace = true
+clap.workspace = true
+iced.workspace = true
+tokio.workspace = true
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[build-dependencies]
+winresource = "0.1"

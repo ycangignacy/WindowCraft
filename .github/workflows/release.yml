@@ -1,0 +1,48 @@
+# Made by ycangignacy
+name: Release
+
+# Pushing a tag such as v0.1.0 builds every download and drafts a GitHub
+# Release. Publishing the draft stays a manual step.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+          targets: aarch64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+
+      - name: Check that the tag matches Cargo.toml
+        shell: pwsh
+        run: |
+          $manifest = Get-Content Cargo.toml -Raw
+          if ($manifest -notmatch '(?m)^version = "(\d+\.\d+\.\d+)"') { throw 'No workspace version.' }
+          $expected = "v$($Matches[1])"
+          if ($expected -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match $expected." }
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Add the ARM64 target
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Build installers
+        shell: pwsh
+        run: |
+          ./packaging/build.ps1 -Architecture x64 -ProjectUrl "https://github.com/$env:GITHUB_REPOSITORY"
+          ./packaging/build.ps1 -Architecture arm64 -ProjectUrl "https://github.com/$env:GITHUB_REPOSITORY"
+
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist -File).FullName --draft --prerelease --notes-file "docs/RELEASE-NOTES-$($env:GITHUB_REF_NAME.TrimStart('v')).md" --title "WindowCraft $env:GITHUB_REF_NAME"

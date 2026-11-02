@@ -1,0 +1,23 @@
+# Made by ycangignacy
+[package]
+name = "windowcraft-iso"
+description = "Windows 11 ISO Studio: image servicing, answer files and USB media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+windowcraft-config.workspace = true
+windowcraft-engine.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
