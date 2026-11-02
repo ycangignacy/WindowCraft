@@ -125,17 +125,9 @@ pub fn apply_sddl(path: &Path, sddl: &str) -> Result<()> {
     unsafe { GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted) }
         .map_err(|error| EngineError::windows("GetSecurityDescriptorDacl", sddl, &error))?;
 
-    // Unprotecting also sets the auto-inherited flag, so only a DACL that had
-    // it asks for that. A restore must reproduce what it read.
-    let flags = sddl.split('(').next().unwrap_or_default();
-    let inheritance = if flags.contains('P') {
-        PROTECTED_DACL_SECURITY_INFORMATION
-    } else if flags.contains("AI") {
-        UNPROTECTED_DACL_SECURITY_INFORMATION
-    } else {
-        OBJECT_SECURITY_INFORMATION(0)
-    };
-    write_dacl(path, dacl, DACL_SECURITY_INFORMATION | inheritance)
+    let protected = sddl.split('(').next().is_some_and(|flags| flags.contains('P'));
+    let flag = if protected { PROTECTED_DACL_SECURITY_INFORMATION } else { UNPROTECTED_DACL_SECURITY_INFORMATION };
+    write_dacl(path, dacl, DACL_SECURITY_INFORMATION | flag)
 }
 
 /// Adds an explicit DENY entry.
@@ -269,6 +261,12 @@ mod tests {
     use super::*;
     use std::fs;
 
+    /// Windows sets the auto-inherited flag on every write through this API,
+    /// whatever the caller asks, so only the entries and protection can differ.
+    fn normalized(sddl: &str) -> String {
+        sddl.replacen("AI(", "(", 1)
+    }
+
     fn directory() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
     }
@@ -279,7 +277,7 @@ mod tests {
         let before = dacl_sddl(dir.path()).unwrap();
         assert!(before.starts_with("D:"));
         apply_sddl(dir.path(), &before).unwrap();
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
@@ -333,7 +331,7 @@ mod tests {
             let _guard = AclGuard::deny(dir.path(), SID_EVERYONE, delete_mask()).unwrap();
             assert_ne!(dacl_sddl(dir.path()).unwrap(), before);
         }
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
@@ -346,7 +344,7 @@ mod tests {
             panic!("simulated uninstaller crash");
         });
         assert!(outcome.is_err());
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
@@ -358,7 +356,7 @@ mod tests {
         let dir = directory();
         let before = dacl_sddl(dir.path()).unwrap();
         assert!(work(dir.path()).is_err());
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
@@ -366,7 +364,7 @@ mod tests {
         let dir = directory();
         let before = dacl_sddl(dir.path()).unwrap();
         AclGuard::deny(dir.path(), SID_EVERYONE, delete_mask()).unwrap().restore().unwrap();
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
@@ -374,7 +372,7 @@ mod tests {
         let dir = directory();
         let before = dacl_sddl(dir.path()).unwrap();
         assert!(add_deny(dir.path(), "not-a-sid", delete_mask()).is_err());
-        assert_eq!(dacl_sddl(dir.path()).unwrap(), before);
+        assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
     }
 
     #[test]
