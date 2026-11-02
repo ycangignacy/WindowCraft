@@ -48,4 +48,4 @@ Installer packages are verified by running PowerShell with elevated administrato
 
 Tests never change live system state. Code submitted in pull requests must preserve this separation.
 
-Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete that tree on drop. Service operations run against an in-memory table. Native operations go to a recording runner. The integration probe in `tests/real_machine_probe.rs` reads the live system and writes nothing.
+Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete that tree on drop. Service operations run against an in-memory table. Native operations go to a recording runner. The integration probe in `crates/windowcraft-engine/tests/real_machine_probe.rs` reads the live system and writes nothing.

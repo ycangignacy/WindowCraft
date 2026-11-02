@@ -34,13 +34,14 @@ These are open in 0.1.0 and will be fixed in a later release.
 
 ## Known limitations
 
-- The interface is in English only.
-- Uninstalling deletes Time Machine history for every user with no warning. Roll changes back first if you want them undone.
-- Uninstalling leaves settings you changed. That covers tweaks, removed apps, installed packages including Chocolatey, OpenSSH Server with its firewall rule, restore points and backups kept beside system files, such as `hosts.bak`.
-- Rolling back OpenSSH Server removes its firewall rule, while the server and its services stay installed.
-- Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption.
-- The portable build has no uninstaller. Run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation it removes only your own data folder.
-- The portable build has no `windowcraft-cli.exe`, so a shell does not wait for it. Use `Start-Process -Wait` or pipe it to `Out-Null`.
-- If you elevate with a different administrator account, per-user tweaks go to that account, and it has its own Time Machine history.
-- `--run` and `--check-drift` fail while the app is open, because only one process can hold the snapshot database.
-- An ISO build installs `oscdimg` through WinGet when it is missing and removes it afterwards, so that build needs a network connection.
+The interface is in English only.
+
+An uninstall deletes Time Machine history for every user with no warning, so roll changes back first if you want them undone. It leaves the settings you changed: tweaks, removed apps, installed packages including Chocolatey, OpenSSH Server with its firewall rule, restore points and backups kept beside system files, such as `hosts.bak`.
+
+Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption. A rollback of OpenSSH Server removes its firewall rule, and the server and its services stay installed.
+
+The portable build has no uninstaller and no `windowcraft-cli.exe`. To remove its data, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation this removes only your own data folder. A shell does not wait for this build unless you use `Start-Process -Wait` or pipe it to `Out-Null`.
+
+If you elevate with a different administrator account, per-user tweaks go to that account, and it has its own Time Machine history. `--run` and `--check-drift` fail while the app is open, because only one process can hold the snapshot database.
+
+An ISO build installs `oscdimg` through WinGet when it is missing and removes it afterwards, so that build needs a network connection.

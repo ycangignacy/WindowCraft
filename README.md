@@ -50,7 +50,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Tests do not modify live system settings. Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete the key on drop. Service operations execute against an in-memory table. Native operations go to a recording runner. `tests/real_machine_probe.rs` reads the live system and writes nothing.
+Tests do not modify live system settings. Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete the key on drop. Service operations execute against an in-memory table. Native operations go to a recording runner. `crates/windowcraft-engine/tests/real_machine_probe.rs` reads the live system and writes nothing.
 
 ## Command line
 
@@ -87,11 +87,11 @@ The graphical renderer is software-based through `tiny-skia`. It meets memory an
 
 WindowCraft runs no background service, notification tray icon, scheduled task, update check or telemetry background process. It creates no custom registry key. It initiates network connections only when a user starts an action that requests one, such as downloading a package.
 
-Closing the window during an active job prompts for confirmation. Quitting anyway cancels the job.
+If you close the window during a job, WindowCraft asks first. Quit Anyway cancels the job, and the app exits once it stops.
 
 Application data is stored in `%LOCALAPPDATA%\WindowCraft`. This directory holds Time Machine snapshots, the append-only job log, exports, downloaded tools and ISO Studio work files.
 
-Uninstalling removes `%LOCALAPPDATA%\WindowCraft` for all users, the `*.wcbak` folders left by Windows Update resets and the `AutoRegBackup` task. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data.
+An uninstall removes `%LOCALAPPDATA%\WindowCraft` for all users, the `*.wcbak` folders left by Windows Update resets and the `AutoRegBackup` task. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data.
 
 The portable build has no uninstaller. `windowcraft.exe --purge-data` from an elevated terminal does the same cleanup, then delete the file. Without elevation it removes only your own data folder.
 
@@ -99,15 +99,13 @@ Settings you chose to change stay as they are after uninstalling. That covers tw
 
 ## Safety
 
-- Every change records the prior value in redb before the initial modification.
-- A failing tweak reverts itself without halting the remaining queue.
-- A rollback lists what it could not undo, and the session shows "Partly rolled back". Rolling back the `reg-backup` feature deletes its task, and rolling back OpenSSH Server removes its firewall rule. Enabled DISM features stay enabled.
-- Seven critical services cannot be disabled: `RpcSs`, `DcomLaunch`, `LSM`, `BFE`, `mpssvc`, `WinDefend`, and `ProfSvc`.
-- Temporary ACL adjustments use a `Drop` guard. The release profile keeps unwinding enabled because `panic = "abort"` would bypass the guard.
-- System files are replaced atomically with a `.bak` backup copy.
-- USB drive erasure requires the USB bus, absence of system volumes, valid disk geometry, and a matching model string re-checked before the initial write.
-- Generated answer files never configure disks, so Setup always asks where to install.
-- Downloaded hosts lists keep sinkhole entries only. Downloaded executables must pass Authenticode before launch.
+Every change records the prior value in redb before the first write. A tweak that fails reverts itself, and the rest of the queue continues. A rollback lists what it could not undo, and the session then shows "Partly rolled back". Rolling back `reg-backup` deletes its task, and rolling back OpenSSH Server removes its firewall rule. Enabled DISM features stay enabled.
+
+These services can never be disabled, whatever a config says: `RpcSs`, `DcomLaunch`, `LSM`, `BFE`, `mpssvc`, `WinDefend` and `ProfSvc`.
+
+Temporary ACL changes live in a `Drop` guard. The release profile keeps unwinding on, because `panic = "abort"` would skip that guard. System files are replaced atomically, with a `.bak` copy.
+
+USB erasure requires the USB bus, no system volume, a sane disk shape and a matching model, checked again immediately before the first write. Generated answer files never configure disks, so Setup always asks where to install. Downloaded hosts lists keep sinkhole entries only, and downloaded executables must pass Authenticode before launch.
 
 See [NOTICE.md](NOTICE.md) for catalog attribution and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for Rust crate notices.
 
