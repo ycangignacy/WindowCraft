@@ -30,6 +30,7 @@ pub struct RecordingRunner {
     /// Features that report as already on.
     pub features_on: Mutex<Vec<String>>,
     pub fail_on: Mutex<Option<NativeOp>>,
+    pub feature_query_fails: std::sync::atomic::AtomicBool,
 }
 
 impl NativeRunner for RecordingRunner {
@@ -58,6 +59,9 @@ impl NativeRunner for RecordingRunner {
     }
 
     fn feature_enabled(&self, name: &str) -> Result<bool> {
+        if self.feature_query_fails.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(EngineError::Invalid("injected".into()));
+        }
         Ok(self.features_on.lock().is_ok_and(|on| on.iter().any(|feature| feature == name)))
     }
 }

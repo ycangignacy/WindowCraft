@@ -599,6 +599,18 @@ fn rolling_back_leaves_features_that_were_already_on() {
 }
 
 #[test]
+fn rolling_back_with_failed_feature_query_disables_nothing() {
+    let rig = rig("featurequeryfail");
+    rig.native.feature_query_fails.store(true, std::sync::atomic::Ordering::Relaxed);
+    let feature = rig.engine.catalog.feature("wsl").unwrap().clone();
+    let session = rig.engine.apply_feature(&feature, None, &CancelToken::new()).unwrap();
+
+    rig.engine.rollback_session(session).unwrap();
+    assert_eq!(session_state(&rig, session), SessionState::RolledBack);
+    assert!(rig.native.disabled_features.lock().unwrap().is_empty());
+}
+
+#[test]
 fn feature_steps_recorded_by_0_1_0_still_count_as_kept() {
     let rig = rig("featurelegacy");
     let session = rig.engine.store.begin_session("WSL").unwrap();

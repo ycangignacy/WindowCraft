@@ -472,4 +472,38 @@ mod tests {
         indexes.dedup();
         assert_eq!(indexes.len(), 200, "indexes must be unique");
     }
+
+    #[test]
+    fn native_change_with_feature_roundtrips_through_json() {
+        let original = Change::Native {
+            description: "Enable Windows feature NetFx3".into(),
+            feature: Some(FeatureStep {
+                name: "NetFx3".into(),
+                was_on: false,
+            }),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Change = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn v0_1_0_native_change_json_deserializes_with_none_feature() {
+        let json = r#"{"kind":"Native","description":"Enable Windows feature NetFx3"}"#;
+        let deserialized: Change = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            deserialized,
+            Change::Native {
+                description: "Enable Windows feature NetFx3".into(),
+                feature: None,
+            }
+        );
+    }
+
+    #[test]
+    fn change_native_serializes_without_feature_key() {
+        let change = Change::native("x");
+        let json = serde_json::to_string(&change).unwrap();
+        assert!(!json.contains("feature"));
+    }
 }

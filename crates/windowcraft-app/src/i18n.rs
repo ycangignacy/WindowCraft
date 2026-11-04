@@ -3308,4 +3308,64 @@ mod tests {
         assert_eq!(parse_settings_language(r#"{"language": "unknown"}"#), None);
         assert_eq!(parse_settings_language(r#"{}"#), None);
     }
+
+    #[test]
+    fn no_message_contains_rust_format_spec() {
+        for &lang in Language::ALL {
+            for &msg in Msg::ALL {
+                let text = t(lang, msg);
+                assert!(
+                    !text.contains("{:"),
+                    "Message {:?} in {:?} contains format spec: {}",
+                    msg, lang, text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn language_all_has_eight_distinct_entries() {
+        assert_eq!(Language::ALL.len(), 8);
+
+        let mut tags: Vec<_> = Language::ALL.iter().map(|l| l.tag()).collect();
+        tags.sort_unstable();
+        tags.dedup();
+        assert_eq!(tags.len(), 8);
+
+        let mut names: Vec<_> = Language::ALL.iter().map(|l| l.native_name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 8);
+    }
+
+    #[test]
+    fn format_1_leaves_second_placeholder_in_place() {
+        assert_eq!(format_1("{} and {}", "a"), "a and {}");
+    }
+
+    #[test]
+    fn langid_mapping_maps_western_locales_and_czech() {
+        assert_eq!(Language::from_langid(0x0407), Language::De);
+        assert_eq!(Language::from_langid(0x040C), Language::Fr);
+        assert_eq!(Language::from_langid(0x0C0A), Language::Es);
+        assert_eq!(Language::from_langid(0x0410), Language::It);
+        assert_eq!(Language::from_langid(0x0405), Language::En);
+    }
+
+    #[test]
+    fn ukrainian_plurals() {
+        let lang = Language::Uk;
+        let p = |n| lang.plural(n, "1", "few", "many");
+        assert_eq!(p(1), "1");
+        assert_eq!(p(21), "1");
+        assert_eq!(p(2), "few");
+        assert_eq!(p(3), "few");
+        assert_eq!(p(4), "few");
+        assert_eq!(p(22), "few");
+        assert_eq!(p(5), "many");
+        assert_eq!(p(11), "many");
+        assert_eq!(p(12), "many");
+        assert_eq!(p(14), "many");
+        assert_eq!(p(25), "many");
+    }
 }

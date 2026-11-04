@@ -359,6 +359,14 @@ mod tests {
     }
 
     #[test]
+    fn targets_contains_single_iso_target_ending_with_windowcraft_iso() {
+        let iso_entries: Vec<_> = targets().into_iter().filter(|target| target.id == ISO_TARGET).collect();
+        assert_eq!(iso_entries.len(), 1);
+        assert_eq!(iso_entries[0].paths.len(), 1);
+        assert!(iso_entries[0].paths[0].ends_with(r"WindowCraft\iso"));
+    }
+
+    #[test]
     fn a_mounted_image_blocks_only_the_iso_target() {
         let dir = tempfile::tempdir().unwrap();
         let mount = dir.path().join("mount");
