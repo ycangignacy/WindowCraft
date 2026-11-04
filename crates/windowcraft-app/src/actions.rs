@@ -1,6 +1,7 @@
 // Made by ycangignacy
 //! Operations shared by the GUI and the CLI.
 
+use crate::i18n::{Language, Msg, format_1, format_2, t};
 use std::collections::BTreeMap;
 use windowcraft_config::{
     Catalog, NativeOp, PresetName, Profile, ResolvedProfile, ServiceRule, Tweak, TweakGroup, TweakKind,
@@ -61,13 +62,13 @@ fn custom_services_tweak(rules: &[ServiceRule]) -> Tweak {
 }
 
 /// Applies the DNS selection. `Fastest` benchmarks first.
-pub fn apply_dns(catalog: &Catalog, selection: &str) -> Result<String> {
+pub fn apply_dns(catalog: &Catalog, selection: &str, lang: Language) -> Result<String> {
     use windowcraft_engine::dns_bench::{Target, benchmark, fastest};
     use windowcraft_engine::download::block_on;
     match selection {
         "Default" | "DHCP" => {
             dns::reset_to_dhcp()?;
-            Ok("DNS returned to DHCP".to_owned())
+            Ok(t(lang, Msg::DnsReturnedToDhcp).to_owned())
         }
         "Fastest" => {
             let targets: Vec<Target> =
@@ -76,12 +77,12 @@ pub fn apply_dns(catalog: &Catalog, selection: &str) -> Result<String> {
             let winner = fastest(&results).ok_or_else(|| EngineError::Network("no resolver answered".to_owned()))?;
             let provider = catalog.dns_provider(winner).ok_or_else(|| EngineError::NotFound(winner.to_owned()))?;
             dns::set_provider(provider)?;
-            Ok(format!("DNS set to {winner}, the fastest resolver"))
+            Ok(format_1(t(lang, Msg::DnsSetFastest), winner))
         }
         name => {
             let provider = catalog.dns_provider(name).ok_or_else(|| EngineError::NotFound(name.to_owned()))?;
             let adapters = dns::set_provider(provider)?;
-            Ok(format!("DNS set to {name} on {adapters} adapters"))
+            Ok(format_2(t(lang, Msg::DnsSetOnAdapters), name, &adapters.to_string()))
         }
     }
 }
@@ -158,7 +159,7 @@ pub fn run_profile(
         }
     }
     if let Some(selection) = &profile.dns {
-        step(&mut summary, "DNS", apply_dns(&catalog, selection).map(drop));
+        step(&mut summary, "DNS", apply_dns(&catalog, selection, Language::En).map(drop));
     }
     if let Some(id) = &profile.update_mode
         && let Some(mode) = catalog.update_mode(id)

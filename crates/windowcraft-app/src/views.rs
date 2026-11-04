@@ -1,6 +1,7 @@
 //! The three-column workspace and its seven modules.
 
 use crate::app::*;
+use crate::i18n::{self, Language, Msg, format_1, format_2, format_3, t};
 use crate::icons::Icon;
 use crate::press::press;
 use crate::theme::*;
@@ -9,10 +10,10 @@ use iced::widget::{Column, Row, column, container, mouse_area, opaque, row, spac
 use iced::{Alignment, Border, Color, Length, Padding, mouse};
 use windowcraft_config::{FeatureKind, Tweak, TweakGroup, TweakKind};
 use windowcraft_engine::Detection;
-use windowcraft_engine::services::is_protected;
 use windowcraft_engine::autoruns::EntrySource;
 use windowcraft_engine::gaming::InterruptPriority;
 use windowcraft_engine::packages::PackageManager;
+use windowcraft_engine::services::is_protected;
 use windowcraft_engine::snapshot::{Change, SessionState, unix_now};
 
 /// Wider than the visible hairline, so the edge is easy to grab.
@@ -59,14 +60,14 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
     ];
 
     let elevation: El<'_> = if app.info.elevated {
-        badge(p, "Administrator", p.green)
+        badge(p, t(app.language, Msg::Administrator), p.green)
     } else {
-        press(badge(p, "Standard user", p.amber)).on_press(Message::Relaunch).into()
+        press(badge(p, t(app.language, Msg::StandardUser), p.amber)).on_press(Message::Relaunch).into()
     };
     let header = column![
         strong("WindowCraft", p.ink),
-        mono(format!("Build {}", app.info.full_build()), p.ink_tertiary),
-        caption("Made by ycangignacy", p.ink_tertiary),
+        mono(format_1(t(app.language, Msg::BuildFormat), &app.info.full_build()), p.ink_tertiary),
+        caption(t(app.language, Msg::MadeBy), p.ink_tertiary),
         space().height(6),
         elevation,
     ]
@@ -88,7 +89,7 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
         let ink = if active { p.ink } else { p.ink_secondary };
         items = items.push(
             press(
-                container(row![icon.view(16.0, ink), caption(page.title(), ink)].spacing(10).align_y(Alignment::Center))
+                container(row![icon.view(16.0, ink), caption(page.title_in(app.language), ink)].spacing(10).align_y(Alignment::Center))
                     .width(Length::Fill)
                     .height(NAV_ROW_HEIGHT)
                     .padding([0.0, 10.0])
@@ -104,9 +105,16 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
         container(stack![items].push_under(highlight)).padding([0.0, 8.0]),
         space().height(Length::Fill),
         container(
-            row![icon_button(p, appearance_icon, Message::CycleAppearance), mono(concat!("v", env!("CARGO_PKG_VERSION")), p.ink_tertiary)]
+            column![
+                select(p, Language::ALL.to_vec(), Some(app.language), Message::SetLanguage),
+                row![
+                    icon_button(p, appearance_icon, Message::CycleAppearance),
+                    mono(concat!("v", env!("CARGO_PKG_VERSION")), p.ink_tertiary)
+                ]
                 .spacing(8)
                 .align_y(Alignment::Center),
+            ]
+            .spacing(8),
         )
         .padding(10),
     ])
@@ -117,7 +125,7 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
 }
 
 fn center(app: &App, p: Palette) -> El<'_> {
-    let search = text_input("Search apps, tweaks, registry keys, services and fixes", &app.query)
+    let search = text_input(t(app.language, Msg::SearchPlaceholder), &app.query)
         .id(search_id())
         .on_input(Message::Query)
         .size(13)
@@ -135,7 +143,7 @@ fn center(app: &App, p: Palette) -> El<'_> {
 
     let toolbar = container(
         column![
-            row![heading(app.page.title(), p.ink), space().width(Length::Fill), search, mono("Ctrl+K", p.ink_tertiary)]
+            row![heading(app.page.title_in(app.language), p.ink), space().width(Length::Fill), search, mono("Ctrl+K", p.ink_tertiary)]
                 .spacing(10)
                 .align_y(Alignment::Center),
             page_toolbar(app, p),
@@ -164,14 +172,14 @@ fn center(app: &App, p: Palette) -> El<'_> {
         && app.page != Page::TimeMachine
     {
         main = main.push(
-            container(banner(p, Icon::Alert, p.amber, summary, vec![("Re-apply", Message::RepairDrift)]))
+            container(banner(p, Icon::Alert, p.amber, summary, vec![(t(app.language, Msg::ReApply), Message::RepairDrift)]))
                 .padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }),
         );
     }
     if let Some(notice) = &app.notice {
-        let mut actions = vec![("Dismiss", Message::DismissNotice)];
+        let mut actions = vec![(t(app.language, Msg::Dismiss), Message::DismissNotice)];
         if app.needs_elevation {
-            actions.insert(0, ("Restart as Administrator", Message::Relaunch));
+            actions.insert(0, (t(app.language, Msg::RestartAsAdministrator), Message::Relaunch));
         }
         main = main.push(
             container(banner(p, Icon::Check, p.ink_secondary, notice.clone(), actions))
@@ -226,13 +234,13 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
                     manager,
                     button(
                         p,
-                        if app.checking_upgrades { "Checking Versions" } else { "Show Installed" },
+                        if app.checking_upgrades { t(app.language, Msg::CheckingVersions) } else { t(app.language, Msg::ShowInstalled) },
                         Some(Icon::Eye),
                         Tone::Secondary,
                         (!app.checking_upgrades).then_some(Message::ShowInstalled),
                     ),
-                    button(p, "Upgrade All", Some(Icon::Refresh), Tone::Secondary, app.job.is_none().then_some(Message::UpgradeAll)),
-                    button(p, "Clear Selection", None, Tone::Secondary, Some(Message::ClearApps)),
+                    button(p, t(app.language, Msg::UpgradeAll), Some(Icon::Refresh), Tone::Secondary, app.job.is_none().then_some(Message::UpgradeAll)),
+                    button(p, t(app.language, Msg::ClearSelection), None, Tone::Secondary, Some(Message::ClearApps)),
                 ]
                 .spacing(8)
                 .align_y(Alignment::Center),
@@ -248,7 +256,7 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
         Page::Tweaks => {
             let bar = tabs(
                 p,
-                TweakTab::ALL.iter().map(|tab| tab.title()).collect(),
+                TweakTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect(),
                 app.timeline.channels[TAB].value(),
                 104.0,
                 |index| Message::Tab(TweakTab::ALL[index]),
@@ -256,25 +264,25 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
             let mut controls = row![bar].spacing(8).align_y(Alignment::Center);
             if app.tab != TweakTab::Appx {
                 controls = controls
-                    .push(button(p, "Minimal", None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Minimal))))
-                    .push(button(p, "Standard", None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Standard))))
-                    .push(button(p, "Advanced", None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Advanced))))
-                    .push(button(p, "Detect Applied", None, Tone::Secondary, Some(Message::DetectApplied)))
-                    .push(button(p, "Clear", None, Tone::Secondary, Some(Message::ClearTweaks)));
+                    .push(button(p, t(app.language, Msg::PresetMinimal), None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Minimal))))
+                    .push(button(p, t(app.language, Msg::PresetStandard), None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Standard))))
+                    .push(button(p, t(app.language, Msg::PresetAdvanced), None, Tone::Secondary, Some(Message::Preset(windowcraft_config::PresetName::Advanced))))
+                    .push(button(p, t(app.language, Msg::DetectApplied), None, Tone::Secondary, Some(Message::DetectApplied)))
+                    .push(button(p, t(app.language, Msg::Clear), None, Tone::Secondary, Some(Message::ClearTweaks)));
             } else {
-                controls = controls.push(button(p, "Default Removals", None, Tone::Secondary, Some(Message::AppxDefaults)));
+                controls = controls.push(button(p, t(app.language, Msg::DefaultRemovals), None, Tone::Secondary, Some(Message::AppxDefaults)));
             }
             // Wraps instead of clipping when the inspector narrows this column.
             controls
-                .push(button(p, "Import", None, Tone::Secondary, Some(Message::ImportProfile)))
-                .push(button(p, "Export", None, Tone::Secondary, Some(Message::ExportProfile)))
+                .push(button(p, t(app.language, Msg::Import), None, Tone::Secondary, Some(Message::ImportProfile)))
+                .push(button(p, t(app.language, Msg::Export), None, Tone::Secondary, Some(Message::ExportProfile)))
                 .wrap()
                 .vertical_spacing(8)
                 .into()
         }
         Page::Inspector => tabs(
             p,
-            InspectorTab::ALL.iter().map(|tab| tab.title()).collect(),
+            InspectorTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect(),
             app.timeline.channels[TAB].value(),
             100.0,
             |index| Message::InspectorTab(InspectorTab::ALL[index]),
@@ -289,7 +297,7 @@ fn dock<'a>(app: &'a App, p: Palette, progress_value: f32) -> El<'a> {
             row![
                 strong(job.label.as_str(), p.ink).width(Length::Fill),
                 mono(format!("{:>3.0}%", job.fraction * 100.0), p.ink_secondary),
-                button(p, "Cancel", Some(Icon::Stop), Tone::Secondary, Some(Message::CancelJob)),
+                button(p, t(app.language, Msg::Cancel), Some(Icon::Stop), Tone::Secondary, Some(Message::CancelJob)),
             ]
             .spacing(10)
             .align_y(Alignment::Center),
@@ -300,32 +308,68 @@ fn dock<'a>(app: &'a App, p: Palette, progress_value: f32) -> El<'a> {
         .into()
     } else {
         let (count, noun, actions): (usize, &str, Vec<El<'a>>) = match app.page {
-            Page::Applications => (
-                app.selected_apps.len(),
-                "applications selected",
-                vec![
-                    button(p, "Uninstall", Some(Icon::Trash), Tone::Destructive, Some(Message::UninstallApps)),
-                    button(p, "Install / Upgrade", Some(Icon::Download), Tone::Primary, Some(Message::InstallApps)),
-                ],
-            ),
-            Page::Tweaks if app.tab == TweakTab::Appx => (
-                app.selected_appx.len(),
-                "packages selected",
-                vec![
-                    button(p, "Install", Some(Icon::Download), Tone::Secondary, Some(Message::InstallAppx)),
-                    button(p, "Remove", Some(Icon::Trash), Tone::Destructive, Some(Message::RemoveAppx)),
-                ],
-            ),
-            Page::System => (
-                app.selected_features.len(),
-                "features selected",
-                vec![button(p, "Install Features", Some(Icon::Download), Tone::Primary, Some(Message::InstallFeatures))],
-            ),
-            _ => (
-                app.selected_tweaks.len(),
-                "tweaks queued",
-                vec![button(p, "Run Tweaks", Some(Icon::Play), Tone::Primary, Some(Message::ApplyTweaks))],
-            ),
+            Page::Applications => {
+                let count = app.selected_apps.len();
+                let noun = app.language.plural(
+                    count,
+                    t(app.language, Msg::AppsSelectedOne),
+                    t(app.language, Msg::AppsSelectedFew),
+                    t(app.language, Msg::AppsSelectedMany),
+                );
+                (
+                    count,
+                    noun,
+                    vec![
+                        button(p, t(app.language, Msg::Uninstall), Some(Icon::Trash), Tone::Destructive, Some(Message::UninstallApps)),
+                        button(p, t(app.language, Msg::InstallUpgrade), Some(Icon::Download), Tone::Primary, Some(Message::InstallApps)),
+                    ],
+                )
+            }
+            Page::Tweaks if app.tab == TweakTab::Appx => {
+                let count = app.selected_appx.len();
+                let noun = app.language.plural(
+                    count,
+                    t(app.language, Msg::PackagesSelectedOne),
+                    t(app.language, Msg::PackagesSelectedFew),
+                    t(app.language, Msg::PackagesSelectedMany),
+                );
+                (
+                    count,
+                    noun,
+                    vec![
+                        button(p, t(app.language, Msg::Install), Some(Icon::Download), Tone::Secondary, Some(Message::InstallAppx)),
+                        button(p, t(app.language, Msg::Remove), Some(Icon::Trash), Tone::Destructive, Some(Message::RemoveAppx)),
+                    ],
+                )
+            }
+            Page::System => {
+                let count = app.selected_features.len();
+                let noun = app.language.plural(
+                    count,
+                    t(app.language, Msg::FeaturesSelectedOne),
+                    t(app.language, Msg::FeaturesSelectedFew),
+                    t(app.language, Msg::FeaturesSelectedMany),
+                );
+                (
+                    count,
+                    noun,
+                    vec![button(p, t(app.language, Msg::InstallFeatures), Some(Icon::Download), Tone::Primary, Some(Message::InstallFeatures))],
+                )
+            }
+            _ => {
+                let count = app.selected_tweaks.len();
+                let noun = app.language.plural(
+                    count,
+                    t(app.language, Msg::TweaksQueuedOne),
+                    t(app.language, Msg::TweaksQueuedFew),
+                    t(app.language, Msg::TweaksQueuedMany),
+                );
+                (
+                    count,
+                    noun,
+                    vec![button(p, t(app.language, Msg::RunTweaks), Some(Icon::Play), Tone::Primary, Some(Message::ApplyTweaks))],
+                )
+            }
         };
         let mut bar = row![
             mono(count.to_string(), p.ink),
@@ -369,13 +413,13 @@ fn search_results(app: &App, p: Palette) -> El<'_> {
                 None,
                 hit.title.as_str(),
                 hit.detail.as_str(),
-                badge(p, hit.kind.label(), p.ink_secondary),
+                badge(p, i18n::search_kind(app.language, hit.kind), p.ink_secondary),
                 Some(Message::SearchSelected(hit.kind, hit.id.clone())),
             )
         })
         .collect();
     let content: El<'_> = if rows.is_empty() {
-        body("No matches.", p.ink_secondary).into()
+        body(t(app.language, Msg::NoMatches), p.ink_secondary).into()
     } else {
         group(p, rows, ROW_INSET)
     };
@@ -406,14 +450,14 @@ fn applications(app: &App, p: Palette) -> El<'_> {
                 trailing = trailing.push(mono(version, p.ink_secondary));
             }
             if item.foss {
-                trailing = trailing.push(badge(p, "FOSS", p.ink_tertiary));
+                trailing = trailing.push(badge(p, t(app.language, Msg::FossBadge), p.ink_tertiary));
             }
             trailing = trailing.push(icon_button(p, Icon::Eye, Message::Inspect(Inspected::App(item.id.clone()))));
             rows.push(list_row(
                 p,
                 Some(check(p, selected, Message::AppToggled(item.id.clone()))),
                 item.name.as_str(),
-                package.unwrap_or("not available from this source"),
+                package.unwrap_or(t(app.language, Msg::NotAvailableFromSource)),
                 trailing.into(),
                 Some(Message::AppToggled(item.id.clone())),
             ));
@@ -431,17 +475,17 @@ fn status_color(p: Palette, detection: Option<&Detection>) -> Color {
     }
 }
 
-fn tweak_detail(tweak: &Tweak) -> String {
+fn tweak_detail(lang: Language, tweak: &Tweak) -> String {
     tweak.registry.first().map_or_else(
         || {
             tweak.services.first().map_or_else(
                 || tweak.apply.first().map_or_else(String::new, windowcraft_config::NativeOp::describe),
-                |rule| format!("Service {} -> {}", rule.name, rule.startup.label()),
+                |rule| format_2(t(lang, Msg::ServiceRuleFormat), &rule.name, i18n::service_startup(lang, rule.startup)),
             )
         },
         |entry| {
             let more = tweak.registry.len() - 1;
-            let value = entry.value.as_deref().unwrap_or("per option");
+            let value = entry.value.as_deref().unwrap_or(t(lang, Msg::PerOption));
             let suffix = if more > 0 { format!("  +{more}") } else { String::new() };
             format!("{}\\{} = {value}{suffix}", entry.path, entry.name)
         },
@@ -473,7 +517,7 @@ fn tweak_row<'a>(app: &'a App, p: Palette, tweak: &'a Tweak) -> El<'a> {
         }
         TweakKind::Action => (
             None,
-            button(p, "Run", Some(Icon::Play), Tone::Secondary, app.job.is_none().then_some(Message::RunAction(id))),
+            button(p, t(app.language, Msg::Run), Some(Icon::Play), Tone::Secondary, app.job.is_none().then_some(Message::RunAction(id))),
             None,
         ),
         TweakKind::Dns => {
@@ -484,13 +528,13 @@ fn tweak_row<'a>(app: &'a App, p: Palette, tweak: &'a Tweak) -> El<'a> {
 
     let mut trailing = Row::new().spacing(10).align_y(Alignment::Center);
     if tweak.group == TweakGroup::Advanced {
-        trailing = trailing.push(badge(p, "Caution", p.amber));
+        trailing = trailing.push(badge(p, t(app.language, Msg::CautionBadge), p.amber));
     }
     if tweak.is_detectable() {
         trailing = trailing.push(dot(status_color(p, detection)));
     }
     trailing = trailing.push(control).push(inspect);
-    list_row(p, leading, tweak.name.as_str(), tweak_detail(tweak), trailing.into(), on_press)
+    list_row(p, leading, tweak.name.as_str(), tweak_detail(app.language, tweak), trailing.into(), on_press)
 }
 
 fn tweaks(app: &App, p: Palette) -> El<'_> {
@@ -508,7 +552,7 @@ fn tweaks(app: &App, p: Palette) -> El<'_> {
             .filter(|tweak| tweak.group == *group_kind)
             .map(|tweak| tweak_row(app, p, tweak))
             .collect();
-        sections = sections.push(group_titled(p, group_kind.label(), rows, ROW_INSET));
+        sections = sections.push(group_titled(p, i18n::tweak_group(app.language, *group_kind), rows, ROW_INSET));
     }
     scroll_area(p, sections)
 }
@@ -525,7 +569,7 @@ fn appx_page(app: &App, p: Palette) -> El<'_> {
                 let selected = app.selected_appx.contains(&package.id);
                 let mut trailing = Row::new().spacing(8).align_y(Alignment::Center);
                 if package.warning.is_some() {
-                    trailing = trailing.push(badge(p, "Dependency", p.amber));
+                    trailing = trailing.push(badge(p, t(app.language, Msg::DependencyBadge), p.amber));
                 }
                 trailing = trailing.push(icon_button(p, Icon::Eye, Message::Inspect(Inspected::Appx(package.id.clone()))));
                 list_row(
@@ -573,7 +617,7 @@ fn system(app: &App, p: Palette) -> El<'_> {
                 }
                 trailing = trailing.push(button(
                     p,
-                    "Run",
+                    t(app.language, Msg::Run),
                     Some(Icon::Play),
                     Tone::Secondary,
                     app.job.is_none().then(|| Message::RunFix(feature.id.clone())),
@@ -603,10 +647,10 @@ fn system(app: &App, p: Palette) -> El<'_> {
     scroll_area(
         p,
         column![
-            group_titled(p, "Windows Optional Features", feature_rows, 41.0),
-            group_titled(p, "One-Click Fixes", action_rows(FeatureKind::Fix), ROW_INSET),
-            group_titled(p, "PowerShell Profile and OpenSSH", remote, ROW_INSET),
-            group_titled(p, "Classic Windows Panels", panel_rows, ROW_INSET),
+            group_titled(p, t(app.language, Msg::WindowsOptionalFeatures), feature_rows, 41.0),
+            group_titled(p, t(app.language, Msg::OneClickFixes), action_rows(FeatureKind::Fix), ROW_INSET),
+            group_titled(p, t(app.language, Msg::PowerShellProfileAndOpenSsh), remote, ROW_INSET),
+            group_titled(p, t(app.language, Msg::ClassicWindowsPanels), panel_rows, ROW_INSET),
         ]
         .spacing(16),
     )
@@ -620,10 +664,10 @@ fn updates(app: &App, p: Palette) -> El<'_> {
         .map(|mode| {
             let active = app.update_mode == mode.id;
             let trailing: El<'_> = if active {
-                badge(p, "Active", p.green)
+                badge(p, t(app.language, Msg::ActiveBadge), p.green)
             } else {
                 let tone = if mode.confirm { Tone::Destructive } else { Tone::Secondary };
-                button(p, "Apply", None, tone, app.job.is_none().then(|| Message::UpdateMode(mode.id.clone())))
+                button(p, t(app.language, Msg::Apply), None, tone, app.job.is_none().then(|| Message::UpdateMode(mode.id.clone())))
             };
             press(
                 container(
@@ -673,14 +717,14 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
         column![
             row![
                 input(p, r"C:\Downloads\Win11.iso", &iso.path, Message::IsoPath),
-                button(p, "Browse", Some(Icon::Folder), Tone::Secondary, Some(Message::IsoBrowse)),
-                button(p, "Open", None, Tone::Primary, (ready && !iso.path.is_empty()).then_some(Message::IsoOpen)),
+                button(p, t(app.language, Msg::Browse), Some(Icon::Folder), Tone::Secondary, Some(Message::IsoBrowse)),
+                button(p, t(app.language, Msg::Open), None, Tone::Primary, (ready && !iso.path.is_empty()).then_some(Message::IsoOpen)),
             ]
             .spacing(8),
             row![
-                input(p, "Direct download URL from microsoft.com/software-download/windows11", &iso.url, Message::IsoDownloadUrl),
-                input(p, "Expected SHA-256 (optional)", &iso.hash, Message::IsoDownloadHash),
-                button(p, "Download", Some(Icon::Download), Tone::Secondary, (ready && !iso.url.is_empty()).then_some(Message::IsoDownload)),
+                input(p, t(app.language, Msg::IsoDirectDownloadUrlPlaceholder), &iso.url, Message::IsoDownloadUrl),
+                input(p, t(app.language, Msg::IsoExpectedSha256Placeholder), &iso.hash, Message::IsoDownloadHash),
+                button(p, t(app.language, Msg::Download), Some(Icon::Download), Tone::Secondary, (ready && !iso.url.is_empty()).then_some(Message::IsoDownload)),
             ]
             .spacing(8),
         ]
@@ -697,7 +741,7 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
                 p,
                 Some(check(p, active, Message::IsoEdition(image.index))),
                 image.name.as_str(),
-                format!("Index {}  {}  Build {}", image.index, image.architecture, image.build),
+                format_3(t(app.language, Msg::IsoEditionFormat), &image.index.to_string(), &image.architecture, &image.build),
                 space().width(0).into(),
                 Some(Message::IsoEdition(image.index)),
             )
@@ -705,13 +749,13 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
         .collect();
 
     let options = vec![
-        iso_option(p, "Bypass hardware checks", "TPM 2.0, Secure Boot, CPU, RAM and storage", IsoFlag::Bypass, iso.options.bypass_requirements),
-        iso_option(p, "Local account setup", "BypassNRO, hides online account screens", IsoFlag::LocalAccount, iso.options.local_account),
-        iso_option(p, "Dark mode by default", "OOBE Themes", IsoFlag::DarkMode, iso.options.dark_mode),
-        iso_option(p, "Disable device encryption", "PreventDeviceEncryption = 1", IsoFlag::NoEncryption, iso.options.disable_device_encryption),
-        iso_option(p, "Pause updates during OOBE", "NoAutoUpdate, removed at first boot", IsoFlag::PauseUpdates, iso.options.pause_updates_during_oobe),
-        iso_option(p, "Inject system drivers", "SCSIAdapter and HDC into boot.wim, the rest into install.wim", IsoFlag::InjectDrivers, iso.inject_drivers),
-        iso_option(p, "Bundle selected applications", "Embeds a WindowCraft profile for first boot", IsoFlag::BundleApps, iso.bundle_apps),
+        iso_option(p, t(app.language, Msg::IsoBypassHardware), t(app.language, Msg::IsoBypassHardwareDetail), IsoFlag::Bypass, iso.options.bypass_requirements),
+        iso_option(p, t(app.language, Msg::IsoLocalAccount), t(app.language, Msg::IsoLocalAccountDetail), IsoFlag::LocalAccount, iso.options.local_account),
+        iso_option(p, t(app.language, Msg::IsoDarkMode), t(app.language, Msg::IsoDarkModeDetail), IsoFlag::DarkMode, iso.options.dark_mode),
+        iso_option(p, t(app.language, Msg::IsoDisableEncryption), t(app.language, Msg::IsoDisableEncryptionDetail), IsoFlag::NoEncryption, iso.options.disable_device_encryption),
+        iso_option(p, t(app.language, Msg::IsoPauseUpdates), t(app.language, Msg::IsoPauseUpdatesDetail), IsoFlag::PauseUpdates, iso.options.pause_updates_during_oobe),
+        iso_option(p, t(app.language, Msg::IsoInjectDrivers), t(app.language, Msg::IsoInjectDriversDetail), IsoFlag::InjectDrivers, iso.inject_drivers),
+        iso_option(p, t(app.language, Msg::IsoBundleApps), t(app.language, Msg::IsoBundleAppsDetail), IsoFlag::BundleApps, iso.bundle_apps),
     ];
 
     let configured = !iso.images.is_empty();
@@ -719,8 +763,8 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
         container(
             row![
                 input(p, r"C:\Output\Windows11.iso", &iso.output, Message::IsoOutput),
-                button(p, "Browse", Some(Icon::Folder), Tone::Secondary, Some(Message::IsoBrowseOutput)),
-                button(p, "Build ISO", Some(Icon::Disc), Tone::Primary, (ready && configured && !iso.output.is_empty()).then_some(Message::IsoBuild)),
+                button(p, t(app.language, Msg::Browse), Some(Icon::Folder), Tone::Secondary, Some(Message::IsoBrowseOutput)),
+                button(p, t(app.language, Msg::IsoBuildIso), Some(Icon::Disc), Tone::Primary, (ready && configured && !iso.output.is_empty()).then_some(Message::IsoBuild)),
             ]
             .spacing(8),
         )
@@ -729,9 +773,9 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
         list_row(
             p,
             None,
-            "Write to USB drive",
-            "GPT, one FAT32 partition, install.wim split above 3.8 GB",
-            button(p, "Find Drives", None, Tone::Secondary, Some(Message::IsoRefreshDisks)),
+            t(app.language, Msg::IsoWriteToUsbDrive),
+            t(app.language, Msg::IsoUsbPartitionDetail),
+            button(p, t(app.language, Msg::IsoFindDrives), None, Tone::Secondary, Some(Message::IsoRefreshDisks)),
             None,
         ),
     ];
@@ -740,46 +784,47 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
             p,
             None,
             disk.model.as_str(),
-            format!("Disk {}  {} GB  {}", disk.number, disk.bytes >> 30, disk.bus.label()),
-            button(p, "Erase and Write", Some(Icon::Alert), Tone::Destructive, (ready && configured).then_some(Message::IsoWriteUsb(disk.number))),
+            format_3(t(app.language, Msg::IsoDiskFormat), &disk.number.to_string(), &(disk.bytes >> 30).to_string(), &i18n::bus_type(app.language, disk.bus)),
+            button(p, t(app.language, Msg::IsoEraseAndWrite), Some(Icon::Alert), Tone::Destructive, (ready && configured).then_some(Message::IsoWriteUsb(disk.number))),
             None,
         ));
     }
 
-    let mut sections = column![group_titled(p, "1. Source", vec![source.into()], ROW_INSET)].spacing(16);
+    let mut sections = column![group_titled(p, t(app.language, Msg::IsoSourceTitle), vec![source.into()], ROW_INSET)].spacing(16);
     if !editions.is_empty() {
-        sections = sections.push(group_titled(p, "2. Edition", editions, 41.0));
+        sections = sections.push(group_titled(p, t(app.language, Msg::IsoEditionTitle), editions, 41.0));
     }
-    sections = sections.push(group_titled(p, "3. Configuration", options, ROW_INSET));
-    sections = sections.push(group_titled(p, "4. Export", export_rows, ROW_INSET));
+    sections = sections.push(group_titled(p, t(app.language, Msg::IsoConfigurationTitle), options, ROW_INSET));
+    sections = sections.push(group_titled(p, t(app.language, Msg::IsoExportTitle), export_rows, ROW_INSET));
     scroll_area(p, sections)
 }
 
-fn relative_time(unix: u64) -> String {
+fn relative_time(lang: Language, unix: u64) -> String {
     let seconds = unix_now().saturating_sub(unix);
     match seconds {
-        0..=59 => "Just now".to_owned(),
-        60..=3_599 => format!("{} min ago", seconds / 60),
-        3_600..=86_399 => format!("{} h ago", seconds / 3_600),
-        _ => format!("{} d ago", seconds / 86_400),
+        0..=59 => t(lang, Msg::JustNow).to_owned(),
+        60..=3_599 => format_1(t(lang, Msg::MinAgo), &(seconds / 60).to_string()),
+        3_600..=86_399 => format_1(t(lang, Msg::HoursAgo), &(seconds / 3_600).to_string()),
+        _ => format_1(t(lang, Msg::DaysAgo), &(seconds / 86_400).to_string()),
     }
 }
 
-fn change_row<'a>(p: Palette, view: &'a ChangeView) -> El<'a> {
+fn change_row<'a>(lang: Language, p: Palette, view: &'a ChangeView) -> El<'a> {
     let (before, after) = match &view.record.change {
         Change::Registry { before, after, .. } => (
-            before.as_ref().map_or_else(|| "(not set)".to_owned(), windowcraft_engine::RegValue::display),
-            after.as_ref().map_or_else(|| "(removed)".to_owned(), windowcraft_engine::RegValue::display),
+            before.as_ref().map_or_else(|| t(lang, Msg::NotSet).to_owned(), windowcraft_engine::RegValue::display),
+            after.as_ref().map_or_else(|| t(lang, Msg::Removed).to_owned(), windowcraft_engine::RegValue::display),
         ),
-        Change::Service { before, after, .. } => {
-            (before.map_or_else(|| "(absent)".to_owned(), |value| value.label().to_owned()), after.label().to_owned())
-        }
+        Change::Service { before, after, .. } => (
+            before.map_or_else(|| t(lang, Msg::Absent).to_owned(), |value| i18n::service_startup(lang, value).to_owned()),
+            i18n::service_startup(lang, *after).to_owned(),
+        ),
         Change::Task { before, after, .. } => (before.to_string(), after.to_string()),
         Change::Native { .. } => (String::new(), String::new()),
     };
     let reversible = !matches!(view.record.change, Change::Native { .. }) && !view.record.rolled_back;
     let trailing: El<'a> = if view.record.rolled_back {
-        badge(p, "Rolled back", p.ink_tertiary)
+        badge(p, t(lang, Msg::RolledBackBadge), p.ink_tertiary)
     } else if reversible {
         icon_button(p, Icon::Undo, Message::RollbackChange(view.record.session, view.record.index))
     } else {
@@ -789,7 +834,7 @@ fn change_row<'a>(p: Palette, view: &'a ChangeView) -> El<'a> {
     let line = if view.live.is_empty() {
         before.clone()
     } else {
-        format!("{before}  ->  {after}  ->  live {}", view.live)
+        format_3(t(lang, Msg::LiveFormat), &before, &after, &view.live)
     };
     container(
         row![
@@ -810,7 +855,7 @@ fn change_row<'a>(p: Palette, view: &'a ChangeView) -> El<'a> {
 fn time_machine(app: &App, p: Palette) -> El<'_> {
     let mut sections = Column::new().spacing(16);
     if let Some(summary) = windowcraft_engine::Engine::drift_summary(&app.drift) {
-        sections = sections.push(banner(p, Icon::Alert, p.amber, summary, vec![("Re-apply", Message::RepairDrift)]));
+        sections = sections.push(banner(p, Icon::Alert, p.amber, summary, vec![(t(app.language, Msg::ReApply), Message::RepairDrift)]));
         let rows: Vec<El<'_>> = app
             .drift
             .iter()
@@ -820,11 +865,11 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
                 })
             })
             .collect();
-        sections = sections.push(group_titled(p, "Configuration Drift", rows, ROW_INSET));
+        sections = sections.push(group_titled(p, t(app.language, Msg::ConfigurationDrift), rows, ROW_INSET));
     }
 
     if app.sessions.is_empty() {
-        sections = sections.push(body("No changes recorded yet. Every apply creates a snapshot here.", p.ink_secondary));
+        sections = sections.push(body(t(app.language, Msg::NoChangesRecorded), p.ink_secondary));
     } else {
         let mut rows: Vec<El<'_>> = Vec::new();
         for session in &app.sessions {
@@ -833,14 +878,14 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
                 SessionState::RolledBack => p.ink_tertiary,
                 SessionState::Failed | SessionState::Open | SessionState::PartlyRolledBack => p.amber,
             };
-            let mut trailing = row![dot(state_color), caption(session.state.label(), p.ink_secondary)]
+            let mut trailing = row![dot(state_color), caption(i18n::session_state(app.language, session.state), p.ink_secondary)]
                 .spacing(6)
                 .align_y(Alignment::Center);
             // An interrupted session is exactly what the write-ahead record is for.
             if matches!(session.state, SessionState::Committed | SessionState::Open) {
                 trailing = trailing.push(button(
                     p,
-                    "Roll Back",
+                    t(app.language, Msg::RollBack),
                     Some(Icon::Undo),
                     Tone::Secondary,
                     app.job.is_none().then_some(Message::Ask(Confirm::RollbackSession(session.id))),
@@ -850,7 +895,7 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
                 p,
                 None,
                 session.label.as_str(),
-                format!("Session {}  {}", session.id, relative_time(session.created_unix)),
+                format_2(t(app.language, Msg::SessionFormat), &session.id.to_string(), &relative_time(app.language, session.created_unix)),
                 trailing.into(),
                 Some(Message::SelectSession(session.id)),
             ));
@@ -858,14 +903,14 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
                 let height = app.timeline.channels[ACCORDION].value() as f32;
                 let mut changes = Column::new();
                 for view in &app.changes {
-                    changes = changes.push(change_row(p, view));
+                    changes = changes.push(change_row(app.language, p, view));
                 }
                 rows.push(container(changes).height(height).clip(true).width(Length::Fill).into());
             }
         }
-        sections = sections.push(group_titled(p, "Snapshot Timeline", rows, ROW_INSET));
+        sections = sections.push(group_titled(p, t(app.language, Msg::SnapshotTimeline), rows, ROW_INSET));
     }
-    sections = sections.push(button(p, "Export Environment Report", Some(Icon::Terminal), Tone::Secondary, app.job.is_none().then_some(Message::ExportReport)));
+    sections = sections.push(button(p, t(app.language, Msg::ExportEnvironmentReport), Some(Icon::Terminal), Tone::Secondary, app.job.is_none().then_some(Message::ExportReport)));
     if !app.last_log.is_empty() {
         let mut lines = Column::new().spacing(2);
         for line in app.last_log.iter().rev().take(LOG_LINES_SHOWN).rev() {
@@ -873,7 +918,7 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
         }
         let log: El<'_> = container(lines).padding(ROW_INSET).width(Length::Fill).into();
         sections = sections.push(group_titled(p, app.last_log_label.as_str(), vec![log], ROW_INSET));
-        sections = sections.push(caption("Full history: %LocalAppData%\\WindowCraft\\windowcraft.log", p.ink_tertiary));
+        sections = sections.push(caption(t(app.language, Msg::FullHistoryLog), p.ink_tertiary));
     }
     scroll_area(p, sections)
 }
@@ -891,7 +936,7 @@ fn inspector_page(app: &App, p: Palette) -> El<'_> {
 
 fn interrupts(app: &App, p: Palette) -> El<'_> {
     if app.devices.is_empty() {
-        return body("No supported PCIe devices were found.", p.ink_secondary).into();
+        return body(t(app.language, Msg::NoPcieDevicesFound), p.ink_secondary).into();
     }
     let rows: Vec<El<'_>> = app
         .devices
@@ -899,11 +944,19 @@ fn interrupts(app: &App, p: Palette) -> El<'_> {
         .enumerate()
         .map(|(index, device)| {
             let trailing = row![
-                badge(p, device.class.label(), p.ink_secondary),
-                select(p, InterruptPriority::ALL.iter().map(|value| value.label().to_owned()).collect(), Some(device.priority.label().to_owned()), move |label: String| {
-                    let priority = InterruptPriority::ALL.into_iter().find(|value| value.label() == label).unwrap_or(InterruptPriority::Undefined);
-                    Message::SetPriority(index, priority)
-                }),
+                badge(p, i18n::device_class(app.language, device.class), p.ink_secondary),
+                select(
+                    p,
+                    InterruptPriority::ALL.iter().map(|value| i18n::interrupt_priority(app.language, *value).to_owned()).collect(),
+                    Some(i18n::interrupt_priority(app.language, device.priority).to_owned()),
+                    move |label: String| {
+                        let priority = InterruptPriority::ALL
+                            .into_iter()
+                            .find(|value| i18n::interrupt_priority(app.language, *value) == label)
+                            .unwrap_or(InterruptPriority::Undefined);
+                        Message::SetPriority(index, priority)
+                    },
+                ),
                 switch(p, device.msi_enabled, move |on| Message::SetMsi(index, on)),
             ]
             .spacing(10)
@@ -911,7 +964,7 @@ fn interrupts(app: &App, p: Palette) -> El<'_> {
             list_row(p, None, device.name.as_str(), device.instance.as_str(), trailing.into(), None)
         })
         .collect();
-    group_titled(p, "PCIe Devices. Changes apply after a restart.", rows, ROW_INSET)
+    group_titled(p, t(app.language, Msg::PcieDevicesTitle), rows, ROW_INSET)
 }
 
 fn display(app: &App, p: Palette) -> El<'_> {
@@ -926,17 +979,22 @@ fn display(app: &App, p: Palette) -> El<'_> {
         .collect();
     let timer: Vec<El<'_>> = app.timer.map_or_else(Vec::new, |timer| {
         vec![
-            list_row(p, None, "Current", "NtQueryTimerResolution", mono(format!("{:>7.3} ms", timer.current_ms), p.ink).into(), None),
-            list_row(p, None, "Finest", "Maximum resolution", mono(format!("{:>7.3} ms", timer.finest_ms), p.ink).into(), None),
-            list_row(p, None, "Coarsest", "Minimum resolution", mono(format!("{:>7.3} ms", timer.coarsest_ms), p.ink).into(), None),
+            list_row(p, None, t(app.language, Msg::CurrentTimer), "NtQueryTimerResolution", mono(format!("{:>7.3} ms", timer.current_ms), p.ink).into(), None),
+            list_row(p, None, t(app.language, Msg::FinestTimer), "Maximum resolution", mono(format!("{:>7.3} ms", timer.finest_ms), p.ink).into(), None),
+            list_row(p, None, t(app.language, Msg::CoarsestTimer), "Minimum resolution", mono(format!("{:>7.3} ms", timer.coarsest_ms), p.ink).into(), None),
         ]
     });
-    column![group_titled(p, "GPU and Display", toggles, ROW_INSET), group_titled(p, "Kernel Timer", timer, ROW_INSET)].spacing(16).into()
+    column![
+        group_titled(p, t(app.language, Msg::GpuAndDisplay), toggles, ROW_INSET),
+        group_titled(p, t(app.language, Msg::KernelTimer), timer, ROW_INSET),
+    ]
+    .spacing(16)
+    .into()
 }
 
 fn autoruns_view(app: &App, p: Palette) -> El<'_> {
     if app.autoruns.is_empty() {
-        return body("Scanning startup entries.", p.ink_secondary).into();
+        return body(t(app.language, Msg::ScanningStartupEntries), p.ink_secondary).into();
     }
     let mut sections = Column::new().spacing(16);
     for source in [EntrySource::RunKey, EntrySource::StartupFolder, EntrySource::Task, EntrySource::Service] {
@@ -946,10 +1004,10 @@ fn autoruns_view(app: &App, p: Palette) -> El<'_> {
             .enumerate()
             .filter(|(_, entry)| entry.source == source)
             .map(|(index, entry)| {
-                let publisher = entry.publisher.clone().unwrap_or_else(|| "Unsigned".to_owned());
+                let publisher = entry.publisher.clone().unwrap_or_else(|| t(app.language, Msg::UnsignedPublisher).to_owned());
                 // The engine refuses these anyway, so no control pretends otherwise.
                 let control: El<'_> = if entry.source == EntrySource::Service && is_protected(&entry.name) {
-                    badge(p, "Protected", p.ink_tertiary)
+                    badge(p, t(app.language, Msg::ProtectedBadge), p.ink_tertiary)
                 } else {
                     switch(p, entry.enabled, move |on| Message::SetAutorun(index, on))
                 };
@@ -960,7 +1018,7 @@ fn autoruns_view(app: &App, p: Palette) -> El<'_> {
             })
             .collect();
         if !rows.is_empty() {
-            sections = sections.push(group_titled(p, source.label(), rows, ROW_INSET));
+            sections = sections.push(group_titled(p, i18n::entry_source(app.language, source), rows, ROW_INSET));
         }
     }
     sections.into()
@@ -976,10 +1034,10 @@ fn format_bytes(bytes: u64) -> String {
 
 fn cleaner_view(app: &App, p: Palette) -> El<'_> {
     let actions = row![
-        button(p, "Scan", Some(Icon::Search), Tone::Secondary, Some(Message::CleanScan)),
+        button(p, t(app.language, Msg::CleanScan), Some(Icon::Search), Tone::Secondary, Some(Message::CleanScan)),
         button(
             p,
-            "Clean Selected",
+            t(app.language, Msg::CleanSelected),
             Some(Icon::Trash),
             Tone::Destructive,
             (app.job.is_none() && !(app.clean_selected.is_empty() && app.selected_orphans.is_empty()))
@@ -991,11 +1049,17 @@ fn cleaner_view(app: &App, p: Palette) -> El<'_> {
         .clean_results
         .iter()
         .map(|(target, result)| {
+            let files_noun = app.language.plural(
+                result.files as usize,
+                t(app.language, Msg::FilesCountOne),
+                t(app.language, Msg::FilesCountFew),
+                t(app.language, Msg::FilesCountMany),
+            );
             list_row(
                 p,
                 Some(check(p, app.clean_selected.contains(target.id), Message::CleanToggled(target.id))),
                 target.name,
-                format!("{}  {} files", target.group, result.files),
+                format!("{}  {} {}", target.group, result.files, files_noun),
                 mono(format_bytes(result.bytes), p.ink).into(),
                 Some(Message::CleanToggled(target.id)),
             )
@@ -1020,13 +1084,13 @@ fn cleaner_view(app: &App, p: Palette) -> El<'_> {
         sections = sections.push(group(p, rows, 41.0));
     }
     if !orphans.is_empty() {
-        sections = sections.push(group_titled(p, "Possibly Orphaned Folders. Review each one: names are not proof.", orphans, 41.0));
+        sections = sections.push(group_titled(p, t(app.language, Msg::PossiblyOrphanedFolders), orphans, 41.0));
     }
     sections.into()
 }
 
 fn dns_view(app: &App, p: Palette) -> El<'_> {
-    let run = button(p, "Run Benchmark", Some(Icon::Play), Tone::Secondary, (!app.bench_running).then_some(Message::BenchRun));
+    let run = button(p, t(app.language, Msg::DnsRunBenchmark), Some(Icon::Play), Tone::Secondary, (!app.bench_running).then_some(Message::BenchRun));
     let mut rows: Vec<El<'_>> = Vec::new();
     for (index, result) in app.bench.iter().enumerate() {
         let fraction = app.timeline.channels.get(DNS_BARS + index).map_or(0.0, |channel| channel.value() as f32).clamp(0.0, 1.0);
@@ -1037,7 +1101,7 @@ fn dns_view(app: &App, p: Palette) -> El<'_> {
                 if measure.average_ms.is_finite() {
                     format!("{} {:>6.1} / {:>6.1} / {:>5.1} ms", measure.protocol.label(), measure.min_ms, measure.average_ms, measure.jitter_ms)
                 } else {
-                    format!("{} failed", measure.protocol.label())
+                    format_1(t(app.language, Msg::DnsProtocolFailedFormat), measure.protocol.label())
                 }
             })
             .collect::<Vec<_>>()
@@ -1049,7 +1113,10 @@ fn dns_view(app: &App, p: Palette) -> El<'_> {
         rows.push(
             container(
                 column![
-                    row![body(result.id.as_str(), p.ink).width(Length::Fill), mono(result.score().map_or_else(|| "no answer".to_owned(), |score| format!("{score:>7.1} ms")), p.ink)],
+                    row![
+                        body(result.id.as_str(), p.ink).width(Length::Fill),
+                        mono(result.score().map_or_else(|| t(app.language, Msg::DnsNoAnswer).to_owned(), |score| format!("{score:>7.1} ms")), p.ink)
+                    ],
                     track.width(Length::Fixed(fraction * 520.0)),
                     mono(figures, p.ink_tertiary),
                 ]
@@ -1059,7 +1126,7 @@ fn dns_view(app: &App, p: Palette) -> El<'_> {
             .into(),
         );
     }
-    let mut sections = column![run, caption("Each protocol shows min / average / jitter.", p.ink_secondary)].spacing(10);
+    let mut sections = column![run, caption(t(app.language, Msg::DnsMinAvgJitterCaption), p.ink_secondary)].spacing(10);
     if !rows.is_empty() {
         sections = sections.push(group(p, rows, ROW_INSET));
     }
@@ -1092,9 +1159,9 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
                         container(
                             column![
                                 mono(row_data.target.as_str(), p.ink).wrapping(iced::widget::text::Wrapping::Glyph),
-                                compare(p, "Current", row_data.current.as_str(), if row_data.matches { p.green } else { p.ink }),
-                                compare(p, "Target", row_data.desired.as_str(), p.ink),
-                                compare(p, "Undo", row_data.undo.as_str(), p.ink_secondary),
+                                compare(p, t(app.language, Msg::InspectorCurrent), row_data.current.as_str(), if row_data.matches { p.green } else { p.ink }),
+                                compare(p, t(app.language, Msg::InspectorTarget), row_data.desired.as_str(), p.ink),
+                                compare(p, t(app.language, Msg::InspectorUndo), row_data.undo.as_str(), p.ink_secondary),
                                 mono(row_data.kind.as_str(), p.ink_tertiary),
                             ]
                             .spacing(3),
@@ -1116,7 +1183,7 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
                     native = native.push(mono(operation, p.ink_secondary));
                 }
                 if any {
-                    content = content.push(section("Native Operations", p.ink_secondary)).push(native);
+                    content = content.push(section(t(app.language, Msg::NativeOperations), p.ink_secondary)).push(native);
                 }
                 // Undo on something never applied would write catalog defaults
                 // over whatever this machine really has.
@@ -1124,11 +1191,11 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
                 let undoable = matches!(state, Some(Detection::Applied | Detection::Partial { .. }))
                     || (state == Some(&Detection::Unknown) && !tweak.undo.is_empty());
                 if tweak.irreversible {
-                    content = content.push(caption("This change cannot be undone automatically.", p.amber));
+                    content = content.push(caption(t(app.language, Msg::CannotUndoAutomatically), p.amber));
                 } else if undoable {
                     content = content.push(button(
                         p,
-                        "Undo This Tweak",
+                        t(app.language, Msg::UndoThisTweak),
                         Some(Icon::Undo),
                         Tone::Secondary,
                         app.job.is_none().then(|| Message::Undo(tweak.id.clone())),
@@ -1140,9 +1207,9 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
             if let Some(item) = app.catalog.app(id) {
                 content = content.push(strong(item.name.as_str(), p.ink));
                 content = content.push(caption(item.description.as_str(), p.ink_secondary));
-                content = content.push(compare(p, "WinGet", item.winget.as_deref().unwrap_or("not available"), p.ink));
-                content = content.push(compare(p, "Chocolatey", item.choco.as_deref().unwrap_or("not available"), p.ink));
-                content = content.push(compare(p, "License", if item.foss { "Open source" } else { "Proprietary" }, p.ink));
+                content = content.push(compare(p, "WinGet", item.winget.as_deref().unwrap_or(t(app.language, Msg::NotAvailableFromSource)), p.ink));
+                content = content.push(compare(p, "Chocolatey", item.choco.as_deref().unwrap_or(t(app.language, Msg::NotAvailableFromSource)), p.ink));
+                content = content.push(compare(p, t(app.language, Msg::InspectorLicense), if item.foss { t(app.language, Msg::OpenSource) } else { t(app.language, Msg::Proprietary) }, p.ink));
                 content = content.push(mono(item.link.as_str(), p.ink_tertiary));
             }
         }
@@ -1165,8 +1232,8 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
             if let Some(package) = app.catalog.appx_package(id) {
                 content = content.push(strong(package.name.as_str(), p.ink));
                 content = content.push(caption(package.description.as_str(), p.ink_secondary));
-                content = content.push(compare(p, "Package", package.package_id.as_str(), p.ink));
-                content = content.push(compare(p, "Store ID", package.store_id.as_deref().unwrap_or("none"), p.ink));
+                content = content.push(compare(p, t(app.language, Msg::InspectorPackage), package.package_id.as_str(), p.ink));
+                content = content.push(compare(p, t(app.language, Msg::InspectorStoreId), package.store_id.as_deref().unwrap_or(t(app.language, Msg::InspectorNone)), p.ink));
                 if let Some(warning) = &package.warning {
                     content = content.push(banner(p, Icon::Alert, p.amber, warning.clone(), Vec::new()));
                 }
@@ -1175,7 +1242,7 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
         None => {}
     }
 
-    let header = row![section("X-Ray Inspector", p.ink_secondary).width(Length::Fill), icon_button(p, Icon::Close, Message::CloseInspector)]
+    let header = row![section(t(app.language, Msg::XRayInspector), p.ink_secondary).width(Length::Fill), icon_button(p, Icon::Close, Message::CloseInspector)]
         .align_y(Alignment::Center);
 
     let drawer = row![
@@ -1202,32 +1269,35 @@ fn compare<'a>(p: Palette, label: &'a str, value: &'a str, color: Color) -> El<'
 fn confirm_dialog(app: &App, p: Palette) -> El<'_> {
     let (title, detail, action): (String, String, &str) = match &app.confirm {
         Some(Confirm::DisableUpdates) => (
-            "Disable all Windows Updates?".to_owned(),
-            "BITS, wuauserv and UsoSvc stop and SoftwareDistribution is purged. The system stops receiving security fixes.".to_owned(),
-            "Disable Updates",
+            t(app.language, Msg::ConfirmDisableUpdatesTitle).to_owned(),
+            t(app.language, Msg::ConfirmDisableUpdatesDetail).to_owned(),
+            t(app.language, Msg::ConfirmDisableUpdatesAction),
         ),
         Some(Confirm::RollbackSession(id)) => (
-            format!("Roll back session {id}?"),
-            "Every recorded value returns to its pre-change state. Native operations run their undo step.".to_owned(),
-            "Roll Back",
+            format_1(t(app.language, Msg::ConfirmRollbackSessionTitle), &id.to_string()),
+            t(app.language, Msg::ConfirmRollbackSessionDetail).to_owned(),
+            t(app.language, Msg::ConfirmRollbackSessionAction),
         ),
         Some(Confirm::EraseDisk { number, model }) => (
-            format!("Erase disk {number}?"),
-            format!("{model} will be repartitioned. All data on it is destroyed. This cannot be undone."),
-            "Erase and Write",
+            format_1(t(app.language, Msg::ConfirmEraseDiskTitle), &number.to_string()),
+            format_1(t(app.language, Msg::ConfirmEraseDiskDetail), model),
+            t(app.language, Msg::ConfirmEraseDiskAction),
         ),
         Some(Confirm::IrreversibleTweak(id)) => (
-            "This selection cannot be undone".to_owned(),
-            format!("{} has no automatic undo. Continue with the queued tweaks?", app.catalog.tweak(id).map_or(id.as_str(), |tweak| tweak.name.as_str())),
-            "Continue",
+            t(app.language, Msg::ConfirmIrreversibleTweakTitle).to_owned(),
+            format_1(
+                t(app.language, Msg::ConfirmIrreversibleTweakDetail),
+                app.catalog.tweak(id).map_or(id.as_str(), |tweak| tweak.name.as_str()),
+            ),
+            t(app.language, Msg::ConfirmIrreversibleTweakAction),
         ),
         Some(Confirm::QuitDuringJob) => (
-            "A job is still running".to_owned(),
-            format!(
-                "{} stops now, and what it already changed stays changed. A USB drive stopped mid-write has to be written again.",
-                app.job.as_ref().map_or("The job", |job| job.label.as_str())
+            t(app.language, Msg::ConfirmQuitDuringJobTitle).to_owned(),
+            format_1(
+                t(app.language, Msg::ConfirmQuitDuringJobDetail),
+                app.job.as_ref().map_or(t(app.language, Msg::UnnamedJob), |job| job.label.as_str()),
             ),
-            "Quit Anyway",
+            t(app.language, Msg::ConfirmQuitDuringJobAction),
         ),
         None => (String::new(), String::new(), ""),
     };
@@ -1237,7 +1307,7 @@ fn confirm_dialog(app: &App, p: Palette) -> El<'_> {
             caption(detail, p.ink_secondary),
             row![
                 space().width(Length::Fill),
-                button(p, "Cancel", None, Tone::Secondary, Some(Message::Answer(false))),
+                button(p, t(app.language, Msg::Cancel), None, Tone::Secondary, Some(Message::Answer(false))),
                 button(p, action, None, Tone::Destructive, Some(Message::Answer(true))),
             ]
             .spacing(8),

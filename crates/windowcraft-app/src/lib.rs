@@ -4,6 +4,7 @@
 pub mod actions;
 pub mod app;
 pub mod cli;
+pub mod i18n;
 pub mod icons;
 pub mod platform;
 pub mod press;
@@ -22,17 +23,21 @@ use windowcraft_engine::{Engine, sysinfo};
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon-64.rgba");
 const ICON_SIZE: u32 = 64;
 
-fn report_fatal(message: &str) -> ExitCode {
+fn report_fatal(lang: i18n::Language, message: &str) -> ExitCode {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
-    use windows::core::{HSTRING, w};
+    use windows::core::HSTRING;
+    let formatted = i18n::format_1(i18n::t(lang, i18n::Msg::FatalErrorMessage), message);
+    let title = i18n::t(lang, i18n::Msg::FatalErrorTitle);
     // SAFETY: Both strings are null-terminated and outlive the call.
     unsafe {
-        MessageBoxW(None, &HSTRING::from(message), w!("WindowCraft"), MB_OK | MB_ICONERROR);
+        MessageBoxW(None, &HSTRING::from(&formatted), &HSTRING::from(title), MB_OK | MB_ICONERROR);
     }
     ExitCode::FAILURE
 }
 
 fn run_gui(cli: cli::Cli) -> ExitCode {
+    let lang = i18n::detect_language();
+
     // First, so a second launch never waits on the database lock.
     let Some(_instance) = platform::claim_single_instance() else {
         return ExitCode::SUCCESS;
@@ -40,25 +45,25 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
 
     let catalog = match Catalog::load() {
         Ok(catalog) => Arc::new(catalog),
-        Err(error) => return report_fatal(&error),
+        Err(error) => return report_fatal(lang, &error),
     };
     let profile = match cli::load_selection(&cli, &catalog) {
         Ok(selection) => selection.map(|resolved| resolved.profile),
-        Err(error) => return report_fatal(&error),
+        Err(error) => return report_fatal(lang, &error),
     };
     let page = match (cli.open, &profile) {
         (Some(page), _) => page.0,
         (None, Some(_)) => app::Page::Tweaks,
         (None, None) => app::Page::Applications,
     };
-    let start = app::StartView { page, inspect: cli.inspect, profile };
+    let start = app::StartView { page, inspect: cli.inspect, profile, language: lang };
     let info = match sysinfo::query() {
         Ok(info) => info,
-        Err(error) => return report_fatal(&error.to_string()),
+        Err(error) => return report_fatal(lang, &error.to_string()),
     };
     let engine = match Engine::system(catalog.clone()) {
         Ok(engine) => Arc::new(engine),
-        Err(error) => return report_fatal(&error.to_string()),
+        Err(error) => return report_fatal(lang, &error.to_string()),
     };
 
     let accessibility = platform::accessibility();
@@ -99,7 +104,7 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
 
     match result {
         Ok(()) => ExitCode::SUCCESS,
-        Err(error) => report_fatal(&error.to_string()),
+        Err(error) => report_fatal(lang, &error.to_string()),
     }
 }
 

@@ -2,6 +2,7 @@
 //! Application state and message handling.
 
 use crate::actions::{self, detect_all, detect_options};
+use crate::i18n::{self, Language, Msg, format_1, format_2, t};
 use crate::platform::{self, Accessibility};
 use crate::theme::{INSPECTOR_WIDTH, Palette};
 use iced::futures::stream;
@@ -60,14 +61,18 @@ impl Page {
     ];
 
     pub fn title(self) -> &'static str {
+        self.title_in(Language::En)
+    }
+
+    pub fn title_in(self, lang: Language) -> &'static str {
         match self {
-            Self::Applications => "Applications",
-            Self::Tweaks => "Tweaks & Privacy",
-            Self::System => "System Config & Fixes",
-            Self::Updates => "Windows Updates",
-            Self::Iso => "ISO Studio",
-            Self::TimeMachine => "Time Machine",
-            Self::Inspector => "System & Gaming Inspector",
+            Self::Applications => t(lang, Msg::PageApplications),
+            Self::Tweaks => t(lang, Msg::PageTweaks),
+            Self::System => t(lang, Msg::PageSystem),
+            Self::Updates => t(lang, Msg::PageUpdates),
+            Self::Iso => t(lang, Msg::PageIso),
+            Self::TimeMachine => t(lang, Msg::PageTimeMachine),
+            Self::Inspector => t(lang, Msg::PageInspector),
         }
     }
 
@@ -102,11 +107,13 @@ pub struct StartView {
     pub inspect: Option<String>,
     /// Selection loaded from `--config` or `--preset`, ready to review.
     pub profile: Option<Profile>,
+    /// Detected once at startup, see `i18n::detect_language`.
+    pub language: Language,
 }
 
 impl Default for StartView {
     fn default() -> Self {
-        Self { page: Page::Applications, inspect: None, profile: None }
+        Self { page: Page::Applications, inspect: None, profile: None, language: Language::En }
     }
 }
 
@@ -122,11 +129,15 @@ impl TweakTab {
     pub const ALL: [Self; 4] = [Self::Essential, Self::Advanced, Self::Preferences, Self::Appx];
 
     pub fn title(self) -> &'static str {
+        self.title_in(Language::En)
+    }
+
+    pub fn title_in(self, lang: Language) -> &'static str {
         match self {
-            Self::Essential => "Essential",
-            Self::Advanced => "Advanced",
-            Self::Preferences => "Preferences",
-            Self::Appx => "AppX Packages",
+            Self::Essential => t(lang, Msg::TabEssential),
+            Self::Advanced => t(lang, Msg::TabAdvanced),
+            Self::Preferences => t(lang, Msg::TabPreferences),
+            Self::Appx => t(lang, Msg::TabAppx),
         }
     }
 
@@ -148,12 +159,16 @@ impl InspectorTab {
     pub const ALL: [Self; 5] = [Self::Interrupts, Self::Display, Self::Autoruns, Self::Cleaner, Self::Dns];
 
     pub fn title(self) -> &'static str {
+        self.title_in(Language::En)
+    }
+
+    pub fn title_in(self, lang: Language) -> &'static str {
         match self {
-            Self::Interrupts => "MSI Mode",
-            Self::Display => "Display",
-            Self::Autoruns => "Autoruns",
-            Self::Cleaner => "Cleaner",
-            Self::Dns => "DNS Benchmark",
+            Self::Interrupts => t(lang, Msg::TabMsiMode),
+            Self::Display => t(lang, Msg::TabDisplay),
+            Self::Autoruns => t(lang, Msg::TabAutoruns),
+            Self::Cleaner => t(lang, Msg::TabCleaner),
+            Self::Dns => t(lang, Msg::TabDns),
         }
     }
 
@@ -312,6 +327,7 @@ pub enum Message {
     Ask(Confirm),
     Answer(bool),
     Notice(String),
+    SetLanguage(Language),
 }
 
 /// A selection that a job consumes when it succeeds.
@@ -351,6 +367,7 @@ pub struct App {
     pub info: SystemInfo,
     pub accessibility: Accessibility,
     pub appearance: Appearance,
+    pub language: Language,
     pub window: Option<u64>,
     pub page: Page,
     pub query: String,
@@ -428,7 +445,7 @@ fn work_dir() -> PathBuf {
 
 impl App {
     pub fn new(catalog: Arc<Catalog>, engine: Arc<Engine>, info: SystemInfo, start: StartView) -> (Self, Task<Message>) {
-        let StartView { page, inspect, profile } = start;
+        let StartView { page, inspect, profile, language } = start;
         let accessibility = platform::accessibility();
         let mut timeline = Timeline::new([0.0, 0.0, 0.0, 0.0, 0.0]);
         timeline.mode = if accessibility.animations { MotionMode::Spring } else { MotionMode::Reduced };
@@ -440,6 +457,7 @@ impl App {
             info,
             accessibility,
             appearance: Appearance::System,
+            language,
             window: None,
             page: Page::Applications,
             query: String::new(),
@@ -559,10 +577,11 @@ impl App {
         done: impl Fn(T) -> Message + Send + 'static,
     ) -> Task<Message> {
         let engine = self.engine.clone();
+        let lang = self.language;
         Task::future(async move {
             match tokio::task::spawn_blocking(move || work(engine)).await {
                 Ok(value) => done(value),
-                Err(error) => Message::Notice(format!("Background task failed: {error}")),
+                Err(error) => Message::Notice(format_1(t(lang, Msg::NoticeBackgroundTaskFailed), &error.to_string())),
             }
         })
     }
@@ -608,14 +627,14 @@ impl App {
         body: impl FnOnce(&JobContext) -> EngineResult<String> + Send + 'static,
     ) -> Task<Message> {
         if self.job.is_some() {
-            self.notice = Some("Another operation is running. Wait for it to finish or cancel it.".to_owned());
+            self.notice = Some(t(self.language, Msg::NoticeAnotherOperationRunning).to_owned());
             return Task::none();
         }
         let handle = jobs::spawn(label, body);
         self.job = Some(ActiveJob {
             label: label.to_owned(),
             fraction: 0.0,
-            step: "Starting".to_owned(),
+            step: t(self.language, Msg::JobStarting).to_owned(),
             cancel: handle.cancel.clone(),
             log: handle.log.clone(),
             queue,
@@ -729,6 +748,7 @@ impl App {
     fn run_items_for(&mut self, label: &str, queue: Option<Queue>, items: Vec<(Tweak, TweakAction)>) -> Task<Message> {
         let engine = self.engine.clone();
         let session_label = label.to_owned();
+        let lang = self.language;
         self.start_queue_job(label, queue, move |context| {
             let total = items.len().max(1) as f32;
             let borrowed: Vec<(&Tweak, TweakAction)> = items.iter().map(|(tweak, action)| (tweak, action.clone())).collect();
@@ -736,10 +756,11 @@ impl App {
                 context.progress(index as f32 / total, name);
             })?;
             if report.failed.is_empty() {
-                Ok(format!("Applied {} items", report.applied.len()))
+                Ok(format_1(t(lang, Msg::NoticeItemsApplied), &report.applied.len().to_string()))
             } else {
                 let (name, reason) = &report.failed[0];
-                Err(EngineError::Invalid(format!("{} failed. {name}: {reason}", report.failed.len())))
+                let first = format!("{name}: {reason}");
+                Err(EngineError::Invalid(format_2(t(lang, Msg::NoticeFailures), &report.failed.len().to_string(), &first)))
             }
         })
     }
@@ -919,13 +940,14 @@ impl App {
                 self.upgrades = upgrades.into_iter().collect();
                 self.checking_upgrades = false;
             }
-            Message::InstallApps => return self.package_job("Installing applications", true),
-            Message::UninstallApps => return self.package_job("Uninstalling applications", false),
+            Message::InstallApps => return self.package_job(t(self.language, Msg::JobInstallingApps), true),
+            Message::UninstallApps => return self.package_job(t(self.language, Msg::JobUninstallingApps), false),
             Message::UpgradeAll => {
                 let manager = self.manager;
-                return self.start_job("Upgrading all packages", move |context| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobUpgradingAllPackages), move |context| {
                     packages::upgrade_all(manager, &context.cancel, &mut |line| context.log(line))?;
-                    Ok("All packages upgraded".to_owned())
+                    Ok(t(lang, Msg::NoticeAllPackagesUpgraded).to_owned())
                 });
             }
             Message::Tab(tab) => {
@@ -986,7 +1008,8 @@ impl App {
             Message::Dns(selection) => {
                 self.dns_choice = selection.clone();
                 let catalog = self.catalog.clone();
-                return self.start_job("Configuring DNS", move |_| actions::apply_dns(&catalog, &selection));
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobConfiguringDns), move |_| actions::apply_dns(&catalog, &selection, lang));
             }
             Message::RunAction(id) => {
                 if let Some(tweak) = self.find_tweak(&id) {
@@ -996,9 +1019,10 @@ impl App {
             Message::Undo(id) => {
                 if let Some(tweak) = self.find_tweak(&id) {
                     let engine = self.engine.clone();
-                    return self.start_job("Undoing change", move |_| {
+                    let lang = self.language;
+                    return self.start_job(t(lang, Msg::JobUndoingChange), move |_| {
                         engine.undo_tweak(&tweak)?;
-                        Ok(format!("Reverted {}", tweak.name))
+                        Ok(format_1(t(lang, Msg::NoticeRevertedTweak), &tweak.name))
                     });
                 }
             }
@@ -1018,13 +1042,14 @@ impl App {
                     .map(|package| package.package_id.clone())
                     .collect();
                 let engine = self.engine.clone();
-                return self.start_queue_job("Removing AppX packages", Some(Queue::Appx), move |context| {
+                let lang = self.language;
+                return self.start_queue_job(t(lang, Msg::JobRemovingAppx), Some(Queue::Appx), move |context| {
                     let total = patterns.len().max(1) as f32;
                     for (index, pattern) in patterns.iter().enumerate() {
                         context.progress(index as f32 / total, pattern);
                         engine.native.run(&NativeOp::RemoveAppx { pattern: pattern.clone() }, &context.cancel)?;
                     }
-                    Ok(format!("Removed {} packages", patterns.len()))
+                    Ok(format_1(t(lang, Msg::NoticeRemovedPackages), &patterns.len().to_string()))
                 });
             }
             Message::InstallAppx => {
@@ -1035,7 +1060,8 @@ impl App {
                     .map(|package| (package.name.clone(), package.store_id.clone()))
                     .collect();
                 let engine = self.engine.clone();
-                return self.start_queue_job("Installing AppX packages", Some(Queue::Appx), move |context| {
+                let lang = self.language;
+                return self.start_queue_job(t(lang, Msg::JobInstallingAppx), Some(Queue::Appx), move |context| {
                     let total = ids.len().max(1) as f32;
                     for (index, (name, store)) in ids.iter().enumerate() {
                         context.progress(index as f32 / total, name);
@@ -1043,12 +1069,16 @@ impl App {
                             engine.native.run(&NativeOp::WingetInstall { id: store.clone() }, &context.cancel)?;
                         }
                     }
-                    Ok(format!("Installed {} packages", ids.len()))
+                    Ok(format_1(t(lang, Msg::NoticeInstalledPackages), &ids.len().to_string()))
                 });
             }
             Message::ImportProfile => {
                 return Task::perform(
-                    platform::pick_open_file("Import configuration", "JSON profiles", "*.json"),
+                    platform::pick_open_file(
+                        t(self.language, Msg::DialogImportConfigTitle),
+                        t(self.language, Msg::DialogJsonProfilesLabel),
+                        "*.json",
+                    ),
                     Message::ProfilePicked,
                 );
             }
@@ -1060,9 +1090,9 @@ impl App {
                     {
                         Ok(resolved) => {
                             self.apply_loaded_profile(resolved.profile);
-                            self.notice = Some(format!("Imported {}", path.display()));
+                            self.notice = Some(format_1(t(self.language, Msg::NoticeImported), &path.display().to_string()));
                         }
-                        Err(error) => self.notice = Some(format!("Import failed: {error}")),
+                        Err(error) => self.notice = Some(format_1(t(self.language, Msg::NoticeImportFailed), &error)),
                     }
                 }
             }
@@ -1074,23 +1104,24 @@ impl App {
                 {
                     Ok(()) => {
                         let command = format!("windowcraft.exe --config \"{}\" --run", path.display());
-                        self.notice = Some(format!("Profile saved. Copied: {command}"));
+                        self.notice = Some(format_1(t(self.language, Msg::NoticeProfileSavedCopied), &command));
                         iced::clipboard::write(command)
                     }
                     Err(error) => {
-                        self.notice = Some(format!("Export failed: {error}"));
+                        self.notice = Some(format_1(t(self.language, Msg::NoticeExportFailed), &error.to_string()));
                         Task::none()
                     }
                 };
             }
             Message::ExportReport => {
                 let engine = self.engine.clone();
-                return self.start_job("Exporting environment report", move |_| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobExportingEnvironmentReport), move |_| {
                     let report = windowcraft_engine::report::build(&engine)?;
                     let path = windowcraft_engine::win::local_app_dir().join("environment-report.json");
                     let text = windowcraft_engine::report::to_json(&report)?;
                     std::fs::write(&path, text).map_err(|e| EngineError::io(path.display().to_string(), e))?;
-                    Ok(format!("Report written to {}", path.display()))
+                    Ok(format_1(t(lang, Msg::NoticeReportWrittenTo), &path.display().to_string()))
                 });
             }
             Message::FeatureChecked(id) => {
@@ -1100,7 +1131,7 @@ impl App {
             Message::InstallFeatures => {
                 let features: Vec<Feature> =
                     self.selected_features.iter().filter_map(|id| self.catalog.feature(id)).cloned().collect();
-                return self.feature_job("Enabling features", Some(Queue::Features), features);
+                return self.feature_job(t(self.language, Msg::JobEnablingFeatures), Some(Queue::Features), features);
             }
             Message::RunFix(id) => {
                 if let Some(feature) = self.catalog.feature(&id).cloned() {
@@ -1126,7 +1157,11 @@ impl App {
             Message::IsoPath(path) => self.iso.path = path,
             Message::IsoBrowse => {
                 return Task::perform(
-                    platform::pick_open_file("Select a Windows 11 ISO", "ISO images", "*.iso"),
+                    platform::pick_open_file(
+                        t(self.language, Msg::DialogSelectIsoTitle),
+                        t(self.language, Msg::DialogIsoImagesLabel),
+                        "*.iso",
+                    ),
                     Message::IsoPicked,
                 );
             }
@@ -1141,11 +1176,12 @@ impl App {
                 let (url, hash) = (self.iso.url.clone(), self.iso.hash.trim().to_owned());
                 let destination = work_dir().join("Win11.iso");
                 self.iso.path = destination.display().to_string();
-                return self.start_job("Downloading Windows 11", move |context| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobDownloadingWin11), move |context| {
                     let hash = (!hash.is_empty()).then_some(hash);
                     pipeline::download_iso(&url, &destination, hash.as_deref(), context)
                         .map_err(|e| EngineError::Invalid(e.to_string()))?;
-                    Ok("Download verified".to_owned())
+                    Ok(t(lang, Msg::NoticeDownloadVerified).to_owned())
                 });
             }
             Message::IsoOpen => {
@@ -1155,11 +1191,12 @@ impl App {
                 if let Some(saved) = StudioSession::resume(&work).filter(|saved| saved.source_iso == session.source_iso) {
                     session.step = saved.step;
                 }
-                return self.start_job("Opening ISO", move |context| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobOpeningIso), move |context| {
                     session.save(&work).map_err(|e| EngineError::Invalid(e.to_string()))?;
                     let images = pipeline::extract(&mut session, &work, context)
                         .map_err(|e| EngineError::Invalid(e.to_string()))?;
-                    Ok(format!("Found {} editions", images.len()))
+                    Ok(format_1(t(lang, Msg::NoticeFoundEditions), &images.len().to_string()))
                 });
             }
             Message::IsoImages(result) => match result {
@@ -1190,7 +1227,7 @@ impl App {
             Message::IsoOutput(path) => self.iso.output = path,
             Message::IsoBrowseOutput => {
                 return Task::perform(
-                    platform::pick_save_file("Save bootable ISO", "Windows11-WindowCraft.iso"),
+                    platform::pick_save_file(t(self.language, Msg::DialogSaveIsoTitle), "Windows11-WindowCraft.iso"),
                     Message::IsoOutputPicked,
                 );
             }
@@ -1219,10 +1256,11 @@ impl App {
                 }
                 self.open_session = Some(id);
                 self.timeline.channels[ACCORDION].snap(0.0);
+                let lang = self.language;
                 return self.blocking(
                     move |engine| {
                         let records = engine.store.changes(id).unwrap_or_default();
-                        let views = records.into_iter().map(|record| live_view(&engine, record)).collect();
+                        let views = records.into_iter().map(|record| live_view(&engine, record, lang)).collect();
                         (id, views)
                     },
                     |(id, views)| Message::Changes(id, views),
@@ -1237,15 +1275,17 @@ impl App {
             }
             Message::RollbackChange(session, index) => {
                 let engine = self.engine.clone();
-                return self.start_job("Rolling back one change", move |_| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobRollingBackOneChange), move |_| {
                     engine.rollback_change(session, index)?;
-                    Ok("Change rolled back".to_owned())
+                    Ok(t(lang, Msg::NoticeChangeRolledBack).to_owned())
                 });
             }
             Message::RepairDrift => {
                 let engine = self.engine.clone();
-                return self.start_job("Re-applying drifted tweaks", move |_| {
-                    Ok(format!("Re-applied {} tweaks", engine.repair_drift()?))
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobReApplyingDrift), move |_| {
+                    Ok(format_1(t(lang, Msg::NoticeReAppliedTweaks), &engine.repair_drift()?.to_string()))
                 });
             }
             Message::InspectorTab(tab) => {
@@ -1315,7 +1355,8 @@ impl App {
                     .collect();
                 let orphans: Vec<PathBuf> = self.selected_orphans.iter().cloned().collect();
                 let iso_open = !self.iso.images.is_empty();
-                return self.start_job("Cleaning caches", move |context| {
+                let lang = self.language;
+                return self.start_job(t(lang, Msg::JobCleaningCaches), move |context| {
                     let total = (targets.len() + orphans.len()).max(1) as f32;
                     let mut freed = 0;
                     for (index, target) in targets.iter().enumerate() {
@@ -1323,7 +1364,7 @@ impl App {
                         if target.id == cleaner::ISO_TARGET && iso_open {
                             context.progress(
                                 index as f32 / total,
-                                "ISO Studio work files skipped: an ISO session is open",
+                                t(lang, Msg::NoticeIsoWorkFilesSkipped),
                             );
                             continue;
                         }
@@ -1335,7 +1376,7 @@ impl App {
                         context.progress((targets.len() + index) as f32 / total, path.display().to_string());
                         freed += cleaner::remove_orphan(path).removed_bytes;
                     }
-                    Ok(format!("Freed {} MB", freed >> 20))
+                    Ok(format_1(t(lang, Msg::NoticeFreedMb), &(freed >> 20).to_string()))
                 });
             }
             Message::BenchRun => {
@@ -1376,6 +1417,12 @@ impl App {
                 }
             }
             Message::Notice(text) => self.notice = Some(text),
+            Message::SetLanguage(lang) => {
+                self.language = lang;
+                if let Err(error) = i18n::save_settings_language(lang) {
+                    self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
+                }
+            }
             Message::CloseRequested => {
                 // A second close while the job stops means it should not wait.
                 if self.job.is_none() || self.quit_pending {
@@ -1398,7 +1445,7 @@ impl App {
             .filter_map(|id| self.catalog.tweak(id))
             .map(|tweak| (tweak.clone(), TweakAction::Apply))
             .collect();
-        self.run_items_for("Applying tweaks", Some(Queue::Tweaks), items)
+        self.run_items_for(t(self.language, Msg::JobApplyingTweaks), Some(Queue::Tweaks), items)
     }
 
     fn begin_drag(&mut self, position: Point) {
@@ -1463,6 +1510,7 @@ impl App {
         let manager = self.manager;
         let apps: Vec<windowcraft_config::App> =
             self.selected_apps.iter().filter_map(|id| self.catalog.app(id)).cloned().collect();
+        let lang = self.language;
         self.start_queue_job(label, Some(Queue::Apps), move |context| {
             let total = apps.len().max(1) as f32;
             let mut failures = Vec::new();
@@ -1479,9 +1527,9 @@ impl App {
                 }
             }
             if failures.is_empty() {
-                Ok(format!("{} applications processed", apps.len()))
+                Ok(format_1(t(lang, Msg::NoticeApplicationsProcessed), &apps.len().to_string()))
             } else {
-                Err(EngineError::Invalid(format!("{} failed. {}", failures.len(), failures[0])))
+                Err(EngineError::Invalid(format_2(t(lang, Msg::NoticeFailures), &failures.len().to_string(), &failures[0])))
             }
         })
     }
@@ -1489,6 +1537,7 @@ impl App {
     fn feature_job(&mut self, label: &str, queue: Option<Queue>, features: Vec<Feature>) -> Task<Message> {
         let engine = self.engine.clone();
         let option = self.fix_modes.get("update").cloned();
+        let lang = self.language;
         self.start_queue_job(label, queue, move |context| {
             let total = features.len().max(1) as f32;
             for (index, feature) in features.iter().enumerate() {
@@ -1502,17 +1551,18 @@ impl App {
                 }
                 engine.apply_feature(feature, option.as_deref(), &context.cancel)?;
             }
-            Ok(format!("{} items completed", features.len()))
+            Ok(format_1(t(lang, Msg::NoticeItemsCompleted), &features.len().to_string()))
         })
     }
 
     fn update_mode_job(&mut self, id: String) -> Task<Message> {
         let engine = self.engine.clone();
         let catalog = self.catalog.clone();
-        self.start_job("Changing update policy", move |_| {
+        let lang = self.language;
+        self.start_job(t(lang, Msg::JobChangingUpdatePolicy), move |_| {
             let mode = catalog.update_mode(&id).ok_or_else(|| EngineError::NotFound(id.clone()))?;
             engine.apply_update_mode(mode)?;
-            Ok(format!("Windows Updates set to {}", mode.name))
+            Ok(format_1(t(lang, Msg::NoticeWindowsUpdatesSetTo), &mode.name))
         })
     }
 
@@ -1521,17 +1571,18 @@ impl App {
         session.step = windowcraft_iso::Step::Extracted;
         let (work, output) = (work_dir(), PathBuf::from(&self.iso.output));
         let catalog = self.catalog.clone();
-        self.start_job("Building Windows 11 media", move |context| {
+        let lang = self.language;
+        self.start_job(t(lang, Msg::JobBuildingMedia), move |context| {
             let wrap = |error: windowcraft_iso::IsoError| EngineError::Invalid(error.to_string());
             pipeline::configure(&mut session, &work, &catalog, context).map_err(wrap)?;
             match disk {
                 Some((number, model)) => {
                     pipeline::export_usb(&mut session, &work, &catalog, number, &model, context).map_err(wrap)?;
-                    Ok("USB drive is ready".to_owned())
+                    Ok(t(lang, Msg::NoticeUsbDriveReady).to_owned())
                 }
                 None => {
                     pipeline::export_iso(&mut session, &work, &output, context).map_err(wrap)?;
-                    Ok(format!("ISO written to {}", output.display()))
+                    Ok(format_1(t(lang, Msg::NoticeIsoWrittenTo), &output.display().to_string()))
                 }
             }
         })
@@ -1542,13 +1593,14 @@ impl App {
             Confirm::DisableUpdates => self.update_mode_job("disabled".to_owned()),
             Confirm::RollbackSession(id) => {
                 let engine = self.engine.clone();
-                self.start_job("Rolling back session", move |_| {
+                let lang = self.language;
+                self.start_job(t(lang, Msg::JobRollingBackSession), move |_| {
                     let kept = engine.irreversible_in_session(id)?;
                     engine.rollback_session(id)?;
                     Ok(if kept.is_empty() {
-                        "Session rolled back".to_owned()
+                        t(lang, Msg::NoticeSessionRolledBack).to_owned()
                     } else {
-                        format!("Session rolled back. These cannot be restored automatically: {}", kept.join(", "))
+                        format_1(t(lang, Msg::NoticeSessionRolledBackKept), &kept.join(", "))
                     })
                 })
             }
@@ -1560,7 +1612,7 @@ impl App {
                 let Some(job) = &self.job else { return iced::exit() };
                 job.cancel.cancel();
                 self.quit_pending = true;
-                self.notice = Some(format!("Stopping {} before closing", job.label));
+                self.notice = Some(format_1(t(self.language, Msg::NoticeStoppingBeforeClosing), &job.label));
                 Task::none()
             }
         }
@@ -1619,7 +1671,7 @@ impl App {
                     platform::taskbar_progress(window, None);
                 }
                 let mut tasks = vec![self.refresh_all()];
-                if label == "Opening ISO" {
+                if label == t(self.language, Msg::JobOpeningIso) || label == "Opening ISO" {
                     let media = work_dir().join("media");
                     tasks.push(self.blocking(
                         move |_| pipeline::validate_media(&media).map_err(|error| error.to_string()),
@@ -1663,20 +1715,20 @@ fn tab_of(group: windowcraft_config::TweakGroup) -> TweakTab {
     }
 }
 
-fn live_view(engine: &Engine, record: ChangeRecord) -> ChangeView {
+fn live_view(engine: &Engine, record: ChangeRecord, lang: Language) -> ChangeView {
     use windowcraft_engine::snapshot::Change;
     let live = match &record.change {
         Change::Registry { path, name, .. } => RegPath::parse(path)
             .ok()
             .and_then(|parsed| engine.scope.read(&parsed, name).ok())
             .flatten()
-            .map_or_else(|| "(not set)".to_owned(), |value| value.display()),
+            .map_or_else(|| t(lang, Msg::NotSet).to_owned(), |value| value.display()),
         Change::Service { name, .. } => engine
             .services
             .query(name)
             .ok()
             .flatten()
-            .map_or_else(|| "(absent)".to_owned(), |info| info.startup.label().to_owned()),
+            .map_or_else(|| t(lang, Msg::Absent).to_owned(), |info| i18n::service_startup(lang, info.startup).to_owned()),
         Change::Task { .. } | Change::Native { .. } => String::new(),
     };
     ChangeView { record, live }
@@ -2090,7 +2142,7 @@ mod tests {
         let rig = rig("uiprofile");
         let mut profile = Profile::new();
         profile.tweaks.push("activity".to_owned());
-        let start = StartView { page: Page::Tweaks, inspect: None, profile: Some(profile) };
+        let start = StartView { page: Page::Tweaks, profile: Some(profile), ..StartView::default() };
         let (app, _) = App::new(rig.app.catalog.clone(), rig.app.engine.clone(), rig.app.info.clone(), start);
         assert_eq!(app.page, Page::Tweaks);
         assert!(app.selected_tweaks.contains("activity"));
