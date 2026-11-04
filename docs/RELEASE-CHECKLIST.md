@@ -5,9 +5,9 @@ Status of WindowCraft 1.0.0 as of 2026-11-04. It is published as a pre-release, 
 Do not mark a release stable until section 4 is done, because the system-changing features have
 never run outside a test sandbox.
 
-New in 1.0.0 and not yet checked by hand: the eight interface languages on an English Windows,
-`setup.exe` in each language, and `verify-install.ps1` with the new `WCLANGUAGE` checks. German,
-Ukrainian and Polish were captured at 980 by 600 on the development machine.
+New in 1.0.0 and not yet checked by hand: the eight interface languages on an English Windows and
+`setup.exe` in each language. German, Ukrainian and Polish were captured at 980 by 600 on the
+development machine. `verify-install.ps1` with the `WCLANGUAGE` checks passed on 2026-11-04.
 
 ## 1. Repository
 
@@ -21,7 +21,8 @@ Ukrainian and Polish were captured at 980 by 600 on the development machine.
 - [x] Set the repository URL in `Cargo.toml`, `packaging/build.ps1`, the README and the
       installers. It leads nowhere until the repository exists.
 - [x] Add `description` and `authors` to `[workspace.package]` in `Cargo.toml`.
-- [ ] Add screenshots to the README. There are none yet.
+- [x] Add screenshots to the README. Three from the 1.0.0 release build in `docs/screenshots/`;
+      the Inspector page was left out because it shows the machine's PCI device IDs.
 - [x] Add `SECURITY.md` with a private way to report a vulnerability. This tool runs elevated.
 - [x] Add `CONTRIBUTING.md` and issue templates that ask for the output of `--export-report`.
 - [x] Date the 0.1.0 entry in `CHANGELOG.md`.
@@ -73,13 +74,19 @@ The workflows have never run. Expect fixes on the first run.
 ### Installers
 
 - [x] Run `packaging/verify-install.ps1` on the final packages, with no WindowCraft installed.
-- [ ] **Upgrade from one version to the next, with both MSI and `setup.exe`.** Time Machine data
-      must survive. This has never been tested, and the failure mode is lost history.
+      1.0.0, files downloaded from the release and checked against `SHA256SUMS.txt`: 104 of 104
+      checks over 2 rounds of MSI, MSI with `WCLANGUAGE=pl`, and `setup.exe`, on 2026-11-04.
+- [x] Upgrade with `setup.exe` from 0.1.0 to 1.0.0 on the development machine, over an install in
+      real use: exit 0, both uninstall entries moved to 1.0.0, the two data files were byte for
+      byte the same afterwards, and 1.0.0 opened the 0.1.0 history (`--export-report` exit 0).
+- [ ] **Upgrade with the MSI alone** (`msiexec /i` over 0.1.0). Same checks. Only `setup.exe`
+      was tested.
 - [ ] Interactive `setup.exe`: logo, license page, install, launch, uninstall from Settings.
 - [ ] First launch from the Start menu. The shortcut is advertised, so time it: the event log showed
       two unexplained Windows Installer "installed" events 15 seconds apart during a manual test.
 - [ ] Interactive MSI: banner and panel images, license page, the "Launch WindowCraft" checkbox.
-- [ ] Settings shows exactly one WindowCraft entry after `setup.exe`.
+- [x] Settings shows exactly one WindowCraft entry after `setup.exe`. Of the two uninstall keys,
+      the MSI one has `SystemComponent=1`, so only the `setup.exe` entry is listed (1.0.0).
 - [ ] Uninstall with two user profiles: data must go from both. Only one was tested.
 - [ ] Uninstall while WindowCraft is running.
 - [ ] Junction safety when elevated. It passed unelevated, and uninstall runs as SYSTEM.
@@ -105,9 +112,19 @@ The workflows have never run. Expect fixes on the first run.
 
 ### Trust
 
-- [ ] Upload the release files to VirusTotal. An unsigned tool that edits services and the
-      registry is likely to trigger false positives.
-- [ ] Decide on code signing. Without it, SmartScreen warns every user.
+- [x] Upload the release files to VirusTotal (submitted by release URL on 2026-11-04). Both
+      `setup.exe` files: 0 detections (0/71 x64, 0/70 ARM64). Both MSIs: 1/62, SentinelOne
+      "Static AI - Suspicious MSI". x64 portable, which is the same `windowcraft.exe` the
+      installers put in Program Files: 2/71, Microsoft `Trojan:Win32/Wacatac.C!ml` and
+      SentinelOne "Static AI - Suspicious PE". ARM64 portable: 1/69, SentinelOne only. Defender
+      on the development machine, real-time on with signatures 1.463.125.0, reported nothing.
+- [ ] **Report the Microsoft detection as a false positive** at
+      <https://www.microsoft.com/en-us/wdsi/filesubmission> (Software developer, file
+      `WindowCraft-1.0.0-x64-portable.exe`, SHA-256 `02360d8f...f81`). `!ml` is a machine
+      learning verdict, and Defender ships with every Windows, so a user's copy could be
+      quarantined. Needs the owner's Microsoft account.
+- [ ] Decide on code signing. Without it, SmartScreen warns every user, and signed binaries
+      draw fewer machine learning verdicts like the one above.
 
 ## 5. Known bugs
 

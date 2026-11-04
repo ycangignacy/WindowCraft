@@ -55,4 +55,4 @@ An ISO build installs `oscdimg` through WinGet when it is missing and removes it
 | `SHA256SUMS.txt` | Checksums |
 | `THIRD-PARTY-NOTICES.md` | Licenses of the bundled Rust crates |
 
-An upgrade from 0.1.0 is meant to keep Time Machine history, but it has not been tested yet.
+An upgrade from 0.1.0 with `setup.exe` kept the Time Machine history byte for byte in one test on the development machine. An upgrade with the MSI alone has not been tested yet.

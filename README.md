@@ -20,6 +20,12 @@ The catalogs of applications, tweaks, features, AppX packages, DNS providers and
 
 The X-Ray Inspector shows, for any tweak, each registry value or service it touches with its current, target and undo value. Global search (Ctrl+K) covers apps, tweaks, registry keys, services, fixes and AppX packages.
 
+![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
+
+![Applications page](docs/screenshots/applications.png)
+
+![System Config & Fixes in Polish](docs/screenshots/system-pl.png)
+
 ## Languages
 
 The interface is available in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. On first start WindowCraft uses the Windows display language if it is one of these, and English otherwise. The language list at the bottom of the sidebar changes it at once, without a restart. The choice is saved per user in `%LOCALAPPDATA%\WindowCraft\settings.json`.
