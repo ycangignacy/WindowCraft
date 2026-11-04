@@ -1,9 +1,13 @@
 # Release Checklist
 
-Status of WindowCraft 0.1.0 as of 2026-11-02. It is published as a pre-release.
+Status of WindowCraft 1.0.0 as of 2026-11-04. It is published as a pre-release, like 0.1.0.
 
-Recommendation: publish 0.1.0 as a GitHub pre-release. Do not mark it stable until
-section 4 is done, because the system-changing features have never run outside a test sandbox.
+Do not mark a release stable until section 4 is done, because the system-changing features have
+never run outside a test sandbox.
+
+New in 1.0.0 and not yet checked by hand: the eight interface languages on an English Windows,
+`setup.exe` in each language, and `verify-install.ps1` with the new `WCLANGUAGE` checks. German,
+Ukrainian and Polish were captured at 980 by 600 on the development machine.
 
 ## 1. Repository
 
@@ -113,24 +117,25 @@ The workflows have never run. Expect fixes on the first run.
 | KB-2 | The exe is a GUI binary, so cmd and PowerShell do not wait for exit codes. Scripted deployments are affected. | Installers add `windowcraft-cli.exe` next to `windowcraft.exe`. It waits and returns the exit code. The portable build uses `Start-Process -Wait` or `\| Out-Null`. |
 | KB-3 | Rolling back a session counted native steps as undone without doing anything. Features recorded no native steps at all. | Features record their native steps. A rollback lists what it could not undo, and the session shows "Partly rolled back". |
 | KB-4 | The `AutoRegBackup` task and OpenSSH firewall rule could not be removed from inside the app. | Rolling back `reg-backup` deletes `AutoRegBackup` task. Rolling back OpenSSH Server removes its firewall rule. The firewall rule survives uninstall on purpose. |
+| KB-5 | Clearing "ISO Studio work files" while an ISO session was open broke the next build. | 1.0.0: the cleaner skips them while an ISO is open or an image is mounted in `iso\mount`. |
+| KB-6 | Any unclassified snapshot database error counted as corruption. | 1.0.0: only `StorageError::Corrupted` and an `InvalidData` header move the file aside. `UpgradeRequired` and other errors leave it and report. |
+| KB-7 | Unknown fields on `NativeOp` variants without parameters were accepted. | 1.0.0: `native_ops_carry_no_unknown_fields` round-trips every operation in the catalogs. |
+| KB-8 | Enabled DISM features stayed enabled after a rollback. | 1.0.0: feature steps record `was_on` from `DismGetFeatureInfo`, and a rollback disables only those that were off. Sessions from 0.1.0 still roll back partly. |
+| SEC-1 | The CTT PowerShell profile came from a moving `main` branch. | 1.0.0: pinned to commit `daa7ba2` with SHA-256. The profile still updates itself weekly from `main`; that is upstream behavior and is in the release notes. |
+| SEC-2 | The Adobe block list came from a moving branch. | 1.0.0: pinned to commit `3512d92` with SHA-256, and validation rejects unpinned lists. |
 
 ### Open
 
 | ID | Severity | Issue | Workaround |
 | :--- | :--- | :--- | :--- |
-| KB-5 | Low | Clearing "ISO Studio work files" in the cleaner while a session is open makes the next build fail on missing files. | Open the ISO again. Will be fixed in a later release. |
-| KB-6 | Low | Any unclassified snapshot database error counts as corruption, so the history file is moved aside. A future `redb` format upgrade would take this path. | The file stays as `timemachine.corrupt-<time>`. Will be fixed in a later release. |
-| KB-7 | Low | Unknown fields on `NativeOp` variants without parameters are accepted, despite `deny_unknown_fields`. Serde limit affecting catalog data. | None needed. Will be fixed in a later release. |
-| SEC-1 | Medium | The optional CTT PowerShell profile is fetched from a moving `main` branch and is not pinned or signed. It runs in every new PowerShell session. | Review profile manually before use. Will be fixed in a later release. |
-| SEC-2 | Low | The Adobe block list comes from a moving third-party branch. Only sinkhole entries are kept. | Review block list entries. Will be fixed in a later release. |
-| SEC-3 | Low | `OOSU10.exe` and `Autologon.exe` have no pinned hash. Authenticode verifies the publisher signature. | Verify publisher signature. Will be fixed in a later release. |
-| KB-8 | Medium | Enabled DISM features stay enabled after a rollback. | Disable features manually with DISM if needed. Will be fixed in a later release. |
+| SEC-3 | Low | `OOSU10.exe` and `Autologon.exe` have no pinned hash, because the vendors serve them from fixed "latest" URLs. Authenticode verifies the publisher signature. | None needed. |
 
 ## 6. Known limitations
 
 These are intended for the release notes.
 
-- WindowCraft runs on Windows 11 only, on x64 and ARM64. The interface is in English only.
+- WindowCraft runs on Windows 11 only, on x64 and ARM64. The interface is in eight languages;
+  catalog content, error details, the job log and command line output are in English.
 - The builds are not code-signed, so SmartScreen shows a warning on first run.
 - Uninstalling deletes Time Machine history for every user, with no warning. Roll changes back
   first if you want them undone.
@@ -166,7 +171,7 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 379 pass, 2 network tests are opt-in and pass, clippy clean with `-D warnings` |
+| Unit and integration tests | 407 pass in 1.0.0, 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
 | GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |
@@ -183,9 +188,10 @@ packaged app sees a virtualized `%LOCALAPPDATA%`, which makes the data folder ch
 
 ## 9. Release steps
 
-1. Finish sections 1 to 3 and push `main`.
+1. Set `version` in `Cargo.toml`, write `docs/RELEASE-NOTES-<version>.md`, date the
+   `CHANGELOG.md` entry and push `main`.
 2. Confirm CI passes.
-3. Push tag `v0.1.0`. `release.yml` builds everything and publishes a pre-release with the notes
-   from `docs/RELEASE-NOTES-0.1.0.md`.
+3. Push tag `v<version>`. `release.yml` builds everything and publishes a pre-release with the
+   notes from `docs/RELEASE-NOTES-<version>.md`.
 4. Download the files on a clean machine, check `SHA256SUMS.txt`, install and uninstall.
 5. Finish section 4 in a VM, and fix what it finds before any stable release.
