@@ -51,9 +51,26 @@ Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/
 | `WindowCraft-<version>-<arch>.msi` | You deploy with Intune, GPO or `msiexec /qn`. |
 | `WindowCraft-<version>-<arch>-portable.exe` | You want to run it without installing. |
 
-Checksums are in `SHA256SUMS.txt`. The builds are unsigned, so SmartScreen warns on first run.
+Checksums are in `SHA256SUMS.txt`. The builds are unsigned, so SmartScreen warns on first run. See the code signing policy below.
 
 1.0.0 is a pre-release. The features that change the system have run in automated tests and on an elevated CI runner, but not yet on a real Windows install. Try it in a virtual machine or on a machine you can restore, and create a restore point first.
+
+## Code signing policy
+
+WindowCraft has applied for free code signing provided by [SignPath.io](https://about.signpath.io), with the certificate by [SignPath Foundation](https://signpath.org). Releases are unsigned until that is granted, and this section will say from which version on they are signed.
+
+Signed files are built by the [release workflow](.github/workflows/release.yml) on GitHub-hosted runners from a tagged commit of this repository, and every signing request is approved by hand. Only files built from this repository are signed: `windowcraft.exe`, `windowcraft-cli.exe`, the MSI and `setup.exe`. The WiX Toolset parts inside the installers keep the state their maintainers publish them in.
+
+| Role | Members |
+| :--- | :--- |
+| Committers and reviewers | [ycangignacy](https://github.com/ycangignacy) |
+| Approvers | [ycangignacy](https://github.com/ycangignacy) |
+
+### Privacy policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+The actions that do connect are the ones a user starts: installing or updating packages through [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/) or [Chocolatey](https://chocolatey.org/privacy), downloading a Windows 11 ISO or a tool such as `OOSU10.exe`, the DNS benchmark, and the pinned downloads listed under Safety. Those services have their own privacy policies, for example [Microsoft's](https://privacy.microsoft.com/privacystatement) for WinGet and Windows downloads.
 
 ## Command line
 
