@@ -28,6 +28,19 @@
     <Property Id="ARPURLINFOABOUT" Value="$(var.ProjectUrl)" />
     <Property Id="ARPNOREPAIR" Value="1" />
 
+    <!-- WCLANGUAGE=pl (or en, de, fr, es, it, pt-BR, uk) presets the language
+         WindowCraft starts in for every user. A later install without the
+         property keeps the earlier choice. Without it the app follows the
+         Windows display language. -->
+    <Property Id="WCLANGUAGE" Secure="yes" />
+    <Property Id="WCLANGUAGE_SAVED" Secure="yes">
+      <RegistrySearch Id="SavedLanguageSearch" Root="HKLM" Key="SOFTWARE\WindowCraft"
+                      Name="Language" Type="raw" Win64="$(var.Win64)" />
+    </Property>
+    <SetProperty Id="WCLANGUAGE" Value="[WCLANGUAGE_SAVED]" After="AppSearch" Sequence="both">
+      NOT WCLANGUAGE AND WCLANGUAGE_SAVED
+    </SetProperty>
+
     <!-- msiexec sees a capped VersionNT on Windows 10 and later, so the real
          build number has to come from the registry. -->
     <Property Id="WINDOWSBUILD">
@@ -72,6 +85,14 @@
       <Component Id="CommandLine" Guid="E9D403C7-3F85-41C6-BC6D-50AF48BCD734" Win64="$(var.Win64)">
         <CreateFolder />
         <Environment Id="PathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+      </Component>
+      <Component Id="LanguageConfig" Guid="D2A684C2-4B6E-4E65-B5E3-72E6F255CA21" Win64="$(var.Win64)">
+        <Condition>
+          <![CDATA[WCLANGUAGE = "en" OR WCLANGUAGE = "pl" OR WCLANGUAGE = "de" OR WCLANGUAGE = "fr" OR WCLANGUAGE = "es" OR WCLANGUAGE = "it" OR WCLANGUAGE = "pt-BR" OR WCLANGUAGE = "uk"]]>
+        </Condition>
+        <RegistryKey Root="HKLM" Key="SOFTWARE\WindowCraft">
+          <RegistryValue Name="Language" Value="[WCLANGUAGE]" Type="string" KeyPath="yes" />
+        </RegistryKey>
       </Component>
     </ComponentGroup>
 

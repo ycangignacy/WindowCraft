@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Made by ycangignacy -->
+<WixLocalization Culture="pl-pl" Language="1045" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="Caption">Instalator [WixBundleName]</String>
+  <String Id="Title">[WixBundleName]</String>
+  <String Id="InstallVersion">Wersja [WixBundleVersion]</String>
+  <String Id="ConfirmCancelMessage">Czy na pewno chcesz anulować?</String>
+  <String Id="ExecuteUpgradeRelatedBundleMessage">Poprzednia wersja</String>
+  <String Id="HelpHeader">Pomoc instalatora</String>
+  <String Id="HelpText">/install | /repair | /uninstall | /layout [katalog] - instaluje, naprawia, odinstalowuje lub
+   tworzy pełną kopię lokalną pakietu w katalogu. Domyślnie instaluje.
+
+/passive | /quiet - wyświetla minimalny interfejs użytkownika bez monitów lub nie wyświetla
+   interfejsu ani monitów. Domyślnie wyświetlany jest pełny interfejs i wszystkie monity.
+
+/norestart - pomija próby ponownego uruchomienia. Domyślnie wyświetlany jest monit przed restartem.
+/log log.txt - zapisuje dziennik do wskazanego pliku. Domyślnie plik dziennika jest tworzony w folderze %TEMP%.</String>
+  <String Id="HelpCloseButton">&amp;Zamknij</String>
+  <String Id="InstallAcceptCheckbox">&amp;Zgadzam się z warunkami licencji</String>
+  <String Id="InstallOptionsButton">&amp;Opcje</String>
+  <String Id="InstallInstallButton">&amp;Zainstaluj</String>
+  <String Id="InstallCloseButton">&amp;Zamknij</String>
+  <String Id="OptionsHeader">Opcje instalacji</String>
+  <String Id="OptionsLocationLabel">Lokalizacja instalacji:</String>
+  <String Id="OptionsBrowseButton">&amp;Przeglądaj</String>
+  <String Id="OptionsOkButton">&amp;OK</String>
+  <String Id="OptionsCancelButton">&amp;Anuluj</String>
+  <String Id="ProgressHeader">Postęp instalacji</String>
+  <String Id="ProgressLabel">Przetwarzanie:</String>
+  <String Id="OverallProgressPackageText">Inicjowanie...</String>
+  <String Id="ProgressCancelButton">&amp;Anuluj</String>
+  <String Id="ModifyHeader">Modyfikacja instalacji</String>
+  <String Id="ModifyRepairButton">&amp;Napraw</String>
+  <String Id="ModifyUninstallButton">&amp;Odinstaluj</String>
+  <String Id="ModifyCloseButton">&amp;Zamknij</String>
+  <String Id="SuccessRepairHeader">Naprawa zakończona pomyślnie</String>
+  <String Id="SuccessUninstallHeader">Dezinstalacja zakończona pomyślnie</String>
+  <String Id="SuccessInstallHeader">Instalacja zakończona pomyślnie</String>
+  <String Id="SuccessHeader">Instalacja zakończona pomyślnie</String>
+  <String Id="SuccessLaunchButton">&amp;Uruchom</String>
+  <String Id="SuccessRestartText">Przed użyciem oprogramowania należy ponownie uruchomić komputer.</String>
+  <String Id="SuccessRestartButton">&amp;Uruchom ponownie</String>
+  <String Id="SuccessCloseButton">&amp;Zamknij</String>
+  <String Id="FailureHeader">Instalacja nie powiodła się</String>
+  <String Id="FailureInstallHeader">Instalacja nie powiodła się</String>
+  <String Id="FailureUninstallHeader">Dezinstalacja nie powiodła się</String>
+  <String Id="FailureRepairHeader">Naprawa nie powiodła się</String>
+  <String Id="FailureHyperlinkLogText">Co najmniej jeden problem spowodował niepowodzenie instalacji. Usuń problemy i ponów próbę. Aby uzyskać więcej informacji, zobacz &lt;a href="#"&gt;plik dziennika&lt;/a&gt;.</String>
+  <String Id="FailureRestartText">Należy ponownie uruchomić komputer, aby ukończyć wycofywanie zmian.</String>
+  <String Id="FailureRestartButton">&amp;Uruchom ponownie</String>
+  <String Id="FailureCloseButton">&amp;Zamknij</String>
+  <String Id="FilesInUseHeader">Pliki w użyciu</String>
+  <String Id="FilesInUseLabel">Następujące aplikacje używają plików, które muszą zostać zaktualizowane:</String>
+  <String Id="FilesInUseCloseRadioButton">Zamknij &amp;aplikacje i spróbuj je uruchomić ponownie.</String>
+  <String Id="FilesInUseDontCloseRadioButton">&amp;Nie zamykaj aplikacji. Wymagane będzie ponowne uruchomienie systemu.</String>
+  <String Id="FilesInUseOkButton">&amp;OK</String>
+  <String Id="FilesInUseCancelButton">&amp;Anuluj</String>
+  <String Id="ErrorFailNoActionReboot">Nie podjęto żadnych działań, ponieważ wymagane jest ponowne uruchomienie komputera.</String>
+</WixLocalization>

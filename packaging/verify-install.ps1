@@ -54,6 +54,7 @@ $exe = Join-Path $folder 'windowcraft.exe'
 $shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\WindowCraft.lnk'
 $data = Join-Path $env:LOCALAPPDATA 'WindowCraft'
 $kept = "$data.verify-backup"
+$regKey = 'HKLM:\SOFTWARE\WindowCraft'
 $script:failures = 0
 
 function Write-Result([string] $Line) {
@@ -117,7 +118,8 @@ function Get-Leftover {
     ) | ForEach-Object { $_.FullName }
     $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match 'WindowCraft' } | ForEach-Object { $_.TaskName }
     $services = Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'WindowCraft' } | ForEach-Object { $_.Name }
-    @($installer) + @($files) + @($tasks) + @($services) | Where-Object { $_ }
+    $reg = if (Test-Path $regKey) { $regKey } else { $null }
+    @($installer) + @($files) + @($tasks) + @($services) + @($reg) | Where-Object { $_ }
 }
 
 function Test-Removed([string] $Name, [int] $ExitCode) {
@@ -126,6 +128,7 @@ function Test-Removed([string] $Name, [int] $ExitCode) {
     Test-Check "$Name removed the Start menu entry" (-not (Test-Path $shortcut))
     Test-Check "$Name removed the PATH entry" (-not (Test-OnPath))
     Test-Check "$Name removed the uninstall entry" ($null -eq (Get-UninstallEntry))
+    Test-Check "$Name removed the registry key" (-not (Test-Path $regKey))
     Test-Check "$Name removed the user data folder" (-not (Test-Path $data))
     if (Test-Path $data) {
         Get-ChildItem $data -Recurse -Force | ForEach-Object { Write-Result "      still there: $($_.FullName)" }
@@ -144,7 +147,7 @@ function Invoke-Installer([string] $File, [string[]] $Arguments) {
     (Start-Process -FilePath $File -ArgumentList $Arguments -Wait -PassThru).ExitCode
 }
 
-if ((Get-UninstallEntry) -or (Test-Path $folder)) {
+if ((Get-UninstallEntry) -or (Test-Path $folder) -or (Test-Path $regKey)) {
     throw 'WindowCraft is already installed. Uninstall it first.'
 }
 if (Test-Path $kept) { throw "$kept exists from an interrupted run. Restore or delete it first." }
@@ -169,6 +172,16 @@ try {
         Test-Removed 'MSI' $code
         Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
 
+        Write-Result "--- MSI with WCLANGUAGE=pl, round $round"
+        $msiLangLog = Join-Path $package "msi-install-lang-$round.log"
+        $code = Invoke-Installer 'msiexec.exe' @('/i', "`"$msi`"", 'WCLANGUAGE=pl', '/qn', '/norestart', '/l*v', "`"$msiLangLog`"")
+        Test-Installed 'MSI with WCLANGUAGE=pl' $code
+        $languageValue = (Get-ItemProperty $regKey -ErrorAction SilentlyContinue).Language
+        Test-Check "MSI with WCLANGUAGE=pl wrote Language=pl to registry (got '$languageValue')" ($languageValue -eq 'pl')
+        $code = Invoke-Installer 'msiexec.exe' @('/x', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$(Join-Path $package "msi-uninstall-lang-$round.log")`"")
+        Test-Removed 'MSI with WCLANGUAGE=pl' $code
+        Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
+
         # No /log here: the check below proves a normal run writes none to %TEMP%.
         Write-Result "--- setup.exe, round $round"
         $code = Invoke-Installer $setup @('/quiet', '/norestart')
@@ -186,6 +199,9 @@ try {
         Write-Result 'Run was interrupted: uninstalling what it installed.'
         $null = Invoke-Installer $setup @('/uninstall', '/quiet', '/norestart')
         $null = Invoke-Installer 'msiexec.exe' @('/x', "`"$msi`"", '/qn', '/norestart')
+    }
+    if (Test-Path $regKey) {
+        Remove-Item -Path $regKey -Recurse -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path $kept) {
         Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue

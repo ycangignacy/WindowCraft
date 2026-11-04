@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Made by ycangignacy -->
+<WixLocalization Culture="uk-ua" Language="1058" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="Caption">Інсталяція [WixBundleName]</String>
+  <String Id="Title">[WixBundleName]</String>
+  <String Id="InstallVersion">Версія [WixBundleVersion]</String>
+  <String Id="ConfirmCancelMessage">Справді скасувати встановлення?</String>
+  <String Id="ExecuteUpgradeRelatedBundleMessage">Попередня версія</String>
+  <String Id="HelpHeader">Довідка з інсталяції</String>
+  <String Id="HelpText">/install | /repair | /uninstall | /layout [каталог] - встановлює, відновлює, видаляє або
+   створює повну локальну копію пакета в каталозі. Типова дія: встановлення.
+
+/passive | /quiet - відображає спрощений інтерфейс користувача без запитів або не відображає
+   інтерфейс і запити взагалі. За замовчуванням відображається повний інтерфейс.
+
+/norestart - забороняє спроби перезавантаження. За замовчуванням перед перезавантаженням з'являється запит.
+/log log.txt - зберігає журнал у вказаний файл. За замовчуванням файл журналу створюється у папці %TEMP%.</String>
+  <String Id="HelpCloseButton">&amp;Закрити</String>
+  <String Id="InstallAcceptCheckbox">Я &amp;погоджуюся з умовами ліцензії</String>
+  <String Id="InstallOptionsButton">&amp;Параметри</String>
+  <String Id="InstallInstallButton">&amp;Встановити</String>
+  <String Id="InstallCloseButton">&amp;Закрити</String>
+  <String Id="OptionsHeader">Параметри інсталяції</String>
+  <String Id="OptionsLocationLabel">Розташування для встановлення:</String>
+  <String Id="OptionsBrowseButton">&amp;Огляд</String>
+  <String Id="OptionsOkButton">&amp;OK</String>
+  <String Id="OptionsCancelButton">&amp;Скасувати</String>
+  <String Id="ProgressHeader">Перебіг інсталяції</String>
+  <String Id="ProgressLabel">Обробка:</String>
+  <String Id="OverallProgressPackageText">Ініціалізація...</String>
+  <String Id="ProgressCancelButton">&amp;Скасувати</String>
+  <String Id="ModifyHeader">Змінити встановлення</String>
+  <String Id="ModifyRepairButton">&amp;Відновити</String>
+  <String Id="ModifyUninstallButton">&amp;Видалити</String>
+  <String Id="ModifyCloseButton">&amp;Закрити</String>
+  <String Id="SuccessRepairHeader">Відновлення успішно завершено</String>
+  <String Id="SuccessUninstallHeader">Видалення успішно завершено</String>
+  <String Id="SuccessInstallHeader">Встановлення успішно завершено</String>
+  <String Id="SuccessHeader">Інсталяцію завершено успішно</String>
+  <String Id="SuccessLaunchButton">&amp;Запустити</String>
+  <String Id="SuccessRestartText">Перед використанням програми необхідно перезавантажити комп'ютер.</String>
+  <String Id="SuccessRestartButton">&amp;Перезавантажити</String>
+  <String Id="SuccessCloseButton">&amp;Закрити</String>
+  <String Id="FailureHeader">Помилка інсталяції</String>
+  <String Id="FailureInstallHeader">Помилка інсталяції</String>
+  <String Id="FailureUninstallHeader">Помилка видалення</String>
+  <String Id="FailureRepairHeader">Помилка відновлення</String>
+  <String Id="FailureHyperlinkLogText">Через одну або кілька проблем інсталяція зазнала невдачі. Виправте помилки та повторіть спробу. Докладніші відомості наведено у &lt;a href="#"&gt;файлі журналу&lt;/a&gt;.</String>
+  <String Id="FailureRestartText">Необхідно перезавантажити комп'ютер, щоб завершити відкочування змін.</String>
+  <String Id="FailureRestartButton">&amp;Перезавантажити</String>
+  <String Id="FailureCloseButton">&amp;Закрити</String>
+  <String Id="FilesInUseHeader">Файли використовуються</String>
+  <String Id="FilesInUseLabel">Такі програми використовують файли, які потрібно оновити:</String>
+  <String Id="FilesInUseCloseRadioButton">Закрити &amp;програми та спробувати перезапустити їх.</String>
+  <String Id="FilesInUseDontCloseRadioButton">&amp;Не закривати програми. Потрібно буде перезавантажити комп'ютер.</String>
+  <String Id="FilesInUseOkButton">&amp;OK</String>
+  <String Id="FilesInUseCancelButton">&amp;Скасувати</String>
+  <String Id="ErrorFailNoActionReboot">Жодних дій не виконано, оскільки потрібне перезавантаження системи.</String>
+</WixLocalization>

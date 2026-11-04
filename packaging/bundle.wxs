@@ -17,10 +17,23 @@
                                               LogoFile="$(var.Assets)\logo-64.png"
                                               SuppressOptionsUI="yes"
                                               SuppressRepair="yes" />
+      <!-- The setup UI follows the Windows display language. -->
+      <Payload Id="thm_1033" SourceFile="$(var.Root)\packaging\lang\1033\thm.wxl" Name="1033\thm.wxl" />
+      <Payload Id="thm_1045" SourceFile="$(var.Root)\packaging\lang\1045\thm.wxl" Name="1045\thm.wxl" />
+      <Payload Id="thm_1031" SourceFile="$(var.Root)\packaging\lang\1031\thm.wxl" Name="1031\thm.wxl" />
+      <Payload Id="thm_1036" SourceFile="$(var.Root)\packaging\lang\1036\thm.wxl" Name="1036\thm.wxl" />
+      <Payload Id="thm_3082" SourceFile="$(var.Root)\packaging\lang\3082\thm.wxl" Name="3082\thm.wxl" />
+      <Payload Id="thm_1040" SourceFile="$(var.Root)\packaging\lang\1040\thm.wxl" Name="1040\thm.wxl" />
+      <Payload Id="thm_1046" SourceFile="$(var.Root)\packaging\lang\1046\thm.wxl" Name="1046\thm.wxl" />
+      <Payload Id="thm_1058" SourceFile="$(var.Root)\packaging\lang\1058\thm.wxl" Name="1058\thm.wxl" />
     </BootstrapperApplicationRef>
+    <!-- setup.exe WCLANGUAGE=pl passes the language on to the MSI. -->
+    <Variable Name="WCLANGUAGE" Value="" bal:Overridable="yes" />
     <bal:Condition Message="WindowCraft requires Windows 11 or later.">WindowsBuildNumber &gt;= 22000</bal:Condition>
     <Chain>
-      <MsiPackage SourceFile="$(var.Msi)" DisplayInternalUI="no" Vital="yes" Compressed="yes" />
+      <MsiPackage SourceFile="$(var.Msi)" DisplayInternalUI="no" Vital="yes" Compressed="yes">
+        <MsiProperty Name="WCLANGUAGE" Value="[WCLANGUAGE]" />
+      </MsiPackage>
     </Chain>
   </Bundle>
 </Wix>
