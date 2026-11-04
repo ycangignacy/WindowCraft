@@ -35,8 +35,10 @@ Ukrainian and Polish were captured at 980 by 600 on the development machine.
       the MSI installs and `dist/` carries as a release file.
 - [x] Set the copyright holder to ycangignacy in `LICENSE`, the installers and the exe version data.
 - [x] Confirm the rights to the logo in `crates/windowcraft-app/assets/logo-source.jpg`.
-- [ ] Confirm where the path data in `crates/windowcraft-app/src/icons.rs` comes from. It is not
-      recorded, and third-party icons would need attribution.
+- [x] Confirm where the path data in `crates/windowcraft-app/src/icons.rs` comes from. The paths
+      were written in the first development session to a "Lucide style" brief. Most coordinates
+      differ from Lucide, but the wrench starts at Lucide's `M14.7 6.3` and the eye follows
+      Feather's construction, so `NOTICE.md` carries the Lucide ISC and Feather MIT notices.
 - [x] Reword "A native successor to Chris Titus Tech's WinUtil" in the README and add a clear
       "not affiliated" line. The WinUtil credit in `NOTICE.md` stays.
 

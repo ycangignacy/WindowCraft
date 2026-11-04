@@ -1,5 +1,6 @@
 // Made by ycangignacy
-//! Monochrome stroke icons on a 24 unit grid with a 1.5 stroke.
+//! Monochrome stroke icons on a 24 unit grid with a 1.5 stroke, drawn in the
+//! style of Lucide. See NOTICE.md and assets/LUCIDE-LICENSE.txt.
 
 use iced::widget::{Svg, svg};
 use iced::{Color, Length};
