@@ -1,13 +1,15 @@
 # Release Checklist
 
-Status of WindowCraft 1.0.0 as of 2026-11-04. It is published as a pre-release, like 0.1.0.
+Status of WindowCraft 1.0.1 as of 2026-11-04: the first stable release. 0.1.0 and 1.0.0 were
+pre-releases.
 
-Do not mark a release stable until section 4 is done, because the system-changing features have
-never run outside a test sandbox.
+The system-changing features ran for the first time on a live system on 2026-11-04: Windows 11
+Home 26H2, build 26300, Polish, in VirtualBox 7.2.22, driven by `crates/windowcraft-app/tests/live_vm.rs`
+and a PowerShell script in `target/vm/` (not in the repository). The results are in
+`docs/RELEASE-NOTES-1.0.1.md`. Section 4 lists what is still open.
 
-New in 1.0.0 and not yet checked by hand: the eight interface languages on an English Windows and
-`setup.exe` in each language. German, Ukrainian and Polish were captured at 980 by 600 on the
-development machine. `verify-install.ps1` with the `WCLANGUAGE` checks passed on 2026-11-04.
+Not checked by hand: the eight interface languages on an English Windows and `setup.exe` in each
+language. German, Ukrainian and Polish were captured at 980 by 600 on the development machine.
 
 ## 1. Repository
 
@@ -63,10 +65,14 @@ The workflows have never run. Expect fixes on the first run.
 
 ### Real system changes
 
-- [ ] **Work through `docs/VM-TEST-PLAN.md` in a disposable VM.** It needs VirtualBox or VMware,
-      because the development machine runs Windows 11 Home. Never run on a real system so far:
-      tweaks and rollback, services, AppX removal, DISM features, update modes, BitLocker,
-      ISO builds, booting a built ISO, USB writes and the first-logon bundle.
+- [x] **Work through `docs/VM-TEST-PLAN.md` in a disposable VM.** Done on 2026-11-04 in VirtualBox:
+      tweaks and rollback, drift, services, AppX removal, DISM features, update modes, BitLocker,
+      an ISO build, a USB write, and a Windows install from that USB media on a VM with no TPM,
+      through OOBE and the first logon. Found and fixed: CscService on Home, RAM 0 in VMs, dark
+      mode ignored by 26H2, the DVD_ROM label.
+- [ ] Run a second install from ISO Studio media with "Dark mode by default", to see the Default
+      hive fix take effect, and with `windowcraft.exe` bundled instead of the test runner, to see
+      the profile applied at first logon.
 - [x] Add these to the VM plan, which does not cover them yet: uninstall, `--purge-data`, the
       first-logon cleanup and the MSI upgrade below.
 - [x] Fix the plan's exit code steps, which KB-2 affects.
@@ -79,8 +85,9 @@ The workflows have never run. Expect fixes on the first run.
 - [x] Upgrade with `setup.exe` from 0.1.0 to 1.0.0 on the development machine, over an install in
       real use: exit 0, both uninstall entries moved to 1.0.0, the two data files were byte for
       byte the same afterwards, and 1.0.0 opened the 0.1.0 history (`--export-report` exit 0).
-- [ ] **Upgrade with the MSI alone** (`msiexec /i` over 0.1.0). Same checks. Only `setup.exe`
-      was tested.
+- [x] **Upgrade with the MSI alone.** In the VM, 0.1.0 to 1.0.0 and 1.0.0 to 1.0.1: exit 0, the
+      history byte for byte the same, one uninstall entry with the new version, and the new
+      version opened the old history.
 - [ ] Interactive `setup.exe`: logo, license page, install, launch, uninstall from Settings.
 - [ ] First launch from the Start menu. The shortcut is advertised, so time it: the event log showed
       two unexplained Windows Installer "installed" events 15 seconds apart during a manual test.
@@ -88,7 +95,9 @@ The workflows have never run. Expect fixes on the first run.
 - [x] Settings shows exactly one WindowCraft entry after `setup.exe`. Of the two uninstall keys,
       the MSI one has `SystemComponent=1`, so only the `setup.exe` entry is listed (1.0.0).
 - [ ] Uninstall with two user profiles: data must go from both. Only one was tested.
-- [ ] Uninstall while WindowCraft is running.
+- [x] Uninstall while WindowCraft is running. Exit 0, files and data removed, but the window keeps
+      running (KB-9). WiX `CloseApplication` was tried and did not reach the window from the
+      quiet uninstall, so it was not kept.
 - [ ] Junction safety when elevated. It passed unelevated, and uninstall runs as SYSTEM.
 - [ ] Clean Windows 11 install with no Visual C++ runtime.
 - [ ] Oldest supported Windows 11, build 22000, and the refusal on Windows 10.
@@ -148,6 +157,7 @@ The workflows have never run. Expect fixes on the first run.
 | ID | Severity | Issue | Workaround |
 | :--- | :--- | :--- | :--- |
 | SEC-3 | Low | `OOSU10.exe` and `Autologon.exe` have no pinned hash, because the vendors serve them from fixed "latest" URLs. Authenticode verifies the publisher signature. | None needed. |
+| KB-9 | Low | Uninstalling while WindowCraft is open removes the files and data, and the open window keeps running until it is closed. | Close WindowCraft before you uninstall. |
 
 ## 6. Known limitations
 

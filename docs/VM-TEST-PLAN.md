@@ -205,7 +205,7 @@ WindowCraft hard-blocks disabling seven critical services (`RpcSs`, `DcomLaunch`
 ## 5. DISM Features
 
 > [!NOTE]
-> **Rollback behaviour:** Time Machine records and rolls back any registry entries attached to a catalog feature (for example `AnonymousUID`/`AnonymousGID` on `Services for NFS`, or `EnablePeriodicBackup` on `RegIdleBackup`). Rolling back `reg-backup` deletes the `AutoRegBackup` scheduled task. DISM feature state changes enabled via `dism.exe /Online /Enable-Feature` remain enabled on rollback. Rolling back marks the session **`Partly rolled back`**.
+> Rollback behaviour: Time Machine records each feature with its state before WindowCraft enabled it. A rollback disables the features that were off before and leaves those that were on, and it reverts registry entries attached to the feature (for example `EnablePeriodicBackup` on `reg-backup`, whose rollback also deletes the `AutoRegBackup` task). Parent features that DISM enabled along with a requested one stay on.
 
 ### Enable a Windows Optional Feature
 - [ ] Check the current state of `Microsoft-Windows-Subsystem-Linux` and `VirtualMachinePlatform` (or `TelnetClient` / `SimpleTCP` if testing a lightweight feature):
@@ -233,8 +233,8 @@ WindowCraft hard-blocks disabling seven critical services (`RpcSs`, `DcomLaunch`
   schtasks /query /tn "AutoRegBackup"
   ```
   **Expected result:** `ERROR: The system cannot find the file specified.`
-- [ ] Verify `dism /online /get-features` still shows the DISM features enabled until manually disabled (`dism /online /disable-feature /featurename:Microsoft-Windows-Subsystem-Linux /norestart`) or VM snapshot revert.
-- [ ] Verify the session in Time Machine displays **`Partly rolled back`** and lists the un-reverted DISM operations.
+- [ ] Verify `Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux` reports `Disabled` or `DisablePending`, and that a feature which was on before the session is still on.
+- [ ] Verify the session in Time Machine displays **`Rolled back`**.
 
 ---
 
@@ -360,7 +360,7 @@ WindowCraft hard-blocks disabling seven critical services (`RpcSs`, `DcomLaunch`
   Get-Volume -DiskImage $m
   Dismount-DiskImage -ImagePath C:\Test\Win11-Custom.iso
   ```
-- [ ] Clear "ISO Studio work files" in the Cleaner, then try **`Build ISO`** without reopening the ISO. This is known bug KB-5: it fails on missing files until the ISO is opened again.
+- [ ] Clear "ISO Studio work files" in the Cleaner while the ISO is open. The cleaner skips them and says so (KB-5, fixed in 1.0.0).
 
 ---
 
@@ -493,7 +493,6 @@ WindowCraft's `usb::assess` and `usb::prepare_disk` enforce four independent che
 | **AppX Removal** | Removing / deprovisioning AppX packages (`appx_remove`) | Package payloads are deleted from the system and deprovisioned for all users. | Reinstall via **`Install`** in the `AppX Packages` tab (`winget` / Microsoft Store) or restore VM snapshot. |
 | **Software & Apps** | Uninstalling Win32/Store apps (`winget uninstall`) | Application binaries and uninstaller state are removed externally by `winget`. | Reinstall via **`Install Selected`** in `Software & Apps` or restore VM snapshot. |
 | **BitLocker** | **`BitLocker - Disable`** (`disable-bit-locker`) | Marked `irreversible: true`; decrypts the OS volume via WMI `Win32_EncryptableVolume.Decrypt`. | Re-enable BitLocker manually with `manage-bde -on C:` or restore VM snapshot. |
-| **DISM Features** | Enabling Windows Optional Features (`dism /Enable-Feature`) | Associated registry entries are tracked in Time Machine; CBS feature state is not disabled on rollback. | Run `dism /online /disable-feature /featurename:<name>` or restore VM snapshot. |
 | **USB Write** | **`Erase and Write`** in ISO Studio | Wipes partition table, formats FAT32, and overwrites the target USB drive. | Reformat the USB drive manually. |
 
 ---

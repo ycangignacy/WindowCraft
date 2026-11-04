@@ -35,15 +35,15 @@ Names and descriptions of catalog entries (apps, tweaks, features) stay in Engli
 `setup.exe` shows its pages in the Windows display language as well. An administrator can preset the language for every user with `WCLANGUAGE`:
 
 ```powershell
-msiexec /i WindowCraft-1.0.0-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.0.0-x64-setup.exe WCLANGUAGE=de
+msiexec /i WindowCraft-1.0.1-x64.msi WCLANGUAGE=pl /qn
+.\WindowCraft-1.0.1-x64-setup.exe WCLANGUAGE=de
 ```
 
 The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`. A user's own choice in the app wins over the preset.
 
 ## Download
 
-Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases). Release notes for 1.0.0 are in [docs/RELEASE-NOTES-1.0.0.md](docs/RELEASE-NOTES-1.0.0.md).
+Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases). Release notes for 1.0.1 are in [docs/RELEASE-NOTES-1.0.1.md](docs/RELEASE-NOTES-1.0.1.md).
 
 | File | Use it when |
 | :--- | :--- |
@@ -53,7 +53,7 @@ Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/
 
 Checksums are in `SHA256SUMS.txt`. The builds are unsigned, so SmartScreen warns on first run. See the code signing policy below.
 
-1.0.0 is a pre-release. The features that change the system have run in automated tests and on an elevated CI runner, but not yet on a real Windows install. Try it in a virtual machine or on a machine you can restore, and create a restore point first.
+Every feature that changes the system ran on Windows 11 Home 26H2 in VirtualBox before 1.0.1; the release notes list what was checked and what was not. Create a restore point before you apply changes.
 
 ## Code signing policy
 
