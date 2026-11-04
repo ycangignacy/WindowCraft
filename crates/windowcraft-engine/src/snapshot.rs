@@ -52,16 +52,35 @@ pub enum Change {
     Registry { path: String, name: String, before: Option<RegValue>, after: Option<RegValue> },
     Service { name: String, before: Option<StartupType>, after: StartupType },
     Task { path: String, before: bool, after: bool },
-    Native { description: String },
+    Native {
+        description: String,
+        /// Set when this step enables a Windows feature. Absent for every
+        /// other native step and for feature steps written by 0.1.0.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        feature: Option<FeatureStep>,
+    },
+}
+
+/// State of one Windows feature before WindowCraft enabled it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeatureStep {
+    pub name: String,
+    /// A rollback turns the feature off only when it was off before.
+    pub was_on: bool,
 }
 
 impl Change {
+    /// A native step that a rollback cannot undo by itself.
+    pub fn native(description: impl Into<String>) -> Self {
+        Self::Native { description: description.into(), feature: None }
+    }
+
     pub fn target(&self) -> String {
         match self {
             Self::Registry { path, name, .. } => format!("{path}\\{name}"),
             Self::Service { name, .. } => format!("Service {name}"),
             Self::Task { path, .. } => format!("Task {path}"),
-            Self::Native { description } => description.clone(),
+            Self::Native { description, .. } => description.clone(),
         }
     }
 }
@@ -106,6 +125,17 @@ pub fn unix_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs())
 }
 
+/// Only real damage moves the history aside. A format upgrade, an aborted
+/// repair or a plain I/O failure leaves the file in place and reports it.
+fn is_damage(error: &redb::DatabaseError) -> bool {
+    match error {
+        redb::DatabaseError::Storage(redb::StorageError::Corrupted(_)) => true,
+        // redb reports a bad file header as InvalidData.
+        redb::DatabaseError::Storage(redb::StorageError::Io(error)) => error.kind() == std::io::ErrorKind::InvalidData,
+        _ => false,
+    }
+}
+
 impl SnapshotStore {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -114,14 +144,13 @@ impl SnapshotStore {
         let database = match Database::create(path) {
             Ok(database) => database,
             Err(redb::DatabaseError::DatabaseAlreadyOpen) => return Err(crate::error::EngineError::StoreBusy),
-            // redb reports a bad file header as InvalidData, which is damage
-            // and not an I/O failure, so that case falls through below.
-            Err(redb::DatabaseError::Storage(redb::StorageError::Io(error)))
-                if error.kind() != std::io::ErrorKind::InvalidData =>
-            {
-                return Err(crate::error::EngineError::io(path.display().to_string(), error));
+            Err(redb::DatabaseError::UpgradeRequired(_)) => {
+                return Err(crate::error::EngineError::Store(format!(
+                    "{} was written by a different WindowCraft version and was left in place",
+                    path.display()
+                )));
             }
-            Err(_) => {
+            Err(error) if is_damage(&error) => {
                 // A damaged history must not stop the app from starting. The
                 // file is kept beside the new one for manual recovery.
                 let aside = path.with_extension(format!("corrupt-{}", unix_now()));
@@ -129,6 +158,10 @@ impl SnapshotStore {
                     .map_err(|e| crate::error::EngineError::io(path.display().to_string(), e))?;
                 Database::create(path)?
             }
+            Err(redb::DatabaseError::Storage(redb::StorageError::Io(error))) => {
+                return Err(crate::error::EngineError::io(path.display().to_string(), error));
+            }
+            Err(error) => return Err(error.into()),
         };
         let transaction = database.begin_write()?;
         transaction.open_table(SESSIONS)?;
@@ -373,6 +406,45 @@ mod tests {
         let names: Vec<String> =
             std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
         assert!(names.iter().any(|name| name.contains("corrupt-")), "{names:?}");
+    }
+
+    #[test]
+    fn a_garbage_file_is_set_aside_and_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("garbage.redb");
+        std::fs::write(&path, b"not a valid redb database file header or contents").unwrap();
+        let store = SnapshotStore::open(&path).unwrap();
+        assert!(store.sessions().unwrap().is_empty());
+        let names: Vec<String> =
+            std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        assert!(names.iter().any(|name| name.contains("corrupt-")), "{names:?}");
+    }
+
+    #[test]
+    fn is_damage_classifies_only_corruption_and_invalid_data() {
+        let corrupt = redb::DatabaseError::Storage(redb::StorageError::Corrupted("corrupt page".into()));
+        assert!(is_damage(&corrupt));
+
+        let invalid_data = redb::DatabaseError::Storage(redb::StorageError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "bad magic header",
+        )));
+        assert!(is_damage(&invalid_data));
+
+        let io_other = redb::DatabaseError::Storage(redb::StorageError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "access denied",
+        )));
+        assert!(!is_damage(&io_other));
+
+        assert!(!is_damage(&redb::DatabaseError::DatabaseAlreadyOpen));
+        assert!(!is_damage(&redb::DatabaseError::UpgradeRequired(1)));
+        assert!(!is_damage(&redb::DatabaseError::RepairAborted));
+        assert!(!is_damage(&redb::DatabaseError::TransactionInProgress));
+        assert!(!is_damage(&redb::DatabaseError::Storage(redb::StorageError::ValueTooLarge(100))));
+        assert!(!is_damage(&redb::DatabaseError::Storage(redb::StorageError::Unsupported)));
+        assert!(!is_damage(&redb::DatabaseError::Storage(redb::StorageError::PreviousIo)));
+        assert!(!is_damage(&redb::DatabaseError::Storage(redb::StorageError::DatabaseClosed)));
     }
 
     #[test]

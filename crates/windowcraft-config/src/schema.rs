@@ -117,7 +117,8 @@ pub enum NativeOp {
     RemoveOnedrive,
     WingetInstall { id: String },
     ReservedStorage { enabled: bool },
-    HostsBlock { section: String, url: String },
+    /// `url` must name a fixed commit, and `sha256` is the hash of that file.
+    HostsBlock { section: String, url: String, sha256: String },
     HostsUnblock { section: String },
     RegDeleteTree { path: String },
     Teredo { enabled: bool },

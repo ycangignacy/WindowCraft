@@ -1117,7 +1117,8 @@
       {
         "op": "hosts_block",
         "section": "ADOBE",
-        "url": "https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts"
+        "url": "https://raw.githubusercontent.com/Ruddernation-Designs/Adobe-URL-Block-List/3512d922db8106b3e704c60fe45f09e353162c20/hosts",
+        "sha256": "3c64183b4380385aa3c07f1da743a94db0642e172a1c49ce80aebb2a5ac59709"
       }
     ],
     "undo": [

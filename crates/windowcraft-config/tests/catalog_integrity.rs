@@ -247,3 +247,53 @@ fn registry_validation_rejects_bad_entries() {
     let bad_binary = RegistryEntry { kind: RegKind::Binary, value: Some("ABC".into()), ..good };
     assert!(check_registry_entry("t", &bad_binary).is_err());
 }
+
+/// Collects every object with an `op` key, wherever it sits in the catalog.
+fn native_ops<'a>(value: &'a serde_json::Value, found: &mut Vec<&'a serde_json::Map<String, serde_json::Value>>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if map.get("op").is_some_and(serde_json::Value::is_string) {
+                found.push(map);
+            }
+            map.values().for_each(|child| native_ops(child, found));
+        }
+        serde_json::Value::Array(items) => items.iter().for_each(|child| native_ops(child, found)),
+        _ => {}
+    }
+}
+
+/// `deny_unknown_fields` does not reach variants without fields in an
+/// internally tagged enum, so serde accepts `{"op":"fix_network","x":1}`.
+/// Round-tripping each operation finds such leftover keys in the data.
+#[test]
+fn native_ops_carry_no_unknown_fields() {
+    let mut problems = Vec::new();
+    let mut checked = 0;
+    for (name, text) in [
+        ("tweaks.json", include_str!("../catalog/tweaks.json")),
+        ("feature.json", include_str!("../catalog/feature.json")),
+        ("updates.json", include_str!("../catalog/updates.json")),
+    ] {
+        let value: serde_json::Value = serde_json::from_str(text).unwrap();
+        let mut found = Vec::new();
+        native_ops(&value, &mut found);
+        checked += found.len();
+        for raw in found {
+            let op: NativeOp = serde_json::from_value(serde_json::Value::Object(raw.clone())).unwrap();
+            let serde_json::Value::Object(round) = serde_json::to_value(&op).unwrap() else { unreachable!() };
+            for key in raw.keys().filter(|key| !round.contains_key(*key)) {
+                problems.push(format!("{name}: {} has unknown field '{key}'", raw["op"]));
+            }
+        }
+    }
+    assert!(checked > 20, "only {checked} operations found");
+    assert!(problems.is_empty(), "{problems:#?}");
+}
+
+#[test]
+fn round_trip_check_sees_fields_serde_lets_through() {
+    let raw = serde_json::json!({"op": "fix_network", "stray": true});
+    let op: NativeOp = serde_json::from_value(raw).unwrap();
+    let serde_json::Value::Object(round) = serde_json::to_value(&op).unwrap() else { unreachable!() };
+    assert!(!round.contains_key("stray"), "serde started rejecting this itself; the check can go");
+}

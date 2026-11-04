@@ -5,7 +5,10 @@ use crate::error::{EngineError, Result};
 use crate::jobs::CancelToken;
 use crate::registry::{RegPath, RegTarget, RegValue, RegistryScope, resolve_value};
 use crate::services::{ServiceBackend, guard_change};
-use crate::snapshot::{AppliedState, Change, ChangeRecord, SessionState, SnapshotStore, unix_now};
+use crate::snapshot::{AppliedState, Change, ChangeRecord, FeatureStep, SessionState, SnapshotStore, unix_now};
+
+/// Description prefix of a feature step in the timeline.
+const FEATURE_STEP: &str = "Enable Windows feature ";
 use std::sync::{Arc, Mutex};
 use windowcraft_config::{Catalog, Feature, NativeOp, RegistryEntry, ServiceRule, StartupType, Tweak, TweakKind};
 
@@ -14,6 +17,8 @@ use windowcraft_config::{Catalog, Feature, NativeOp, RegistryEntry, ServiceRule,
 pub trait NativeRunner: Send + Sync {
     fn run(&self, op: &NativeOp, cancel: &CancelToken) -> Result<()>;
     fn enable_feature(&self, name: &str, cancel: &CancelToken) -> Result<()>;
+    fn disable_feature(&self, name: &str, cancel: &CancelToken) -> Result<()>;
+    fn feature_enabled(&self, name: &str) -> Result<bool>;
 }
 
 /// Records operations without touching the system.
@@ -21,6 +26,9 @@ pub trait NativeRunner: Send + Sync {
 pub struct RecordingRunner {
     pub ran: Mutex<Vec<NativeOp>>,
     pub features: Mutex<Vec<String>>,
+    pub disabled_features: Mutex<Vec<String>>,
+    /// Features that report as already on.
+    pub features_on: Mutex<Vec<String>>,
     pub fail_on: Mutex<Option<NativeOp>>,
 }
 
@@ -40,6 +48,17 @@ impl NativeRunner for RecordingRunner {
             features.push(name.to_owned());
         }
         Ok(())
+    }
+
+    fn disable_feature(&self, name: &str, _cancel: &CancelToken) -> Result<()> {
+        if let Ok(mut disabled) = self.disabled_features.lock() {
+            disabled.push(name.to_owned());
+        }
+        Ok(())
+    }
+
+    fn feature_enabled(&self, name: &str) -> Result<bool> {
+        Ok(self.features_on.lock().is_ok_and(|on| on.iter().any(|feature| feature == name)))
     }
 }
 
@@ -273,7 +292,7 @@ impl Engine {
         }
         let native_ops = self.native_ops(tweak, action);
         for op in &native_ops {
-            changes.push(Change::Native { description: op.describe() });
+            changes.push(Change::native(op.describe()));
         }
 
         // Write-ahead: the undo record is durable before the first mutation.
@@ -384,10 +403,17 @@ impl Engine {
             });
         }
         for name in &feature.features {
-            changes.push(Change::Native { description: format!("Enable Windows feature {name}") });
+            // A feature that was already on stays on after a rollback. When
+            // the state cannot be read, it counts as on: turning off something
+            // the user had before is worse than leaving one feature enabled.
+            let was_on = self.native.feature_enabled(name).unwrap_or(true);
+            changes.push(Change::Native {
+                description: format!("{FEATURE_STEP}{name}"),
+                feature: Some(FeatureStep { name: name.clone(), was_on }),
+            });
         }
         for op in &feature.apply {
-            changes.push(Change::Native { description: op.describe() });
+            changes.push(Change::native(op.describe()));
         }
         self.store.record(session, &feature.id, &changes)?;
 
@@ -485,6 +511,9 @@ impl Engine {
                 Change::Registry { path, name, before, .. } => crate::registry::RegPath::parse(path)
                     .and_then(|path| self.scope.write_opt(&path, name, before.as_ref())),
                 Change::Service { name, before: Some(before), .. } => self.services.set_startup(name, *before),
+                Change::Native { feature: Some(FeatureStep { name, was_on: false }), .. } => {
+                    self.native.disable_feature(name, &CancelToken::new())
+                }
                 Change::Service { .. } | Change::Native { .. } => Ok(()),
                 Change::Task { path, before, .. } => crate::tasks::set_enabled(path, *before),
             };
@@ -540,7 +569,14 @@ impl Engine {
                 let no_undo = native && tweak.undo.is_empty() && !tweak.apply.is_empty();
                 (tweak.irreversible || no_undo).then_some(&tweak.name)
             } else if let Some(feature) = self.catalog.feature(&record.owner) {
-                let no_undo = native && (feature.undo.is_empty() || !feature.features.is_empty());
+                // 0.1.0 recorded feature steps without their earlier state,
+                // so a rollback of those sessions cannot turn the feature off.
+                let no_undo = match &record.change {
+                    Change::Native { feature: Some(_), .. } => false,
+                    Change::Native { description, .. } if description.starts_with(FEATURE_STEP) => true,
+                    Change::Native { .. } => feature.undo.is_empty(),
+                    _ => false,
+                };
                 (feature.irreversible || no_undo).then_some(&feature.name)
             } else {
                 None
@@ -634,7 +670,7 @@ impl Engine {
         let mut repaired = 0;
         for drift in &drifted {
             let Some(state) = self.store.applied_state(&drift.tweak_id)? else { continue };
-            let audit = Change::Native { description: format!("Re-applied {}", drift.tweak_name) };
+            let audit = Change::native(format!("Re-applied {}", drift.tweak_name));
             self.store.record(session, &drift.tweak_id, &[audit])?;
             for (path, name, expected) in &state.registry {
                 let parsed = crate::registry::RegPath::parse(path)?;

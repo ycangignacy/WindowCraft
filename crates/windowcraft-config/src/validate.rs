@@ -51,6 +51,19 @@ fn check_value(owner: &str, entry: &RegistryEntry, value: &str) -> Result<(), St
     }
 }
 
+/// A downloaded list must name one commit and carry its hash, so the
+/// content cannot change after review.
+fn check_pinned(url: &str, sha256: &str) -> Result<(), String> {
+    let is_hex = |text: &str, len: usize| text.len() == len && text.bytes().all(|byte| byte.is_ascii_hexdigit());
+    if !url.starts_with("https://") || !url.split('/').any(|segment| is_hex(segment, 40)) {
+        return Err(format!("'{url}' is not pinned to a commit"));
+    }
+    if !is_hex(sha256, 64) {
+        return Err(format!("bad sha256 '{sha256}'"));
+    }
+    Ok(())
+}
+
 fn check_ids<'a>(label: &str, ids: impl Iterator<Item = &'a str>, problems: &mut Vec<String>) {
     let mut seen = HashSet::new();
     for id in ids {
@@ -113,6 +126,13 @@ impl Catalog {
                 && tweak.apply.is_empty()
             {
                 problems.push(format!("{}: does nothing", tweak.id));
+            }
+            for op in &tweak.apply {
+                if let NativeOp::HostsBlock { url, sha256, .. } = op
+                    && let Err(problem) = check_pinned(url, sha256)
+                {
+                    problems.push(format!("{}: {problem}", tweak.id));
+                }
             }
         }
 
@@ -312,6 +332,27 @@ mod tests {
         tweak.options.clear();
         let problems = catalog.validate();
         assert!(problems.iter().any(|p| p.contains("choice control without options")), "{problems:?}");
+    }
+
+    fn block_list(catalog: &mut Catalog) -> (&mut String, &mut String) {
+        let op = catalog.tweaks.iter_mut().flat_map(|tweak| tweak.apply.iter_mut()).find_map(|op| match op {
+            NativeOp::HostsBlock { url, sha256, .. } => Some((url, sha256)),
+            _ => None,
+        });
+        op.unwrap()
+    }
+
+    #[test]
+    fn catalog_rejects_unpinned_block_lists() {
+        let mut catalog = Catalog::load().unwrap();
+        *block_list(&mut catalog).0 = "https://github.com/example/list/raw/refs/heads/master/hosts".to_owned();
+        let problems = catalog.validate();
+        assert!(problems.iter().any(|p| p.contains("not pinned")), "{problems:?}");
+
+        let mut catalog = Catalog::load().unwrap();
+        *block_list(&mut catalog).1 = "abc".to_owned();
+        let problems = catalog.validate();
+        assert!(problems.iter().any(|p| p.contains("bad sha256")), "{problems:?}");
     }
 
     #[test]

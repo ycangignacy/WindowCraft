@@ -53,6 +53,19 @@ pub struct DismDriverPackage {
     revision: u32,
 }
 
+/// Leading fields of `DismFeatureInfo`. Only the state is read, and DISM
+/// allocates the whole structure, so the tail can be left out.
+#[repr(C, packed)]
+struct DismFeatureInfo {
+    feature_name: PCWSTR,
+    feature_state: i32,
+}
+
+/// `DismPackageFeatureState` values that mean the feature is on or turning on.
+const STATE_INSTALLED: i32 = 4;
+const STATE_INSTALL_PENDING: i32 = 5;
+const STATE_PARTIALLY_INSTALLED: i32 = 7;
+
 /// Owned copy of a driver package entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DriverInfo {
@@ -221,6 +234,28 @@ impl DismSession {
         self.api.check(status, "DismDisableFeature", name)
     }
 
+    /// Whether an optional feature is enabled, pending enable, or partly
+    /// installed. All three count as on, so a rollback leaves them alone.
+    pub fn feature_enabled(&self, name: &str) -> Result<bool> {
+        type Get = unsafe extern "system" fn(Session, PCWSTR, PCWSTR, i32, *mut *mut DismFeatureInfo) -> HRESULT;
+        // SAFETY: The signature matches DismGetFeatureInfo in DismApi.h.
+        let get = unsafe { self.api.library.symbol::<Get>(c"DismGetFeatureInfo")? };
+        let wide_name = wide(name);
+        let mut info: *mut DismFeatureInfo = core::ptr::null_mut();
+        // SAFETY: The name outlives the call, the package identifier is
+        // unused, and `info` is a valid out pointer released below.
+        let status = unsafe { get(self.session, pcwstr(&wide_name), PCWSTR::null(), PACKAGE_NONE, &mut info) };
+        self.api.check(status, "DismGetFeatureInfo", name)?;
+        if info.is_null() {
+            return Err(EngineError::Invalid(format!("DISM returned no information for feature {name}")));
+        }
+        // SAFETY: On success `info` points to a packed DismFeatureInfo.
+        let state = unsafe { core::ptr::read_unaligned(&raw const (*info).feature_state) };
+        // SAFETY: `info` was allocated by DISM and is released once.
+        let _ = unsafe { (self.api.delete)(info.cast()) };
+        Ok(is_enabled_state(state))
+    }
+
     pub fn add_capability(&self, name: &str) -> Result<()> {
         type Add = unsafe extern "system" fn(
             Session, PCWSTR, BOOL, *const PCWSTR, u32, HANDLE, Progress, *mut c_void,
@@ -315,9 +350,24 @@ impl DismSession {
     }
 }
 
-/// Enables or disables an optional feature on the running system.
+fn is_enabled_state(state: i32) -> bool {
+    matches!(state, STATE_INSTALLED | STATE_INSTALL_PENDING | STATE_PARTIALLY_INSTALLED)
+}
+
+/// Enables an optional feature on the running system.
 pub fn enable_online_feature(name: &str) -> Result<()> {
     DismSession::online()?.enable_feature(name)
+}
+
+/// Disables an optional feature on the running system. The payload stays,
+/// so enabling it again needs no download.
+pub fn disable_online_feature(name: &str) -> Result<()> {
+    DismSession::online()?.disable_feature(name)
+}
+
+/// Whether an optional feature is on in the running system.
+pub fn online_feature_enabled(name: &str) -> Result<bool> {
+    DismSession::online()?.feature_enabled(name)
 }
 
 /// A mounted WIM. The image is discarded on drop unless committed, so an
@@ -455,6 +505,29 @@ mod tests {
         assert_eq!(core::mem::offset_of!(DismDriverPackage, catalog_file), 20);
         assert_eq!(core::mem::offset_of!(DismDriverPackage, provider_name), 60);
         assert_eq!(core::mem::offset_of!(DismDriverPackage, major_version), 84);
+        assert_eq!(core::mem::offset_of!(DismFeatureInfo, feature_state), 8);
+    }
+
+    /// Reads feature states from the running system. Read-only, and it runs
+    /// only when elevated, which in practice means the CI runner.
+    #[test]
+    fn online_feature_state_reads_without_changing_anything() {
+        if !crate::sysinfo::is_elevated() {
+            return;
+        }
+        let session = DismSession::online().unwrap();
+        // Present in every Windows 11 and Server 2025 image, on or off.
+        session.feature_enabled("NetFx3").unwrap();
+        let missing = session.feature_enabled("WindowCraft-No-Such-Feature").unwrap_err();
+        assert!(missing.is_not_found(), "{missing}");
+    }
+
+    #[test]
+    fn only_installed_pending_and_partial_states_count_as_enabled() {
+        // DismPackageFeatureState: NotPresent 0, UninstallPending 1, Staged 2,
+        // Removed 3, Installed 4, InstallPending 5, Superseded 6, PartiallyInstalled 7.
+        let enabled: Vec<i32> = (0..=7).filter(|state| is_enabled_state(*state)).collect();
+        assert_eq!(enabled, [4, 5, 7]);
     }
 
     #[test]
@@ -504,6 +577,9 @@ mod tests {
 
         let err = session.disable_feature("NetFx3").unwrap_err();
         assert!(matches!(&err, EngineError::Unsupported(msg) if msg.contains("DismDisableFeature")));
+
+        let err = session.feature_enabled("NetFx3").unwrap_err();
+        assert!(matches!(&err, EngineError::Unsupported(msg) if msg.contains("DismGetFeatureInfo")));
 
         let err = session.add_capability("OpenSSH.Server~~~~0.0.1.0").unwrap_err();
         assert!(matches!(&err, EngineError::Unsupported(msg) if msg.contains("DismAddCapability")));

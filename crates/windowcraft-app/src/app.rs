@@ -1314,11 +1314,19 @@ impl App {
                     .map(|(target, _)| target.clone())
                     .collect();
                 let orphans: Vec<PathBuf> = self.selected_orphans.iter().cloned().collect();
+                let iso_open = !self.iso.images.is_empty();
                 return self.start_job("Cleaning caches", move |context| {
                     let total = (targets.len() + orphans.len()).max(1) as f32;
                     let mut freed = 0;
                     for (index, target) in targets.iter().enumerate() {
                         context.cancel.check()?;
+                        if target.id == cleaner::ISO_TARGET && iso_open {
+                            context.progress(
+                                index as f32 / total,
+                                "ISO Studio work files skipped: an ISO session is open",
+                            );
+                            continue;
+                        }
                         context.progress(index as f32 / total, target.name);
                         freed += cleaner::clean(target).removed_bytes;
                     }

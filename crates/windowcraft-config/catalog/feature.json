@@ -439,7 +439,7 @@
     "id": "install-psprofile",
     "legacy_id": "WPFWinUtilInstallPSProfile",
     "name": "CTT PowerShell Profile - Install",
-    "description": "Backs up the current PowerShell 7 profile and installs the CTT profile.",
+    "description": "Backs up the current PowerShell 7 profile and installs the CTT profile from a reviewed commit, checked by SHA-256. The profile then updates itself from its author's main branch every 7 days in interactive sessions.",
     "kind": "profile",
     "apply": [
       {

@@ -571,14 +571,50 @@ fn rolling_back_openssh_removes_the_rule_and_reports_the_rest_as_kept() {
 }
 
 #[test]
-fn a_windows_feature_session_does_not_claim_a_full_rollback() {
+fn rolling_back_windows_features_disables_them_newest_first() {
     let rig = rig("featuredism");
     let feature = rig.engine.catalog.feature("wsl").unwrap().clone();
     assert!(!feature.features.is_empty());
     let session = rig.engine.apply_feature(&feature, None, &CancelToken::new()).unwrap();
+    assert!(rig.engine.irreversible_in_session(session).unwrap().is_empty());
 
     rig.engine.rollback_session(session).unwrap();
+    assert_eq!(session_state(&rig, session), SessionState::RolledBack);
+    assert_eq!(
+        *rig.native.disabled_features.lock().unwrap(),
+        ["Microsoft-Windows-Subsystem-Linux", "VirtualMachinePlatform"]
+    );
+}
+
+#[test]
+fn rolling_back_leaves_features_that_were_already_on() {
+    let rig = rig("featurekeep");
+    rig.native.features_on.lock().unwrap().push("VirtualMachinePlatform".to_owned());
+    let feature = rig.engine.catalog.feature("wsl").unwrap().clone();
+    let session = rig.engine.apply_feature(&feature, None, &CancelToken::new()).unwrap();
+
+    rig.engine.rollback_session(session).unwrap();
+    assert_eq!(session_state(&rig, session), SessionState::RolledBack);
+    assert_eq!(*rig.native.disabled_features.lock().unwrap(), ["Microsoft-Windows-Subsystem-Linux"]);
+}
+
+#[test]
+fn feature_steps_recorded_by_0_1_0_still_count_as_kept() {
+    let rig = rig("featurelegacy");
+    let session = rig.engine.store.begin_session("WSL").unwrap();
+    // 0.1.0 wrote this record without the feature state.
+    let legacy: Change = serde_json::from_str(
+        r#"{"kind":"Native","description":"Enable Windows feature Microsoft-Windows-Subsystem-Linux"}"#,
+    )
+    .unwrap();
+    rig.engine.store.record(session, "wsl", &[legacy]).unwrap();
+    rig.engine.store.finish_session(session, SessionState::Committed).unwrap();
+
+    let name = rig.engine.catalog.feature("wsl").unwrap().name.clone();
+    assert_eq!(rig.engine.irreversible_in_session(session).unwrap(), [name]);
+    rig.engine.rollback_session(session).unwrap();
     assert_eq!(session_state(&rig, session), SessionState::PartlyRolledBack);
+    assert!(rig.native.disabled_features.lock().unwrap().is_empty());
 }
 
 #[test]

@@ -67,7 +67,7 @@ pub fn targets() -> Vec<CleanTarget> {
         target("npm", "npm cache", "Developer Caches", &[r"%LOCALAPPDATA%\npm-cache"]),
         target("pip", "pip cache", "Developer Caches", &[r"%LOCALAPPDATA%\pip\Cache"]),
         target("nuget", "NuGet package cache", "Developer Caches", &[r"%USERPROFILE%\.nuget\packages"]),
-        target("windowcraft-iso", "ISO Studio work files", "WindowCraft", &[r"%LOCALAPPDATA%\WindowCraft\iso"]),
+        target(ISO_TARGET, "ISO Studio work files", "WindowCraft", &[r"%LOCALAPPDATA%\WindowCraft\iso"]),
     ]
 }
 
@@ -163,8 +163,20 @@ pub fn scan(target: &CleanTarget) -> ScanResult {
     })
 }
 
+/// Id of the target that holds ISO Studio work files.
+pub const ISO_TARGET: &str = "windowcraft-iso";
+
+fn has_mounted_image(iso_dir: &Path) -> bool {
+    fs::read_dir(iso_dir.join("mount")).is_ok_and(|mut entries| entries.next().is_some())
+}
+
 pub fn clean(target: &CleanTarget) -> CleanResult {
     let paths = expanded_paths(target);
+    // Deleting inside a mounted WIM edits the image, so ISO Studio work
+    // files stay while an image is mounted there.
+    if target.id == ISO_TARGET && paths.iter().any(|path| has_mounted_image(path)) {
+        return CleanResult { skipped: 1, ..CleanResult::default() };
+    }
     paths.par_iter().map(|path| clean_dir(path)).reduce(CleanResult::default, |a, b| CleanResult {
         removed_bytes: a.removed_bytes + b.removed_bytes,
         removed_files: a.removed_files + b.removed_files,
@@ -344,5 +356,58 @@ mod tests {
         for target in targets() {
             assert!(target.paths.iter().all(|path| path.starts_with('%')));
         }
+    }
+
+    #[test]
+    fn a_mounted_image_blocks_only_the_iso_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let mount = dir.path().join("mount");
+        fs::create_dir_all(&mount).unwrap();
+        fs::write(mount.join("mounted.wim"), [1u8; 100]).unwrap();
+
+        let sibling = dir.path().join("other.txt");
+        fs::write(&sibling, [2u8; 200]).unwrap();
+
+        let iso_target = target(ISO_TARGET, "ISO Studio work files", "WindowCraft", &[dir.path().to_str().unwrap()]);
+        let target_result = clean(&iso_target);
+        assert_eq!(target_result.skipped, 1);
+        assert_eq!(target_result.removed_files, 0);
+        assert_eq!(target_result.removed_bytes, 0);
+        assert!(sibling.exists());
+        assert!(mount.join("mounted.wim").exists());
+
+        // Any other cache with a folder named mount is cleaned as before.
+        let cache = target("npm", "npm cache", "Developer Caches", &[dir.path().to_str().unwrap()]);
+        assert_eq!(clean(&cache).skipped, 0);
+        assert!(!sibling.exists());
+    }
+
+    #[test]
+    fn empty_mount_subfolder_does_not_block_cleaning() {
+        let dir = tempfile::tempdir().unwrap();
+        let mount = dir.path().join("mount");
+        fs::create_dir_all(&mount).unwrap();
+
+        let sibling = dir.path().join("other.txt");
+        fs::write(&sibling, [2u8; 200]).unwrap();
+
+        let dir_result = clean_dir(dir.path());
+        assert_eq!(dir_result.removed_files, 1);
+        assert_eq!(dir_result.removed_bytes, 200);
+        assert_eq!(dir_result.skipped, 0);
+        assert!(!sibling.exists());
+
+        let dir2 = tempfile::tempdir().unwrap();
+        let mount2 = dir2.path().join("mount");
+        fs::create_dir_all(&mount2).unwrap();
+        let sibling2 = dir2.path().join("other.txt");
+        fs::write(&sibling2, [2u8; 200]).unwrap();
+
+        let iso_target = target(ISO_TARGET, "ISO Studio work files", "WindowCraft", &[dir2.path().to_str().unwrap()]);
+        let target_result = clean(&iso_target);
+        assert_eq!(target_result.removed_files, 1);
+        assert_eq!(target_result.removed_bytes, 200);
+        assert_eq!(target_result.skipped, 0);
+        assert!(!sibling2.exists());
     }
 }

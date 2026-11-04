@@ -4,7 +4,7 @@
 use crate::atomicfs::{atomic_write, hosts_with, hosts_without, sanitize_blocklist};
 use crate::cleaner::clean_dir;
 use crate::dism::{DismSession, enable_online_feature};
-use crate::download::{block_on, download, fetch_text};
+use crate::download::{block_on, download, fetch_text_pinned};
 use crate::error::{EngineError, Result};
 use crate::executor::NativeRunner;
 use crate::jobs::CancelToken;
@@ -19,7 +19,10 @@ use windowcraft_config::{AclRights, App, NativeOp};
 
 const SHORT: Duration = Duration::from_secs(120);
 const LONG: Duration = Duration::from_secs(60 * 60);
-const PROFILE_URL: &str = "https://raw.githubusercontent.com/ChrisTitusTech/powershell-profile/main/Microsoft.PowerShell_profile.ps1";
+/// The CTT profile at a reviewed commit. Update both values together after
+/// reading the new version: it runs in every PowerShell 7 session.
+const PROFILE_URL: &str = "https://raw.githubusercontent.com/ChrisTitusTech/powershell-profile/daa7ba227573de2a97739f15762f2ec231817925/Microsoft.PowerShell_profile.ps1";
+const PROFILE_SHA256: &str = "e249c4f838b72fcaea0742c1922b6542567b42afcf11a9462d7bbc0f163e1ade";
 
 /// Runs against the live system.
 #[derive(Debug, Default, Clone, Copy)]
@@ -118,7 +121,7 @@ fn install_profile(cancel: &CancelToken) -> Result<()> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|e| EngineError::io(parent.display().to_string(), e))?;
     }
-    block_on(download(PROFILE_URL, &target.with_extension("wc-new"), None, cancel, |_, _| {}))??;
+    block_on(download(PROFILE_URL, &target.with_extension("wc-new"), Some(PROFILE_SHA256), cancel, |_, _| {}))??;
     let content =
         std::fs::read(target.with_extension("wc-new")).map_err(|e| EngineError::io(target.display().to_string(), e))?;
     atomic_write(&target, &content)?;
@@ -224,8 +227,8 @@ impl NativeRunner for SystemRunner {
             NativeOp::RemoveOnedrive => remove_onedrive(cancel),
             NativeOp::WingetInstall { id } => winget_install(id, cancel),
             NativeOp::ReservedStorage { enabled } => DismSession::online()?.set_reserved_storage(*enabled),
-            NativeOp::HostsBlock { section, url } => {
-                let list = sanitize_blocklist(&block_on(fetch_text(url))??);
+            NativeOp::HostsBlock { section, url, sha256 } => {
+                let list = sanitize_blocklist(&block_on(fetch_text_pinned(url, sha256))??);
                 if list.is_empty() {
                     return Err(EngineError::Invalid(format!("block list at {url} held no valid entries")));
                 }
@@ -312,5 +315,49 @@ impl NativeRunner for SystemRunner {
 
     fn enable_feature(&self, name: &str, _cancel: &CancelToken) -> Result<()> {
         enable_online_feature(name)
+    }
+
+    fn disable_feature(&self, name: &str, _cancel: &CancelToken) -> Result<()> {
+        // A feature that no longer exists is as good as off.
+        match crate::dism::disable_online_feature(name) {
+            Err(error) if error.is_not_found() => Ok(()),
+            other => other,
+        }
+    }
+
+    fn feature_enabled(&self, name: &str) -> Result<bool> {
+        crate::dism::online_feature_enabled(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reaches GitHub, so it only runs with `--ignored`. A failure means the
+    /// pinned commit or its hash no longer match.
+    #[tokio::test]
+    #[ignore = "needs network access"]
+    async fn pinned_powershell_profile_matches_its_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("profile.ps1");
+        download(PROFILE_URL, &path, Some(PROFILE_SHA256), &CancelToken::new(), |_, _| {}).await.unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("function Update-Profile"));
+    }
+
+    /// Fetches every pinned hosts block list in the catalog. Needs network.
+    #[tokio::test]
+    #[ignore = "needs network access"]
+    async fn pinned_block_lists_match_their_hashes() {
+        let catalog = windowcraft_config::Catalog::load().unwrap();
+        let mut checked = 0;
+        for op in catalog.tweaks.iter().flat_map(|tweak| tweak.apply.iter()) {
+            if let NativeOp::HostsBlock { url, sha256, .. } = op {
+                let list = sanitize_blocklist(&crate::download::fetch_text_pinned(url, sha256).await.unwrap());
+                assert!(!list.is_empty(), "{url}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 0);
     }
 }

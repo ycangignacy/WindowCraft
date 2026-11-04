@@ -129,6 +129,24 @@ pub async fn fetch_text(url: &str) -> Result<String> {
         .map_err(|e| EngineError::Network(e.to_string()))
 }
 
+/// Fetches a text file and checks its SHA-256 before returning it.
+pub async fn fetch_text_pinned(url: &str, expected_sha256: &str) -> Result<String> {
+    let bytes = http_client()?
+        .get(url)
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status)
+        .map_err(|e| EngineError::Network(e.to_string()))?
+        .bytes()
+        .await
+        .map_err(|e| EngineError::Network(e.to_string()))?;
+    let actual = hex(&Sha256::digest(&bytes));
+    if !actual.eq_ignore_ascii_case(expected_sha256) {
+        return Err(EngineError::Checksum { file: url.to_owned(), expected: expected_sha256.to_owned(), actual });
+    }
+    String::from_utf8(bytes.to_vec()).map_err(|_| EngineError::Invalid(format!("{url} is not UTF-8 text")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
