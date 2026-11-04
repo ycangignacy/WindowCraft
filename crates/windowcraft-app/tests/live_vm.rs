@@ -413,7 +413,7 @@ fn t09_usb_guard_and_write() {
     println!("disks: {:?}", all.iter().map(|d| (d.number, d.model.clone(), d.bus.label())).collect::<Vec<_>>());
     println!("eligible: {:?}", eligible.iter().map(|d| (d.number, d.model.clone())).collect::<Vec<_>>());
     assert!(eligible.iter().all(|disk| !disk.is_system), "the system disk is never offered");
-    let target = eligible.iter().find(|disk| disk.model == model).expect("the throwaway USB disk is offered");
+    let target = eligible.iter().find(|disk| disk.model.trim() == model.trim()).expect("the throwaway USB disk is offered");
     assert_eq!(eligible.len(), 1, "only the throwaway disk is offered");
 
     let catalog = Arc::new(Catalog::load().unwrap());

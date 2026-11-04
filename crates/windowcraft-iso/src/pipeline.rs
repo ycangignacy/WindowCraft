@@ -161,7 +161,7 @@ pub fn stage_files(media: &Path, session: &StudioSession, catalog: &Catalog) -> 
     }
 
     let scripts = media.join(r"sources\$OEM$\$$\Setup\Scripts");
-    write_text(&scripts.join("SetupComplete.cmd"), &setup_complete(catalog))?;
+    write_text(&scripts.join("SetupComplete.cmd"), &setup_complete(catalog, &session.options))?;
     if let Some(profile) = &session.profile {
         let bundle = scripts.join("WindowCraft");
         write_text(&bundle.join("profile.json"), &profile.to_json())?;
@@ -250,6 +250,8 @@ pub fn oscdimg_arguments(media: &Path, output: &Path) -> Vec<String> {
         "-o".to_owned(),
         "-u2".to_owned(),
         "-udfver102".to_owned(),
+        // Same volume label as a USB drive written by ISO Studio.
+        "-lWIN11".to_owned(),
         format!("-bootdata:2#p0,e,b{}#pEF,e,b{}", bios.display(), uefi.display()),
         media.display().to_string(),
         output.display().to_string(),
@@ -462,7 +464,8 @@ mod tests {
     #[test]
     fn iso_arguments_describe_dual_boot() {
         let arguments = oscdimg_arguments(Path::new(r"C:\w\media"), Path::new(r"C:\out.iso"));
-        let boot = &arguments[4];
+        let boot = arguments.iter().find(|argument| argument.starts_with("-bootdata")).unwrap();
+        assert!(arguments.contains(&"-lWIN11".to_owned()));
         assert!(boot.starts_with("-bootdata:2#p0,e,b"));
         assert!(boot.contains("etfsboot.com"));
         assert!(boot.contains("#pEF,e,b"));

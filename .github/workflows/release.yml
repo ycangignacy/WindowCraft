@@ -1,8 +1,9 @@
 # Made by ycangignacy
 name: Release
 
-# Pushing a tag such as v0.1.0 builds every download and publishes a GitHub
-# pre-release with the notes from docs/RELEASE-NOTES-<version>.md.
+# Pushing a tag such as v1.0.1 builds every download and publishes a GitHub
+# release with the notes from docs/RELEASE-NOTES-<version>.md. A tag with a
+# suffix, such as v1.1.0-rc1, publishes a pre-release instead.
 on:
   push:
     tags: ['v*.*.*']
@@ -41,8 +42,11 @@ jobs:
           ./packaging/build.ps1 -Architecture x64 -ProjectUrl "https://github.com/$env:GITHUB_REPOSITORY"
           ./packaging/build.ps1 -Architecture arm64 -ProjectUrl "https://github.com/$env:GITHUB_REPOSITORY"
 
-      - name: Publish the pre-release
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist -File).FullName --prerelease --notes-file "docs/RELEASE-NOTES-$($env:GITHUB_REF_NAME.TrimStart('v')).md" --title "WindowCraft $env:GITHUB_REF_NAME"
+        run: |
+          $notes = "docs/RELEASE-NOTES-$($env:GITHUB_REF_NAME.TrimStart('v')).md"
+          $kind = if ($env:GITHUB_REF_NAME -match '-') { '--prerelease' } else { '--latest' }
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist -File).FullName $kind --notes-file $notes --title "WindowCraft $env:GITHUB_REF_NAME"
