@@ -7,8 +7,8 @@ use crate::win::{HandleGuard, wide};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
 use windows::Win32::System::SystemInformation::{
-    GetNativeSystemInfo, GetPhysicallyInstalledSystemMemory, PROCESSOR_ARCHITECTURE_AMD64, PROCESSOR_ARCHITECTURE_ARM64,
-    SYSTEM_INFO,
+    GetNativeSystemInfo, GetPhysicallyInstalledSystemMemory, GlobalMemoryStatusEx, MEMORYSTATUSEX,
+    PROCESSOR_ARCHITECTURE_AMD64, PROCESSOR_ARCHITECTURE_ARM64, SYSTEM_INFO,
 };
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -83,10 +83,22 @@ pub fn query() -> Result<SystemInfo> {
     })
 }
 
+/// Installed memory in KB. Virtual machines often lack the SMBIOS memory
+/// tables that GetPhysicallyInstalledSystemMemory reads (VirtualBox does), so
+/// the memory Windows can use stands in for it there.
 pub fn installed_ram_kb() -> u64 {
     let mut kilobytes = 0;
     // SAFETY: `kilobytes` is a valid out pointer.
-    if unsafe { GetPhysicallyInstalledSystemMemory(&mut kilobytes) }.is_ok() { kilobytes } else { 0 }
+    if unsafe { GetPhysicallyInstalledSystemMemory(&mut kilobytes) }.is_ok() && kilobytes > 0 {
+        return kilobytes;
+    }
+    usable_ram_kb()
+}
+
+fn usable_ram_kb() -> u64 {
+    let mut status = MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+    // SAFETY: `status` is a valid out structure with dwLength set.
+    if unsafe { GlobalMemoryStatusEx(&mut status) }.is_ok() { status.ullTotalPhys / 1024 } else { 0 }
 }
 
 pub fn is_elevated() -> bool {
@@ -154,6 +166,9 @@ mod tests {
         assert!(!info.build.is_empty());
         assert_eq!(info.full_build(), format!("{}.{}", info.build, info.ubr));
         assert!(info.ram_kb > 0);
+        // The fallback reports a little less than installed memory, never more.
+        let usable = usable_ram_kb();
+        assert!(usable > 0 && usable <= info.ram_kb, "usable {usable} installed {}", info.ram_kb);
         assert!(info.logical_processors > 0);
         assert_ne!(info.architecture, "unknown");
     }

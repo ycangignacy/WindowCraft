@@ -41,7 +41,8 @@ pub fn build(engine: &Engine) -> Result<EnvironmentReport> {
         os_display_version: info.display_version,
         os_build,
         architecture: info.architecture.to_owned(),
-        ram_gb: info.ram_kb / (1024 * 1024),
+        // Rounded, because usable memory in a VM comes in just under the GB.
+        ram_gb: (info.ram_kb + 512 * 1024) / (1024 * 1024),
         logical_processors: info.logical_processors,
         winget_present: crate::packages::winget_path().is_some(),
         chocolatey_present: crate::packages::choco_path().is_some(),
