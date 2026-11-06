@@ -19,7 +19,9 @@
              Description="WindowCraft $(var.Version)"
              Comments="Windows 11 administration, debloating and ISO mastering" />
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of WindowCraft is already installed." />
+    <!-- A pre-release and the stable build of one version share it, so the
+         stable one has to replace the pre-release instead of installing beside it. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of WindowCraft is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <Icon Id="WindowCraft.ico" SourceFile="$(var.Assets)\windowcraft.ico" />

@@ -1,7 +1,8 @@
 # Release Checklist
 
-Status of WindowCraft 1.0.1 as of 2026-11-04: the first stable release. 0.1.0 and 1.0.0 were
-pre-releases.
+Status as of 2026-11-06: 1.0.2-rc1 is a pre-release with the scrolling and animation work, tested
+in the same VM (see `docs/RELEASE-NOTES-1.0.2-rc1.md`). 1.0.1 is the current stable release. 0.1.0
+and 1.0.0 were pre-releases.
 
 The system-changing features ran for the first time on a live system on 2026-11-04: Windows 11
 Home 26H2, build 26300, Polish, in VirtualBox 7.2.22, driven by `crates/windowcraft-app/tests/live_vm.rs`
@@ -224,3 +225,10 @@ packaged app sees a virtualized `%LOCALAPPDATA%`, which makes the data folder ch
    notes from `docs/RELEASE-NOTES-<version>.md`.
 4. Download the files on a clean machine, check `SHA256SUMS.txt`, install and uninstall.
 5. Finish section 4 in a VM, and fix what it finds before any stable release.
+
+To make a pre-release stable without changes, edit its GitHub release: clear "Set as a
+pre-release", set it as the latest release and drop the suffix from the title. Do not rebuild the
+same version under a new tag. The MSI replaces a build of the same version
+(`AllowSameVersionUpgrades`), but the WiX 3 bootstrapper does not: in the VM a second
+`setup.exe` build of 1.0.2 over the first left two "WindowCraft 1.0.2" entries in Installed apps,
+one of them a stale bundle. A stable release with code changes gets the next version number.

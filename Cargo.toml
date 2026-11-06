@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 license = "MIT"
 authors = ["ycangignacy"]
@@ -65,6 +65,7 @@ windows = { version = "0.62", features = [
     "Win32_System_Ioctl",
     "Win32_System_LibraryLoader",
     "Win32_System_Ole",
+    "Win32_System_Performance",
     "Win32_System_Power",
     "Win32_System_Registry",
     "Win32_System_Restore",
@@ -115,4 +116,45 @@ opt-level = 3
 opt-level = 3
 
 [profile.release.package.iced_tiny_skia]
+opt-level = 3
+
+# Layout, text shaping and glyph rasterization also run on every animated
+# frame. At opt-level "z" they made scrolling and springs drop frames.
+[profile.release.package.iced_core]
+opt-level = 3
+
+[profile.release.package.iced_widget]
+opt-level = 3
+
+[profile.release.package.iced_graphics]
+opt-level = 3
+
+[profile.release.package.iced_runtime]
+opt-level = 3
+
+[profile.release.package.iced_winit]
+opt-level = 3
+
+[profile.release.package.cosmic-text]
+opt-level = 3
+
+[profile.release.package.swash]
+opt-level = 3
+
+[profile.release.package.zeno]
+opt-level = 3
+
+[profile.release.package.skrifa]
+opt-level = 3
+
+[profile.release.package.read-fonts]
+opt-level = 3
+
+[profile.release.package.harfrust]
+opt-level = 3
+
+[profile.release.package.softbuffer]
+opt-level = 3
+
+[profile.release.package.windowcraft-physics]
 opt-level = 3

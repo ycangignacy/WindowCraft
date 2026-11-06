@@ -28,7 +28,9 @@ jobs:
           $manifest = Get-Content Cargo.toml -Raw
           if ($manifest -notmatch '(?m)^version = "(\d+\.\d+\.\d+)"') { throw 'No workspace version.' }
           $expected = "v$($Matches[1])"
-          if ($expected -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match $expected." }
+          # A pre-release tag carries a suffix, v1.0.2-rc1, on the same version.
+          $release = $env:GITHUB_REF_NAME -replace '-.*$', ''
+          if ($expected -ne $release) { throw "Tag $env:GITHUB_REF_NAME does not match $expected." }
 
       - name: Test
         run: cargo test --workspace --locked

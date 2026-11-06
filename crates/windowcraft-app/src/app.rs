@@ -4,7 +4,7 @@
 use crate::actions::{self, detect_all, detect_options};
 use crate::i18n::{self, Language, Msg, format_1, format_2, t};
 use crate::platform::{self, Accessibility};
-use crate::theme::{INSPECTOR_WIDTH, Palette};
+use crate::theme::{INSPECTOR_WIDTH, NAV_ROW_HEIGHT, Palette};
 use iced::futures::stream;
 use iced::keyboard::{self, Key, Modifiers, key};
 use iced::{Event, Point, Subscription, Task, event, mouse, widget, window};
@@ -34,6 +34,11 @@ pub const DOCK: usize = 2;
 pub const TAB: usize = 3;
 pub const ACCORDION: usize = 4;
 pub const DNS_BARS: usize = 5;
+
+/// Motion smaller than this, in logical pixels, is not drawn differently.
+const VISIBLE_PIXEL: f64 = 0.25;
+/// Bars in the DNS benchmark are about this wide at full length.
+const DNS_BAR_PIXELS: f64 = 300.0;
 
 /// Below this release speed the drawer settles by position instead.
 const FLICK_THRESHOLD: f64 = 60.0;
@@ -76,7 +81,7 @@ impl Page {
         }
     }
 
-    fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|page| *page == self).unwrap_or(0)
     }
 }
@@ -141,7 +146,7 @@ impl TweakTab {
         }
     }
 
-    fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
     }
 }
@@ -172,7 +177,7 @@ impl InspectorTab {
         }
     }
 
-    fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
     }
 }
@@ -447,7 +452,18 @@ impl App {
     pub fn new(catalog: Arc<Catalog>, engine: Arc<Engine>, info: SystemInfo, start: StartView) -> (Self, Task<Message>) {
         let StartView { page, inspect, profile, language } = start;
         let accessibility = platform::accessibility();
+        apply_motion_settings(accessibility);
         let mut timeline = Timeline::new([0.0, 0.0, 0.0, 0.0, 0.0]);
+        // Each channel rests once it moves less than about a quarter pixel.
+        for (channel, precision) in [
+            (NAV, VISIBLE_PIXEL / f64::from(NAV_ROW_HEIGHT)),
+            (DRAWER, VISIBLE_PIXEL),
+            (DOCK, VISIBLE_PIXEL / 90.0),
+            (TAB, VISIBLE_PIXEL / 100.0),
+            (ACCORDION, VISIBLE_PIXEL),
+        ] {
+            timeline.channels[channel].set_precision(precision);
+        }
         timeline.mode = if accessibility.animations { MotionMode::Spring } else { MotionMode::Reduced };
         timeline.channels[NAV].snap(page.index() as f64);
         let resumed = StudioSession::resume(&work_dir());
@@ -561,9 +577,10 @@ impl App {
             iced::system::theme_changes().map(|_| Message::SystemThemeChanged),
         ];
         // No frame source exists unless something is moving, so an idle app
-        // sleeps in the message loop at 0% CPU.
+        // sleeps in the message loop at 0% CPU. While it runs, frames follow
+        // the display refresh instead of the speed of the CPU.
         if self.timeline.needs_frame() {
-            subscriptions.push(window::frames().map(Message::Frame));
+            subscriptions.push(crate::vsync::frames().map(Message::Frame));
         }
         if self.grip_hover || self.drag.is_active() || self.drag_armed {
             subscriptions.push(event::listen_with(pointer_event));
@@ -679,8 +696,9 @@ impl App {
         self.query.clear();
         self.hits.clear();
         self.animate(NAV, page.index() as f64);
-        // Tweaks and the Inspector share one tab indicator.
+        // Every page with a segmented control shares one tab indicator.
         match page {
+            Page::Applications => self.animate(TAB, manager_index(self.manager)),
             Page::Tweaks => self.animate(TAB, self.tab.index() as f64),
             Page::Inspector => self.animate(TAB, self.inspector_tab.index() as f64),
             _ => {}
@@ -847,6 +865,7 @@ impl App {
             }
             Message::SystemThemeChanged => {
                 self.accessibility = platform::accessibility();
+                apply_motion_settings(self.accessibility);
                 self.timeline.mode =
                     if self.accessibility.animations { MotionMode::Spring } else { MotionMode::Reduced };
                 if let Some(handle) = self.window {
@@ -909,7 +928,10 @@ impl App {
                     self.categories = BTreeSet::from([name]);
                 }
             }
-            Message::Manager(manager) => self.manager = manager,
+            Message::Manager(manager) => {
+                self.manager = manager;
+                self.animate(TAB, manager_index(manager));
+            }
             Message::ClearApps => {
                 self.selected_apps.clear();
                 self.update_dock();
@@ -1472,7 +1494,7 @@ impl App {
         self.timeline.channels.truncate(DNS_BARS);
         let mode = self.timeline.mode;
         for result in &results {
-            let mut channel = windowcraft_physics::Channel::new(0.0);
+            let mut channel = windowcraft_physics::Channel::with_precision(0.0, VISIBLE_PIXEL / DNS_BAR_PIXELS);
             channel.animate_to(result.score().map_or(0.0, |score| score / slowest), mode);
             self.timeline.channels.push(channel);
         }
@@ -1682,6 +1704,16 @@ impl App {
             }
         }
     }
+}
+
+fn manager_index(manager: PackageManager) -> f64 {
+    if manager == PackageManager::Winget { 0.0 } else { 1.0 }
+}
+
+/// Wheel easing follows the Windows animation switch and wheel setting.
+fn apply_motion_settings(accessibility: Accessibility) {
+    crate::smooth::set_enabled(accessibility.animations);
+    crate::smooth::set_lines_per_notch(accessibility.wheel_lines);
 }
 
 fn keyboard_event(event: Event, _status: event::Status, _window: window::Id) -> Option<Message> {

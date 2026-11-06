@@ -38,6 +38,18 @@ impl Channel {
         Self { spring: Spring1D::new(value, SpringConfig::UI), fade: None }
     }
 
+    /// Like [`Channel::new`], resting once motion falls below `precision`.
+    pub fn with_precision(value: f64, precision: f64) -> Self {
+        let mut channel = Self::new(value);
+        channel.set_precision(precision);
+        channel
+    }
+
+    /// See [`Spring1D::set_precision`].
+    pub fn set_precision(&mut self, precision: f64) {
+        self.spring.set_precision(precision);
+    }
+
     pub fn value(&self) -> f64 {
         self.spring.position()
     }

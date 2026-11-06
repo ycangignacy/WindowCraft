@@ -45,11 +45,32 @@ pub struct Spring1D {
     velocity: f64,
     pub(crate) target: f64,
     config: SpringConfig,
+    /// Position error below which the spring counts as at rest, in its own units.
+    settle_position: f64,
+    /// Speed below which the spring counts as at rest, in units per second.
+    settle_velocity: f64,
 }
 
 impl Spring1D {
     pub fn new(value: f64, config: SpringConfig) -> Self {
-        Self { position: value, velocity: 0.0, target: value, config }
+        Self {
+            position: value,
+            velocity: 0.0,
+            target: value,
+            config,
+            settle_position: SETTLE_EPSILON,
+            settle_velocity: SETTLE_EPSILON,
+        }
+    }
+
+    /// Sets the smallest change that is still visible, in the units of this
+    /// spring. Motion below it is invisible, and every extra frame costs a
+    /// full view rebuild, so the spring rests once both the error and the
+    /// distance covered in a tenth of a second fall below it.
+    pub fn set_precision(&mut self, precision: f64) {
+        let precision = precision.abs().max(f64::EPSILON);
+        self.settle_position = precision;
+        self.settle_velocity = precision * 10.0;
     }
 
     /// The live presentation value. Drawing code reads this, never the target.
@@ -94,7 +115,7 @@ impl Spring1D {
     }
 
     pub fn is_settled(&self) -> bool {
-        (self.position - self.target).abs() < SETTLE_EPSILON && self.velocity.abs() < SETTLE_EPSILON
+        (self.position - self.target).abs() < self.settle_position && self.velocity.abs() < self.settle_velocity
     }
 
     /// Advances by `dt` seconds. Returns true while motion continues.
@@ -286,6 +307,19 @@ mod tests {
         spring.retarget(1_200.0);
         let steps = run(&mut spring, |_| {});
         assert!((steps as f64) * DT < 1.5, "took {}s", steps as f64 * DT);
+    }
+
+    #[test]
+    fn a_coarse_precision_stops_once_motion_is_invisible() {
+        let mut fine = Spring1D::new(0.0, SpringConfig::UI);
+        let mut coarse = fine;
+        coarse.set_precision(0.25);
+        fine.retarget(340.0);
+        coarse.retarget(340.0);
+        let fine_steps = run(&mut fine, |_| {});
+        let coarse_steps = run(&mut coarse, |_| {});
+        assert!(coarse_steps * 3 < fine_steps * 2, "coarse {coarse_steps} vs fine {fine_steps}");
+        assert_eq!(coarse.position(), 340.0, "a resting spring lands exactly on target");
     }
 
     #[test]

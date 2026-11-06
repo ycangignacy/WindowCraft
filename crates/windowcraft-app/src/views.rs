@@ -186,7 +186,15 @@ fn center(app: &App, p: Palette) -> El<'_> {
                 .padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }),
         );
     }
-    main = main.push(body);
+    // A new page or tab rises into place by a few pixels. The key changes only
+    // when the visible module does, so typing or toggling never replays it.
+    let module = match app.page {
+        Page::Tweaks => app.tab.index(),
+        Page::Inspector => app.inspector_tab.index(),
+        _ => 0,
+    };
+    let key = (app.page.index() as u64) << 8 | (module as u64) << 1 | u64::from(!app.query.trim().is_empty());
+    main = main.push(crate::reveal::reveal(body, key));
 
     let mut layers = stack![main.width(Length::Fill).height(Length::Fill)];
     let dock_progress = app.timeline.channels[DOCK].value() as f32;
@@ -225,7 +233,7 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
             let manager = tabs(
                 p,
                 vec!["WinGet", "Chocolatey"],
-                if app.manager == PackageManager::Winget { 0.0 } else { 1.0 },
+                app.timeline.channels[TAB].value(),
                 84.0,
                 |index| Message::Manager(if index == 0 { PackageManager::Winget } else { PackageManager::Chocolatey }),
             );
@@ -1247,7 +1255,7 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
 
     let drawer = row![
         grip,
-        container(column![header, iced::widget::scrollable(content).height(Length::Fill)].spacing(10))
+        container(column![header, crate::smooth::smooth(iced::widget::scrollable(content).height(Length::Fill))].spacing(10))
             .padding(Padding { top: 14.0, right: 14.0, bottom: 14.0, left: 2.0 })
             .width(INSPECTOR_WIDTH - DRAWER_GRIP)
     ]

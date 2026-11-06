@@ -8,9 +8,12 @@ pub mod i18n;
 pub mod icons;
 pub mod platform;
 pub mod press;
+pub mod reveal;
+pub mod smooth;
 pub mod theme;
 pub mod ui;
 pub mod views;
+pub mod vsync;
 
 use app::App;
 use clap::Parser;

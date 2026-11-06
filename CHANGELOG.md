@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.2-rc1 - 2026-11-06 (Pre-release)
+
+Scrolling and animation. Nothing that changes the system is different from 1.0.1.
+
+- A wheel notch eases over about 150 ms instead of jumping 60 pixels in one frame. The distance per notch follows the Windows "lines to scroll" setting. With Windows animations off, the wheel jumps as before.
+- Animation frames are timed to the display refresh that DWM reports, instead of running as fast as the CPU allows.
+- Springs stop once they move less than a quarter of a pixel. Opening the inspector takes 34 frames instead of 63, a page change 26 instead of 43.
+- A new page or tab rises 8 pixels into place. The WinGet and Chocolatey switch slides like the other segmented controls.
+- Iced's layout, text shaping and glyph rendering are built at `opt-level = 3`. The x64 executable grew by 480 KB.
+- List edge fades are solid bands instead of a gradient, which tiny-skia paints more slowly.
+- `crates/windowcraft-app/tests/frame_bench.rs` measures the cost of each part of a frame without a window.
+- The MSI installs a build of the same version over the installed one, so 1.0.2 replaces this pre-release.
+- The release workflow accepts pre-release tags such as `v1.0.2-rc1`.
+
 ## 1.0.1 - 2026-11-04
 
 First stable release. Every system-changing feature ran on Windows 11 Home 26H2 in VirtualBox before it, and these fixes came out of that run:

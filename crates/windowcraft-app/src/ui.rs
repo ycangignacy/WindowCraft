@@ -4,12 +4,13 @@
 use crate::app::Message;
 use crate::icons::Icon;
 use crate::press::press;
+use crate::smooth::smooth;
 use crate::theme::*;
 use iced::widget::text::{IntoFragment, LineHeight, Wrapping};
 use iced::widget::{
     Column, Space, Text, checkbox, column, container, pick_list, progress_bar, row, scrollable, space, stack, text, toggler,
 };
-use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Shadow, Vector, gradient};
+use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Shadow, Vector};
 use windowcraft_config::NativeOp;
 
 pub type El<'a> = Element<'a, Message>;
@@ -281,21 +282,24 @@ where
         .into()
 }
 
-/// Soft fade over scroll edges, replacing hard header borders.
+/// Bands in the fade over scroll edges.
+const FADE_BANDS: usize = 9;
+const FADE_BAND_HEIGHT: f32 = 2.0;
+
+/// Soft fade over scroll edges, replacing hard header borders. It is drawn
+/// as solid bands of falling opacity: tiny-skia paints a gradient through its
+/// slow high-precision pipeline, and this runs on every scrolled frame.
 fn fade<'a>(p: Palette, top: bool) -> El<'a> {
-    let solid = p.base;
-    let clear = Color { a: 0.0, ..solid };
-    let (start, end) = if top { (solid, clear) } else { (clear, solid) };
-    container(space())
-        .width(Length::Fill)
-        .height(18)
-        .style(move |_| container::Style {
-            background: Some(Background::Gradient(
-                gradient::Linear::new(iced::Radians(core::f32::consts::PI)).add_stop(0.0, start).add_stop(1.0, end).into(),
-            )),
-            ..container::Style::default()
-        })
-        .into()
+    let mut bands = Column::new().width(Length::Fill);
+    for index in 0..FADE_BANDS {
+        let step = if top { index } else { FADE_BANDS - 1 - index };
+        let alpha = 1.0 - (step as f32 + 0.5) / FADE_BANDS as f32;
+        let color = Color { a: alpha * p.base.a, ..p.base };
+        bands = bands.push(
+            container(space()).width(Length::Fill).height(FADE_BAND_HEIGHT).style(move |_| container::background(color)),
+        );
+    }
+    bands.into()
 }
 
 pub fn scroll_area<'a>(p: Palette, content: impl Into<El<'a>>) -> El<'a> {
@@ -327,7 +331,7 @@ pub fn scroll_area<'a>(p: Palette, content: impl Into<El<'a>>) -> El<'a> {
             }
         });
     stack![
-        body,
+        smooth(body),
         column![fade(p, true), space().height(Length::Fill), fade(p, false)].width(Length::Fill).height(Length::Fill)
     ]
     .into()

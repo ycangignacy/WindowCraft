@@ -21,7 +21,7 @@ use windows::Win32::UI::Shell::{
     TBPF_NOPROGRESS, TBPF_NORMAL, TaskbarList,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
+    SPI_GETHIGHCONTRAST, SPI_GETWHEELSCROLLLINES, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
 };
 use windows::core::{BOOL, HSTRING, w};
 
@@ -75,6 +75,8 @@ pub struct Accessibility {
     pub transparency: bool,
     pub high_contrast: bool,
     pub light_theme: bool,
+    /// Lines per mouse-wheel notch from the Windows mouse settings.
+    pub wheel_lines: u32,
 }
 
 pub fn accessibility() -> Accessibility {
@@ -101,7 +103,19 @@ pub fn accessibility() -> Accessibility {
         transparency: flag(UISettings::AdvancedEffectsEnabled),
         high_contrast,
         light_theme: apps_use_light_theme(),
+        wheel_lines: wheel_scroll_lines(),
     }
+}
+
+/// Lines per wheel notch. "One screen at a time" reads as u32::MAX and is
+/// capped by the caller; a failed query keeps the Windows default of 3.
+fn wheel_scroll_lines() -> u32 {
+    let mut lines: u32 = 3;
+    // SAFETY: `lines` is a valid u32 for this request.
+    let read = unsafe {
+        SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, Some((&raw mut lines).cast()), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0))
+    };
+    if read.is_ok() { lines } else { 3 }
 }
 
 fn apps_use_light_theme() -> bool {
