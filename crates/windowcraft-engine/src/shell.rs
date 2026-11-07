@@ -324,14 +324,15 @@ mod tests {
     fn catalog_panels_resolve_to_existing_files() {
         let system = crate::win::system32("");
         let mut targets = vec![
-            "main.cpl", "ncpa.cpl", "powercfg.cpl", "appwiz.cpl", "intl.cpl", "wscui.cpl", "mmsys.cpl", "sysdm.cpl",
-            "timedate.cpl", "firewall.cpl", "compmgmt.msc", "control.exe",
+            "main.cpl", "ncpa.cpl", "powercfg.cpl", "appwiz.cpl", "intl.cpl", "mmsys.cpl", "sysdm.cpl", "timedate.cpl",
+            "firewall.cpl", "compmgmt.msc", "control.exe",
         ];
-        // Windows Server, which CI runs on, has no System Restore.
+        // Windows Server, which CI runs on, has neither System Restore nor
+        // Security and Maintenance.
         let version = crate::registry::RegPath::parse(r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion").unwrap();
         let kind = crate::registry::RegistryScope::System.read(&version, "InstallationType").unwrap();
         if kind == Some(crate::registry::RegValue::String("Client".to_owned())) {
-            targets.push("rstrui.exe");
+            targets.extend(["rstrui.exe", "wscui.cpl"]);
         }
         let missing: Vec<_> = targets.into_iter().filter(|target| !system.join(target).exists()).collect();
         assert!(missing.is_empty(), "missing from {}: {missing:?}", system.display());
