@@ -1790,6 +1790,13 @@ fn manager_index(manager: PackageManager) -> f64 {
 
 /// Wheel easing follows the Windows animation switch and wheel setting.
 fn apply_motion_settings(accessibility: Accessibility) {
+    // These are process-wide switches. In unit tests every App would set them
+    // from the machine's Windows settings while the scroll tests, which hold
+    // their own lock, run in parallel; a CI runner with animations off then
+    // broke them at random.
+    if cfg!(test) {
+        return;
+    }
     crate::smooth::set_enabled(accessibility.animations);
     crate::smooth::set_lines_per_notch(accessibility.wheel_lines);
 }
