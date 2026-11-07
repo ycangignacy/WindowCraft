@@ -1,8 +1,9 @@
 # Release Checklist
 
-Status as of 2026-11-06: 1.0.2-rc1 is a pre-release with the scrolling and animation work, tested
-in the same VM (see `docs/RELEASE-NOTES-1.0.2-rc1.md`). 1.0.1 is the current stable release. 0.1.0
-and 1.0.0 were pre-releases.
+Status as of 2026-11-07: 1.0.2 is the current stable release. It draws on the GPU through wgpu
+(Direct3D 12) with tiny-skia as the fallback, and eases wheel scrolling; see
+`docs/RELEASE-NOTES-1.0.2.md`. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer
+alone. 0.1.0 and 1.0.0 were pre-releases.
 
 The system-changing features ran for the first time on a live system on 2026-11-04: Windows 11
 Home 26H2, build 26300, Polish, in VirtualBox 7.2.22, driven by `crates/windowcraft-app/tests/live_vm.rs`
@@ -113,7 +114,11 @@ The workflows have never run. Expect fixes on the first run.
 ### Interface
 
 - [ ] Escape in search closes it. The logic has a test, but it was never tried by hand.
-- [ ] Mica, the sidebar and animations after the wgpu removal.
+- [ ] Mica, the sidebar and animations on the tiny-skia path by hand. In the 1.0.2 VM run the CPU
+      path drew every page and scrolled; Mica itself was not judged by eye.
+- [x] GPU path on a GeForce RTX 2060 at 2560 by 1440 and 164 Hz: 152 scroll frames 6.07 ms apart
+      (median), slowest 6.85 ms, 113 MB working set.
+- [ ] GPU path on Intel and AMD graphics, and on a laptop that switches between two GPUs.
 - [ ] The Autoruns and DNS pages in the app. The engine behind them was verified live.
 - [ ] 100%, 150% and 200% scaling, plus a small window at the 980 by 600 minimum.
 - [ ] Light mode, dark mode, high contrast, and transparency turned off.
@@ -158,6 +163,7 @@ The workflows have never run. Expect fixes on the first run.
 | ID | Severity | Issue | Workaround |
 | :--- | :--- | :--- | :--- |
 | SEC-3 | Low | `OOSU10.exe` and `Autologon.exe` have no pinned hash, because the vendors serve them from fixed "latest" URLs. Authenticode verifies the publisher signature. | None needed. |
+| KB-10 | Low | `setup.exe` of 1.0.2 over `setup.exe` of 1.0.2-rc1 leaves two "WindowCraft 1.0.2" entries in Installed apps; the WiX 3 engine keeps a related bundle of the same version. | Uninstall the pre-release first. Removing the entry installed first leaves 1.0.2 in place (tested in the VM). |
 | KB-9 | Low | Uninstalling while WindowCraft is open removes the files and data, and the open window keeps running until it is closed. | Close WindowCraft before you uninstall. |
 
 ## 6. Known limitations

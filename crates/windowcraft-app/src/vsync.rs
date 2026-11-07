@@ -8,8 +8,9 @@
 //! moment after the vertical blank that DWM reports, which gives every frame
 //! the same time step.
 
-use iced::Subscription;
 use iced::futures::channel::mpsc;
+use iced::{Subscription, window};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Dwm::{DWM_TIMING_INFO, DwmGetCompositionTimingInfo};
@@ -20,6 +21,29 @@ const FALLBACK_PERIOD: Duration = Duration::from_micros(16_667);
 /// Wake this long after the blank, so timer jitter never lands a wake on the
 /// wrong side of it.
 const PHASE: Duration = Duration::from_micros(1_000);
+
+/// Set when the renderer itself waits for the vertical blank, as wgpu does
+/// with its default present mode. Pacing on top of that only adds a second
+/// clock that drifts against the first, and the frames come out uneven.
+static PRESENTER_WAITS: AtomicBool = AtomicBool::new(false);
+
+pub fn set_presenter_waits(waits: bool) {
+    PRESENTER_WAITS.store(waits, Ordering::Relaxed);
+}
+
+/// The redraw an animation asks for after drawing the frame at `now`.
+pub fn next_redraw(now: Instant) -> window::RedrawRequest {
+    if PRESENTER_WAITS.load(Ordering::Relaxed) {
+        window::RedrawRequest::NextFrame
+    } else {
+        window::RedrawRequest::At(next_frame(now))
+    }
+}
+
+/// The frame clock for animations driven by app messages.
+pub fn animation_frames() -> Subscription<Instant> {
+    if PRESENTER_WAITS.load(Ordering::Relaxed) { window::frames() } else { frames() }
+}
 
 /// Last vertical blank and refresh period as DWM reports them.
 fn timing() -> Option<(Instant, Duration)> {

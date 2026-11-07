@@ -26,7 +26,8 @@ windowcraft-engine = { path = "crates/windowcraft-engine" }
 windowcraft-iso = { path = "crates/windowcraft-iso" }
 
 clap = { version = "4.6", features = ["derive"] }
-iced = { version = "0.14", default-features = false, features = ["tiny-skia", "svg", "tokio", "advanced", "crisp"] }
+# wgpu draws on the GPU; tiny-skia is the fallback when no Direct3D 12 GPU exists.
+iced = { version = "0.14", default-features = false, features = ["wgpu-bare", "tiny-skia", "svg", "tokio", "advanced", "crisp"] }
 rayon = "1.12"
 redb = "4.4"
 # http2 stays: Quad9's DoH endpoint does not answer over HTTP/1.1.
@@ -37,6 +38,9 @@ serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
+# Only the Direct3D 12 backend. Vulkan and GL would add size and memory, and
+# every Windows 11 GPU runs Direct3D 12.
+wgpu = { version = "27.0", default-features = false, features = ["dx12", "std", "wgsl", "parking_lot"] }
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 windows-collections = "0.3.2"
 windows = { version = "0.62", features = [
@@ -45,7 +49,10 @@ windows = { version = "0.62", features = [
     "ApplicationModel",
     "UI_ViewManagement",
     "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D12",
     "Win32_Graphics_Dwm",
+    "Win32_Graphics_Dxgi",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_NetworkManagement_WindowsFirewall",

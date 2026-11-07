@@ -210,6 +210,19 @@ fn count_nodes(tree: &Tree) -> usize {
 // ---------------------------------------------------------------------------
 // Renderer and paint state.
 
+/// tiny-skia behind iced's fallback renderer. Its `Headless::new` never
+/// waits, so one poll with a no-op waker finishes it.
+fn software_renderer() -> Renderer {
+    use iced::advanced::renderer::Headless as _;
+    use std::task::{Context, Poll, Waker};
+    let future = Renderer::new(SANS, iced::Pixels(TEXT_SIZE), Some("tiny-skia"));
+    let mut future = std::pin::pin!(future);
+    match future.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+        Poll::Ready(Some(renderer)) => renderer,
+        _ => panic!("tiny-skia must be available without waiting"),
+    }
+}
+
 struct Surface {
     renderer: Renderer,
     scale: f32,
@@ -218,9 +231,7 @@ struct Surface {
 
 impl Surface {
     fn new(scale: f32) -> Self {
-        // `Headless::new` for tiny-skia only checks the backend name and then
-        // calls this constructor, so the async wrapper is skipped.
-        let renderer = Renderer::new(SANS, iced::Pixels(TEXT_SIZE));
+        let renderer = software_renderer();
         let physical =
             Size::new((WINDOW.width * scale).round() as u32, (WINDOW.height * scale).round() as u32);
         Self { renderer, scale, physical }

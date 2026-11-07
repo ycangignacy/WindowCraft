@@ -27,6 +27,8 @@ iced.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 windows.workspace = true
+# Not used directly: selects the backends iced's wgpu renderer is built with.
+wgpu.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

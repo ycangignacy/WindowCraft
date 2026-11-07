@@ -154,7 +154,9 @@ The tests do not change live settings. Registry tests are confined to `HKCU\Soft
 | `windowcraft-app` | Graphical interface and translations |
 | `windowcraft-cli` | Console program that waits and returns exit codes |
 
-The interface renders in software through `tiny-skia`: 26 MB working set and 62 to 89 ms to a titled window. Its GDI surface keeps an alpha channel that DWM composites over Mica. `wgpu` is left out because it used about 120 MB more memory and added 54 crates.
+The interface draws on the GPU through `wgpu` with its Direct3D 12 backend only. On a computer without a Direct3D 12 GPU, such as a virtual machine without 3D acceleration, it draws on the CPU through `tiny-skia`, not on WARP, the software rasterizer of Direct3D that wgpu can fall back to. Set `ICED_BACKEND=tiny-skia` or `ICED_BACKEND=wgpu` to choose yourself.
+
+The two paths cost different amounts. Measured on one PC with the Applications page open, the GPU path used a 113 MB working set and the CPU path 32 MB. The CPU path paints every frame itself: on a 2560 by 1440 window a scrolled frame took about 36 ms, which is too slow for eased scrolling, while the GPU path kept up with a 164 Hz display. Only the CPU path shows Mica behind the sidebar, because only its GDI surface keeps an alpha channel that DWM composites.
 
 See [NOTICE.md](NOTICE.md) for catalog and WiX attribution and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for Rust crate notices.
 

@@ -38,7 +38,27 @@ fn report_fatal(lang: i18n::Language, message: &str) -> ExitCode {
     ExitCode::FAILURE
 }
 
+/// Picks the renderer before iced starts. Returns true when it may be the GPU.
+///
+/// iced tries wgpu first and tiny-skia second, or what `ICED_BACKEND` names.
+/// Without a Direct3D 12 GPU this sets `ICED_BACKEND=tiny-skia`, see
+/// [`platform::hardware_gpu`]. A value the user set is left alone.
+fn choose_renderer() -> bool {
+    if let Ok(backend) = std::env::var("ICED_BACKEND") {
+        return !backend.eq_ignore_ascii_case("tiny-skia");
+    }
+    if platform::hardware_gpu() {
+        return true;
+    }
+    // SAFETY: Runs first in `run_gui`, before this process starts any thread
+    // that could read the environment at the same time.
+    unsafe { std::env::set_var("ICED_BACKEND", "tiny-skia") };
+    false
+}
+
 fn run_gui(cli: cli::Cli) -> ExitCode {
+    let gpu = choose_renderer();
+    vsync::set_presenter_waits(gpu);
     let lang = i18n::detect_language();
 
     // First, so a second launch never waits on the database lock.
@@ -59,7 +79,11 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
         (None, Some(_)) => app::Page::Tweaks,
         (None, None) => app::Page::Applications,
     };
-    let start = app::StartView { page, inspect: cli.inspect, profile, language: lang };
+    let accessibility = platform::accessibility();
+    // Only tiny-skia presents through a GDI surface that keeps its alpha
+    // channel, so only it can show Mica. The GPU path draws solid surfaces.
+    let mica = !gpu && accessibility.transparency && !accessibility.high_contrast;
+    let start = app::StartView { page, inspect: cli.inspect, profile, language: lang, mica };
     let info = match sysinfo::query() {
         Ok(info) => info,
         Err(error) => return report_fatal(lang, &error.to_string()),
@@ -68,12 +92,7 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
         Ok(engine) => Arc::new(engine),
         Err(error) => return report_fatal(lang, &error.to_string()),
     };
-
-    let accessibility = platform::accessibility();
-    // Software rendering is the only path that meets the memory and startup
-    // budgets, and its GDI surface keeps an alpha channel that DWM composites
-    // over Mica.
-    let translucent = accessibility.transparency && !accessibility.high_contrast;
+    let translucent = mica;
 
     let settings = window::Settings {
         size: Size::new(1280.0, 800.0),

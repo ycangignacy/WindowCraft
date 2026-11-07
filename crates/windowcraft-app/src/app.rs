@@ -114,11 +114,13 @@ pub struct StartView {
     pub profile: Option<Profile>,
     /// Detected once at startup, see `i18n::detect_language`.
     pub language: Language,
+    /// The window is transparent and shows Mica, which only tiny-skia can do.
+    pub mica: bool,
 }
 
 impl Default for StartView {
     fn default() -> Self {
-        Self { page: Page::Applications, inspect: None, profile: None, language: Language::En }
+        Self { page: Page::Applications, inspect: None, profile: None, language: Language::En, mica: false }
     }
 }
 
@@ -371,6 +373,8 @@ pub struct App {
     pub engine: Arc<Engine>,
     pub info: SystemInfo,
     pub accessibility: Accessibility,
+    /// Fixed at startup with the renderer, see `StartView::mica`.
+    mica: bool,
     pub appearance: Appearance,
     pub language: Language,
     pub window: Option<u64>,
@@ -450,7 +454,7 @@ fn work_dir() -> PathBuf {
 
 impl App {
     pub fn new(catalog: Arc<Catalog>, engine: Arc<Engine>, info: SystemInfo, start: StartView) -> (Self, Task<Message>) {
-        let StartView { page, inspect, profile, language } = start;
+        let StartView { page, inspect, profile, language, mica } = start;
         let accessibility = platform::accessibility();
         apply_motion_settings(accessibility);
         let mut timeline = Timeline::new([0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -472,6 +476,7 @@ impl App {
             engine,
             info,
             accessibility,
+            mica,
             appearance: Appearance::System,
             language,
             window: None,
@@ -565,7 +570,7 @@ impl App {
 
     /// Mica needs both the Windows setting and the software renderer.
     fn translucent(&self) -> bool {
-        self.accessibility.transparency
+        self.mica && self.accessibility.transparency
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -580,7 +585,7 @@ impl App {
         // sleeps in the message loop at 0% CPU. While it runs, frames follow
         // the display refresh instead of the speed of the CPU.
         if self.timeline.needs_frame() {
-            subscriptions.push(crate::vsync::frames().map(Message::Frame));
+            subscriptions.push(crate::vsync::animation_frames().map(Message::Frame));
         }
         if self.grip_hover || self.drag.is_active() || self.drag_armed {
             subscriptions.push(event::listen_with(pointer_event));

@@ -1,18 +1,21 @@
 # Changelog
 
-## 1.0.2-rc1 - 2026-11-06 (Pre-release)
+## 1.0.2 - 2026-11-07
 
-Scrolling and animation. Nothing that changes the system is different from 1.0.1.
+Smooth scrolling and a GPU renderer. Nothing that changes the system is different from 1.0.1.
 
-- A wheel notch eases over about 150 ms instead of jumping 60 pixels in one frame. The distance per notch follows the Windows "lines to scroll" setting. With Windows animations off, the wheel jumps as before.
-- Animation frames are timed to the display refresh that DWM reports, instead of running as fast as the CPU allows.
+- The interface draws on the GPU through wgpu (Direct3D 12 only). Without a Direct3D 12 GPU it draws on the CPU through tiny-skia as before. `ICED_BACKEND` overrides the choice. The GPU path uses more memory (113 MB working set against 32 MB on one PC) and shows no Mica.
+- A wheel notch glides over about 150 ms instead of jumping 60 pixels in one frame. A critically damped spring carries the list, so a fast spin of the wheel moves at an even speed. The distance per notch follows the Windows "lines to scroll" setting. With Windows animations off, the wheel jumps as before.
+- Animation frames follow the display refresh: the GPU waits for it, and on the CPU path a frame clock wakes just after each vertical blank that DWM reports.
 - Springs stop once they move less than a quarter of a pixel. Opening the inspector takes 34 frames instead of 63, a page change 26 instead of 43.
 - A new page or tab rises 8 pixels into place. The WinGet and Chocolatey switch slides like the other segmented controls.
-- Iced's layout, text shaping and glyph rendering are built at `opt-level = 3`. The x64 executable grew by 480 KB.
-- List edge fades are solid bands instead of a gradient, which tiny-skia paints more slowly.
-- `crates/windowcraft-app/tests/frame_bench.rs` measures the cost of each part of a frame without a window.
-- The MSI installs a build of the same version over the installed one, so 1.0.2 replaces this pre-release.
-- The release workflow accepts pre-release tags such as `v1.0.2-rc1`.
+- Iced's layout, text shaping and glyph rendering are built at `opt-level = 3`. List edge fades are solid bands instead of a gradient.
+- `WINDOWCRAFT_SCROLL_TRACE=<file>` logs every eased scroll frame, and `crates/windowcraft-app/tests/frame_bench.rs` measures the parts of a frame without a window.
+- The MSI installs over a build of the same version instead of beside it. The release workflow accepts pre-release tags such as `v1.0.2-rc1`.
+
+## 1.0.2-rc1 - 2026-11-06 (Pre-release)
+
+The same scrolling work on the CPU renderer alone. At 2560 by 1440 a scrolled frame took about 36 ms, so the eased scrolling stuttered; 1.0.2 moved drawing to the GPU.
 
 ## 1.0.1 - 2026-11-04
 

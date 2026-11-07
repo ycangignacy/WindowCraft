@@ -4,8 +4,9 @@
 //! Iced moves a scrollable by a fixed 60 px on every wheel notch, so a list
 //! jumps in steps. This wrapper takes line-based wheel events before the
 //! scrollable sees them, adds them to a pending distance and hands that
-//! distance out over the next display frames as pixel deltas. Pixel deltas
-//! from precision touchpads are already smooth and pass through untouched.
+//! distance out over the next display frames as pixel deltas, carried by a
+//! critically damped spring. Pixel deltas pass through untouched; on Windows
+//! winit reports touchpads as fractional lines, so they are eased as well.
 //! The scrollable keeps its fractional offset and rounds the drawn
 //! translation, so text never lands between pixels.
 
@@ -20,11 +21,15 @@ use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vect
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Instant;
 
-/// Time constant of the exponential ease. About 95% of a notch arrives
-/// within three of these.
-const EASE_SECONDS: f32 = 0.055;
-/// Below this the rest is handed out at once, so the tail never crawls.
-const FINISH_PIXELS: f32 = 0.6;
+/// Response of the critically damped spring that carries the list, in
+/// seconds. About 95% of a notch arrives within 0.15 s.
+const RESPONSE_SECONDS: f32 = 0.2;
+/// A notch that starts from rest also gets this share of the spring's top
+/// speed, so the first frame already moves instead of easing in.
+const START_KICK: f32 = 0.5;
+/// Below these the rest is handed out at once, so the tail never crawls.
+const FINISH_PIXELS: f32 = 0.5;
+const FINISH_SPEED: f32 = 6.0;
 /// Frame gaps longer than this are treated as one frame, so a stalled window
 /// does not swallow the whole distance in one jump.
 const MAX_STEP_SECONDS: f32 = 1.0 / 24.0;
@@ -58,57 +63,128 @@ pub struct Smooth<'a, Message> {
     content: Element<'a, Message>,
 }
 
+/// One axis of the motion: how far the list still has to go and how fast
+/// it moves. A new notch moves the target and keeps the speed, so a fast
+/// spin of the wheel is one continuous motion instead of a pulse per notch.
+#[derive(Debug, Default, Clone, Copy)]
+struct Axis {
+    remaining: f32,
+    velocity: f32,
+}
+
+impl Axis {
+    fn is_moving(self) -> bool {
+        self.remaining != 0.0 || self.velocity != 0.0
+    }
+
+    fn push(&mut self, delta: f32, omega: f32) {
+        if delta == 0.0 {
+            return;
+        }
+        // Reversing drops what is left, so the turn shows on the next frame.
+        if self.remaining * delta < 0.0 || self.velocity * delta < 0.0 {
+            *self = Self::default();
+        }
+        if !self.is_moving() {
+            self.velocity = delta * omega * START_KICK;
+        }
+        self.remaining = (self.remaining + delta).clamp(-MAX_PENDING_PIXELS, MAX_PENDING_PIXELS);
+    }
+
+    /// Advances the critically damped spring by `dt` and returns the pixels
+    /// covered in that time.
+    fn step(&mut self, dt: f32, omega: f32) -> f32 {
+        // The spring works on the displacement from the target, which is
+        // minus what remains.
+        let x0 = -self.remaining;
+        let decay = (-omega * dt).exp();
+        let b = self.velocity + omega * x0;
+        let x = decay * (x0 + b * dt);
+        let velocity = decay * (self.velocity - omega * b * dt);
+        if x.abs() < FINISH_PIXELS && velocity.abs() < FINISH_SPEED {
+            let rest = self.remaining;
+            *self = Self::default();
+            return rest;
+        }
+        let moved = x - x0;
+        self.remaining -= moved;
+        self.velocity = velocity;
+        moved
+    }
+}
+
 #[derive(Debug, Default)]
 struct State {
-    pending: Vector,
+    x: Axis,
+    y: Axis,
     cursor: Option<Point>,
     last_frame: Option<Instant>,
     modifiers: Modifiers,
 }
 
+fn omega() -> f32 {
+    core::f32::consts::TAU / RESPONSE_SECONDS
+}
+
 impl State {
     fn is_moving(&self) -> bool {
-        self.pending.x != 0.0 || self.pending.y != 0.0
+        self.x.is_moving() || self.y.is_moving()
+    }
+
+    #[cfg(test)]
+    fn remaining(&self) -> Vector {
+        Vector::new(self.x.remaining, self.y.remaining)
     }
 
     fn stop(&mut self) {
-        self.pending = Vector::ZERO;
+        self.x = Axis::default();
+        self.y = Axis::default();
         self.last_frame = None;
     }
 
-    /// Adds a notch. A notch against the current direction drops what is
-    /// left, so reversing responds on the next frame.
+    /// Adds a notch to the motion.
     fn push(&mut self, delta: Vector) {
-        let reverse = |pending: f32, next: f32| pending * next < 0.0;
-        if reverse(self.pending.x, delta.x) || reverse(self.pending.y, delta.y) {
-            self.pending = Vector::ZERO;
-        }
-        self.pending = Vector::new(
-            (self.pending.x + delta.x).clamp(-MAX_PENDING_PIXELS, MAX_PENDING_PIXELS),
-            (self.pending.y + delta.y).clamp(-MAX_PENDING_PIXELS, MAX_PENDING_PIXELS),
-        );
+        self.x.push(delta.x, omega());
+        self.y.push(delta.y, omega());
     }
 
-    /// Takes this frame's share of the pending distance.
+    /// Takes the distance covered since the last frame.
     fn take(&mut self, now: Instant) -> Vector {
         let dt = self
             .last_frame
-            .map_or(1.0 / 60.0, |last| now.saturating_duration_since(last).as_secs_f32())
+            .map_or(1.0 / 120.0, |last| now.saturating_duration_since(last).as_secs_f32())
             .clamp(0.0, MAX_STEP_SECONDS);
         self.last_frame = Some(now);
-        let share = 1.0 - (-dt / EASE_SECONDS).exp();
-        let mut step = self.pending * share;
-        if (self.pending.x - step.x).abs() < FINISH_PIXELS {
-            step.x = self.pending.x;
-        }
-        if (self.pending.y - step.y).abs() < FINISH_PIXELS {
-            step.y = self.pending.y;
-        }
-        self.pending -= step;
+        let step = Vector::new(self.x.step(dt, omega()), self.y.step(dt, omega()));
+        trace::frame(now, dt, step.y, self.y.remaining, self.y.velocity);
         if !self.is_moving() {
             self.last_frame = None;
         }
         step
+    }
+}
+
+/// Per-frame log of the wheel motion, for measuring how smooth it is on a
+/// given machine. Off unless `WINDOWCRAFT_SCROLL_TRACE` names a file.
+mod trace {
+    use std::io::Write;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
+
+    static FILE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+
+    pub fn frame(now: Instant, dt: f32, step: f32, remaining: f32, velocity: f32) {
+        let file = FILE.get_or_init(|| {
+            let path = std::env::var_os("WINDOWCRAFT_SCROLL_TRACE")?;
+            std::fs::File::create(path).ok().map(Mutex::new)
+        });
+        if let Some(file) = file
+            && let Ok(mut file) = file.lock()
+        {
+            let at = now.saturating_duration_since(*EPOCH.get_or_init(|| now)).as_secs_f64() * 1000.0;
+            let _ = writeln!(file, "{at:.2} {:.2} {step:.2} {remaining:.2} {velocity:.1}", dt * 1000.0);
+        }
     }
 }
 
@@ -194,7 +270,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Smooth<'_, Message> {
                 );
                 let state = tree.state.downcast_mut::<State>();
                 if state.is_moving() {
-                    shell.request_redraw_at(crate::vsync::next_frame(*now));
+                    shell.request_redraw_at(crate::vsync::next_redraw(*now));
                 }
             }
             _ => {}
@@ -276,7 +352,8 @@ mod tests {
         let mut state = State::default();
         state.push(Vector::new(0.0, 120.0));
         state.push(Vector::new(0.0, -60.0));
-        assert_eq!(state.pending.y, -60.0);
+        assert_eq!(state.remaining().y, -60.0);
+        assert!(state.y.velocity < 0.0, "the reversal starts moving the new way at once");
     }
 
     #[test]
@@ -287,6 +364,19 @@ mod tests {
         state.take(start);
         let step = state.take(start + Duration::from_secs(2)).y;
         assert!(step < 600.0 * 0.6, "stalled step {step}");
+    }
+
+    /// tiny-skia behind iced's fallback renderer. Its `Headless::new` never
+    /// waits, so one poll with a no-op waker finishes it.
+    fn software_renderer() -> Renderer {
+        use iced::advanced::renderer::Headless as _;
+        use std::task::{Context, Poll, Waker};
+        let future = Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0), Some("tiny-skia"));
+        let mut future = std::pin::pin!(future);
+        match future.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(Some(renderer)) => renderer,
+            _ => panic!("tiny-skia must be available without waiting"),
+        }
     }
 
     /// A 400x300 list of 200 rows behind the wrapper, driven through the
@@ -313,7 +403,7 @@ mod tests {
                 .height(Length::Fill)
                 .on_scroll(|viewport| viewport.absolute_offset().y);
             let mut root: Element<'static, f32> = smooth(list).into();
-            let renderer = Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0));
+            let renderer = software_renderer();
             let mut tree = Tree::new(root.as_widget());
             let node = root.as_widget_mut().layout(&mut tree, &renderer, &layout::Limits::new(Size::ZERO, BOUNDS));
             Self { root, tree, node, renderer, offset: 0.0, clock: Instant::now() }
@@ -410,11 +500,30 @@ mod tests {
     }
 
     #[test]
+    fn a_fast_spin_moves_at_an_even_speed() {
+        // A notch every 32 ms, drawn at 125 frames per second.
+        let mut state = State::default();
+        let start = Instant::now();
+        let mut steps = Vec::new();
+        for frame in 0..60_u64 {
+            if frame % 4 == 0 && frame < 48 {
+                state.push(Vector::new(0.0, 60.0));
+            }
+            steps.push(state.take(start + Duration::from_millis(8 * frame)).y);
+        }
+        // Once the motion is up to speed, no frame moves twice as far as another.
+        let cruise = &steps[12..44];
+        let (low, high) = cruise.iter().fold((f32::MAX, 0.0_f32), |(low, high), step| (low.min(*step), high.max(*step)));
+        assert!(high < low * 2.0, "steps pulse between {low} and {high}");
+        assert!(steps.iter().all(|step| *step >= 0.0), "the list never moves back");
+    }
+
+    #[test]
     fn pending_distance_is_capped() {
         let mut state = State::default();
         for _ in 0..200 {
             state.push(Vector::new(0.0, 60.0));
         }
-        assert_eq!(state.pending.y, MAX_PENDING_PIXELS);
+        assert_eq!(state.remaining().y, MAX_PENDING_PIXELS);
     }
 }

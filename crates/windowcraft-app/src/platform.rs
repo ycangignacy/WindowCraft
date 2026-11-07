@@ -126,6 +126,48 @@ fn apps_use_light_theme() -> bool {
     matches!(RegistryScope::System.read(&path, "AppsUseLightTheme"), Ok(Some(RegValue::DWord(1))))
 }
 
+/// Whether a GPU that runs Direct3D 12 is present.
+///
+/// Without one, wgpu falls back to WARP, the software rasterizer of Direct3D,
+/// which paints this interface more slowly than tiny-skia does, so the caller
+/// picks tiny-skia instead. Virtual machines without 3D acceleration and the
+/// Microsoft Basic Display Adapter end up there.
+pub fn hardware_gpu() -> bool {
+    use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
+    use windows::Win32::Graphics::Direct3D12::{D3D12CreateDevice, ID3D12Device};
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIFactory1};
+    /// PCI vendor id Microsoft uses for WARP and the Basic Render Driver.
+    const MICROSOFT_VENDOR: u32 = 0x1414;
+
+    // SAFETY: Creates a COM factory; the interface is released on drop.
+    let Ok(factory) = (unsafe { CreateDXGIFactory1::<IDXGIFactory1>() }) else {
+        return false;
+    };
+    for index in 0.. {
+        // SAFETY: Enumeration ends at the first index without an adapter.
+        let Ok(adapter) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        // SAFETY: `adapter` is a live interface.
+        let Ok(description) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        let software = description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0;
+        if software || description.VendorId == MICROSOFT_VENDOR {
+            continue;
+        }
+        // SAFETY: A null output pointer only asks whether a device could be
+        // created on this adapter; nothing is created.
+        let supported = unsafe {
+            D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, std::ptr::null_mut::<Option<ID3D12Device>>())
+        };
+        if supported.is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Requests the Mica backdrop and dark title bar. Unsupported builds ignore it.
 pub fn apply_backdrop(window: u64, dark: bool, mica: bool) {
     let hwnd = HWND(window as *mut core::ffi::c_void);

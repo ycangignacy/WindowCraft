@@ -104,7 +104,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Reveal<'_, Message> {
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
             let state = tree.state.downcast_mut::<State>();
             if state.progress(*now).is_some() {
-                shell.request_redraw_at(crate::vsync::next_frame(*now));
+                shell.request_redraw_at(crate::vsync::next_redraw(*now));
             } else {
                 state.start = None;
             }
