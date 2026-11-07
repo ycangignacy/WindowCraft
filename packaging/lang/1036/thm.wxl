@@ -19,6 +19,7 @@
 /log log.txt - consigne les événements dans un fichier spécifique. Par défaut, le fichier journal est créé dans %TEMP%.</String>
   <String Id="HelpCloseButton">&amp;Fermer</String>
   <String Id="InstallAcceptCheckbox">J'&amp;accepte les conditions de la licence</String>
+  <String Id="InstallLaunchCheckbox">&amp;Lancer WindowCraft à la fin de l'installation</String>
   <String Id="InstallOptionsButton">&amp;Options</String>
   <String Id="InstallInstallButton">&amp;Installer</String>
   <String Id="InstallCloseButton">&amp;Fermer</String>

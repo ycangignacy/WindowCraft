@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn presets_map_to_profiles() {
         let catalog = Catalog::load().unwrap();
-        assert_eq!(preset_profile(&catalog, PresetName::Standard).tweaks.len(), 12);
+        assert_eq!(preset_profile(&catalog, PresetName::Standard).tweaks.len(), 13);
     }
 
     #[test]

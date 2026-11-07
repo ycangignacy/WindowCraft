@@ -3,12 +3,14 @@
 
 pub mod actions;
 pub mod app;
+pub mod background;
 pub mod cli;
 pub mod i18n;
 pub mod icons;
 pub mod platform;
 pub mod press;
 pub mod reveal;
+pub mod settings;
 pub mod smooth;
 pub mod theme;
 pub mod ui;

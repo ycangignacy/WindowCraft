@@ -19,6 +19,7 @@
 /log log.txt - schreibt das Protokoll in eine bestimmte Datei. Standardmäßig wird das Protokoll in %TEMP% erstellt.</String>
   <String Id="HelpCloseButton">&amp;Schließen</String>
   <String Id="InstallAcceptCheckbox">Ich &amp;akzeptiere die Lizenzbedingungen</String>
+  <String Id="InstallLaunchCheckbox">WindowCraft nach der Installation &amp;starten</String>
   <String Id="InstallOptionsButton">&amp;Optionen</String>
   <String Id="InstallInstallButton">&amp;Installieren</String>
   <String Id="InstallCloseButton">&amp;Schließen</String>

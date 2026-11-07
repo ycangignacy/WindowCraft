@@ -19,6 +19,7 @@
 /log log.txt - zapisuje dziennik do wskazanego pliku. Domyślnie plik dziennika jest tworzony w folderze %TEMP%.</String>
   <String Id="HelpCloseButton">&amp;Zamknij</String>
   <String Id="InstallAcceptCheckbox">&amp;Zgadzam się z warunkami licencji</String>
+  <String Id="InstallLaunchCheckbox">&amp;Uruchom WindowCraft po zakończeniu instalacji</String>
   <String Id="InstallOptionsButton">&amp;Opcje</String>
   <String Id="InstallInstallButton">&amp;Zainstaluj</String>
   <String Id="InstallCloseButton">&amp;Zamknij</String>

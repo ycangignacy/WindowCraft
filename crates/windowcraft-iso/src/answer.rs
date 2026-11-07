@@ -195,8 +195,8 @@ const PRIVACY_TWEAKS: [&str; 10] = [
 ];
 
 /// Group Policy values with no equivalent catalog tweak.
-const POLICY_BASELINE: [(&str, &str, u32); 10] = [
-    (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0),
+/// AllowTelemetry comes from the telemetry tweak itself.
+const POLICY_BASELINE: [(&str, &str, u32); 9] = [
     (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", "DoNotShowFeedbackNotifications", 1),
     (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo", "DisabledByGroupPolicy", 1),
     (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\AppCompat", "DisableInventory", 1),
@@ -363,8 +363,10 @@ mod tests {
     }
 
     #[test]
-    fn removes_nineteen_packages() {
-        assert_eq!(bloat_packages(&catalog()).len(), 19);
+    fn removes_the_default_packages_and_teams() {
+        let packages = bloat_packages(&catalog());
+        assert_eq!(packages.len(), catalog().presets.appx_default.len() + 1);
+        assert!(packages.iter().any(|package| package == "MSTeams"));
     }
 
     #[test]

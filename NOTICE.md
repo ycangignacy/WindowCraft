@@ -1,22 +1,27 @@
 # Third-Party Notices
 
-## WinUtil
+## WinUtil import table
 
-The application, tweak, feature, AppX, DNS and preset catalogs in
-`crates/windowcraft-config/catalog/` derive from the `config/` directory of
-Chris Titus Tech's Windows Utility:
-<https://github.com/ChrisTitusTech/winutil>
+`crates/windowcraft-config/catalog/winutil-import.json` lists the ids that Chris
+Titus Tech's Windows Utility (<https://github.com/ChrisTitusTech/winutil>) writes
+into exported configs, next to the matching WindowCraft ids, so that `--config`
+can read those files. WinUtil is Copyright (c) 2022 CT Tech Group LLC and
+distributed under the MIT License. The full text is in
+`crates/windowcraft-config/catalog/WINUTIL-LICENSE.txt`. WindowCraft is not
+affiliated with Chris Titus Tech or WinUtil.
 
-WinUtil is Copyright (c) 2022 CT Tech Group LLC and distributed under the MIT
-License. The full text is in `crates/windowcraft-config/catalog/WINUTIL-LICENSE.txt`.
-
-Entries were converted to WindowCraft's schema, and every PowerShell block was
-replaced by a typed native operation.
+Releases up to 1.0.3 shipped catalogs converted from WinUtil's `config/`
+directory, with every PowerShell block replaced by a typed native operation.
+From 1.1.0 on, the names, descriptions, categories and presets in the catalogs
+are written for WindowCraft, and the optional PowerShell profile is WindowCraft's
+own instead of a download of the CTT profile.
 
 ## WiX Toolset
 
 `setup.exe` contains the WiX Toolset 3.14 standard bootstrapper application,
-and the files in `packaging/lang/` are translations of its theme strings. WiX is
+and the files in `packaging/lang/` are translations of its theme strings.
+`packaging/theme.xml` is its `RtfTheme.xml` with one checkbox added, and stays
+under the same license. WiX is
 Copyright (c) .NET Foundation and contributors and distributed under the
 Microsoft Reciprocal License (MS-RL). The full text is in
 `packaging/lang/WIX-LICENSE.txt`. Source code: <https://github.com/wixtoolset/wix3>

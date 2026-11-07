@@ -155,9 +155,23 @@ pub fn create_restore_point() -> Result<()> {
     Ok(())
 }
 
+/// True when the firmware offers S4, the sleep state hibernation needs.
+/// When the question cannot be answered it says yes, so powercfg decides.
+pub fn firmware_supports_hibernation() -> bool {
+    let mut capabilities = SYSTEM_POWER_CAPABILITIES::default();
+    // SAFETY: The structure is owned here and outlives the call.
+    if unsafe { GetPwrCapabilities(&mut capabilities) } { capabilities.SystemS4 } else { true }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hibernation_support_can_be_asked() {
+        // Any answer is valid; the call must simply work on this machine.
+        let _ = firmware_supports_hibernation();
+    }
 
     #[test]
     fn copies_never_include_builtin_plans_or_the_template() {

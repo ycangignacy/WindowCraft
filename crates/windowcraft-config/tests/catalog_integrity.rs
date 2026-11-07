@@ -24,14 +24,14 @@ fn application_counts_match_specification() {
     }
     let expected = [
         ("Browsers", 15),
-        ("Communications", 18),
+        ("Chat and calls", 18),
         ("Development", 43),
-        ("Document", 17),
+        ("Documents", 17),
         ("Games", 17),
-        ("Microsoft Tools", 19),
-        ("Multimedia Tools", 21),
-        ("Pro Tools", 24),
-        ("Selfhosted Tools", 12),
+        ("Media", 21),
+        ("Microsoft and runtimes", 19),
+        ("Network and system", 24),
+        ("Self-hosted", 12),
         ("Utilities", 53),
     ];
     assert_eq!(counts, expected.into_iter().collect());
@@ -62,17 +62,39 @@ fn tool_and_appx_counts_match_specification() {
 #[test]
 fn preset_sizes_match_specification() {
     let catalog = catalog();
-    assert_eq!(catalog.preset(PresetName::Minimal).len(), 4);
-    assert_eq!(catalog.preset(PresetName::Standard).len(), 12);
-    assert_eq!(catalog.preset(PresetName::Advanced).len(), 17);
-    assert_eq!(catalog.presets.appx_default.len(), 18);
+    assert_eq!(catalog.preset(PresetName::Minimal).len(), 6);
+    assert_eq!(catalog.preset(PresetName::Standard).len(), 13);
+    assert_eq!(catalog.preset(PresetName::Advanced).len(), 21);
+    assert_eq!(catalog.presets.appx_default.len(), 14);
 }
 
 #[test]
-fn telemetry_tweak_keeps_all_upstream_values() {
+fn each_preset_contains_the_one_below_and_starts_with_a_restore_point() {
+    let catalog = catalog();
+    let minimal = catalog.preset(PresetName::Minimal);
+    let standard = catalog.preset(PresetName::Standard);
+    let advanced = catalog.preset(PresetName::Advanced);
+    assert!(minimal.iter().all(|id| standard.contains(id)));
+    assert!(standard.iter().all(|id| advanced.contains(id)));
+    for preset in [minimal, standard, advanced] {
+        assert_eq!(preset[0], "restore-point");
+    }
+}
+
+#[test]
+fn every_winutil_id_maps_to_a_catalog_item() {
+    let catalog = catalog();
+    assert!(catalog.tweaks.iter().all(|tweak| tweak.legacy_id.starts_with("WPF")));
+    assert!(catalog.features.iter().all(|feature| feature.legacy_id.starts_with("WPF")));
+    assert!(catalog.appx.iter().all(|package| !package.legacy_id.is_empty()));
+    assert_eq!(catalog.tweak_by_legacy("WPFTweaksActivity").map(|tweak| tweak.id.as_str()), Some("activity"));
+}
+
+#[test]
+fn telemetry_tweak_keeps_all_its_values() {
     let catalog = catalog();
     let tweak = catalog.tweak("telemetry").unwrap();
-    // 13 upstream values plus the Defender policy and environment variable
+    // 13 telemetry values plus the Defender policy and environment variable
     // that replace its PowerShell block.
     assert_eq!(tweak.registry.len(), 15);
     assert!(tweak.registry.iter().any(|e| e.name == "AllowTelemetry" && e.value.as_deref() == Some("0")));
@@ -137,7 +159,7 @@ fn search_spans_every_kind() {
     assert!(search(&catalog, "telemetry", 10).iter().any(|hit| hit.kind == SearchKind::Tweak));
     assert!(search(&catalog, "AllowTelemetry", 10).iter().any(|hit| hit.kind == SearchKind::RegistryKey));
     assert!(search(&catalog, "DiagTrack", 10).iter().any(|hit| hit.kind == SearchKind::Service));
-    assert!(search(&catalog, "corruption", 10).iter().any(|hit| hit.kind == SearchKind::Fix));
+    assert!(search(&catalog, "repair scan", 10).iter().any(|hit| hit.kind == SearchKind::Fix));
     assert!(search(&catalog, "FeedbackHub", 10).iter().any(|hit| hit.kind == SearchKind::Appx));
     assert!(search(&catalog, "   ", 10).is_empty());
 }

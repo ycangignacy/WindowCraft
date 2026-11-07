@@ -1,9 +1,10 @@
 // Made by ycangignacy
 //! Typed schemas and embedded catalogs.
 //!
-//! Catalog data derives from WinUtil's MIT-licensed configuration
-//! (see `catalog/WINUTIL-LICENSE.txt`), with every PowerShell block replaced by
-//! a typed [`schema::NativeOp`].
+//! The catalogs are written for WindowCraft, and every operation in them is a
+//! typed [`schema::NativeOp`], never a script. `catalog/winutil-import.json`
+//! maps the ids in WinUtil exports so `--config` can read those files. That
+//! table is the only WinUtil material here, see `catalog/WINUTIL-LICENSE.txt`.
 
 pub mod catalog;
 pub mod profile;

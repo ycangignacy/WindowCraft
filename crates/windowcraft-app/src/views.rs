@@ -2,6 +2,7 @@
 
 use crate::app::*;
 use crate::i18n::{self, Language, Msg, format_1, format_2, format_3, t};
+use crate::settings::CheckInterval;
 use crate::icons::Icon;
 use crate::press::press;
 use crate::theme::*;
@@ -74,9 +75,10 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
     .spacing(1);
 
     let indicator_y = app.timeline.channels[NAV].value() as f32 * NAV_ROW_HEIGHT;
+    let on_settings = app.page == Page::Settings;
     let highlight = container(
         container(space().width(Length::Fill).height(NAV_ROW_HEIGHT - 2.0)).style(move |_| container::Style {
-            background: Some(p.selected.into()),
+            background: (!on_settings).then(|| p.selected.into()),
             border: Border { radius: CONTROL_RADIUS.into(), ..Border::default() },
             ..container::Style::default()
         }),
@@ -105,16 +107,13 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
         container(stack![items].push_under(highlight)).padding([0.0, 8.0]),
         space().height(Length::Fill),
         container(
-            column![
-                select(p, Language::ALL.to_vec(), Some(app.language), Message::SetLanguage),
-                row![
-                    icon_button(p, appearance_icon, Message::CycleAppearance),
-                    mono(concat!("v", env!("CARGO_PKG_VERSION")), p.ink_tertiary)
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
+            row![
+                icon_button(p, appearance_icon, Message::CycleAppearance),
+                selected_icon_button(p, Icon::Gear, on_settings, Message::Navigate(Page::Settings)),
+                mono(concat!("v", env!("CARGO_PKG_VERSION")), p.ink_tertiary)
             ]
-            .spacing(8),
+            .spacing(6)
+            .align_y(Alignment::Center),
         )
         .padding(10),
     ])
@@ -164,6 +163,7 @@ fn center(app: &App, p: Palette) -> El<'_> {
             Page::Iso => iso_studio(app, p),
             Page::TimeMachine => time_machine(app, p),
             Page::Inspector => inspector_page(app, p),
+            Page::Settings => settings_page(app, p),
         }
     };
 
@@ -1140,6 +1140,103 @@ fn dns_view(app: &App, p: Palette) -> El<'_> {
         sections = sections.push(group(p, rows, ROW_INSET));
     }
     sections.into()
+}
+
+/// Icon button that keeps a filled background while its page is open.
+fn selected_icon_button<'a>(p: Palette, icon: Icon, selected: bool, on_press: Message) -> El<'a> {
+    let ink = if selected { p.ink } else { p.ink_secondary };
+    press(container(icon.view(15.0, ink)).padding(5).style(move |_| container::Style {
+        background: selected.then(|| p.selected.into()),
+        border: Border { radius: CONTROL_RADIUS.into(), ..Border::default() },
+        ..container::Style::default()
+    }))
+    .colors(Color { a: 0.06, ..p.ink }, p.selected)
+    .on_press(on_press)
+    .into()
+}
+
+/// Settings row: a title with a wrapped explanation and a control on the right.
+fn setting_row<'a>(p: Palette, title: &'a str, detail: &'a str, control: El<'a>) -> El<'a> {
+    let mut label = column![body(title, p.ink)].spacing(1).width(Length::Fill);
+    if !detail.is_empty() {
+        label = label.push(caption(detail, p.ink_tertiary));
+    }
+    container(row![label, control].spacing(16).align_y(Alignment::Center))
+        .width(Length::Fill)
+        .padding([10.0, ROW_INSET])
+        .into()
+}
+
+fn interval_label(lang: Language, interval: CheckInterval) -> String {
+    let msg = match interval {
+        CheckInterval::Off => Msg::IntervalOff,
+        CheckInterval::Daily => Msg::IntervalDaily,
+        CheckInterval::Weekly => Msg::IntervalWeekly,
+        CheckInterval::Monthly => Msg::IntervalMonthly,
+    };
+    t(lang, msg).to_owned()
+}
+
+fn settings_page(app: &App, p: Palette) -> El<'_> {
+    let lang = app.language;
+    let mut themes = Row::new().spacing(6);
+    for (appearance, msg) in
+        [(Appearance::System, Msg::ThemeSystem), (Appearance::Dark, Msg::ThemeDark), (Appearance::Light, Msg::ThemeLight)]
+    {
+        themes = themes.push(chip(p, t(lang, msg).to_owned(), app.appearance == appearance, Message::SetAppearance(appearance)));
+    }
+    let general = vec![
+        setting_row(
+            p,
+            t(lang, Msg::SettingsLanguage),
+            t(lang, Msg::SettingsLanguageDetail),
+            select(p, Language::ALL.to_vec(), Some(lang), Message::SetLanguage),
+        ),
+        setting_row(p, t(lang, Msg::SettingsTheme), t(lang, Msg::SettingsThemeDetail), themes.into()),
+    ];
+
+    let mut intervals = Row::new().spacing(6);
+    for interval in CheckInterval::ALL {
+        intervals = intervals.push(chip(
+            p,
+            interval_label(lang, interval),
+            app.settings.interval == interval,
+            Message::SetInterval(interval),
+        ));
+    }
+    let last = if app.settings.last_check == 0 {
+        t(lang, Msg::SettingsNeverChecked).to_owned()
+    } else {
+        format_1(t(lang, Msg::SettingsLastCheck), &relative_time(lang, app.settings.last_check))
+    };
+    let checks = vec![
+        setting_row(p, t(lang, Msg::SettingsInterval), t(lang, Msg::SettingsIntervalDetail), intervals.into()),
+        setting_row(
+            p,
+            t(lang, Msg::SettingsAfterUpdates),
+            t(lang, Msg::SettingsAfterUpdatesDetail),
+            switch(p, app.settings.after_updates, Message::SetAfterUpdates),
+        ),
+        container(
+            row![
+                body(last, p.ink_secondary).width(Length::Fill),
+                button(p, t(lang, Msg::SettingsCheckNow), Some(Icon::Refresh), Tone::Secondary, Some(Message::CheckDriftNow))
+            ]
+            .spacing(16)
+            .align_y(Alignment::Center),
+        )
+        .padding([10.0, ROW_INSET])
+        .into(),
+    ];
+
+    scroll_area(
+        p,
+        column![
+            group_titled(p, t(lang, Msg::SettingsGeneral), general, ROW_INSET),
+            group_titled(p, t(lang, Msg::SettingsDriftGroup), checks, ROW_INSET),
+        ]
+        .spacing(16),
+    )
 }
 
 fn inspector(app: &App, p: Palette) -> El<'_> {

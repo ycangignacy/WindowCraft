@@ -4,6 +4,7 @@
 use crate::actions::{self, detect_all, detect_options};
 use crate::i18n::{self, Language, Msg, format_1, format_2, t};
 use crate::platform::{self, Accessibility};
+use crate::settings::{self, CheckInterval, Settings};
 use crate::theme::{INSPECTOR_WIDTH, NAV_ROW_HEIGHT, Palette};
 use iced::futures::stream;
 use iced::keyboard::{self, Key, Modifiers, key};
@@ -52,6 +53,8 @@ pub enum Page {
     Iso,
     TimeMachine,
     Inspector,
+    /// Opened from the gear at the bottom of the sidebar, so not in `ALL`.
+    Settings,
 }
 
 impl Page {
@@ -78,11 +81,13 @@ impl Page {
             Self::Iso => t(lang, Msg::PageIso),
             Self::TimeMachine => t(lang, Msg::PageTimeMachine),
             Self::Inspector => t(lang, Msg::PageInspector),
+            Self::Settings => t(lang, Msg::PageSettings),
         }
     }
 
+    /// Position in the sidebar. Settings comes after every listed page.
     pub(crate) fn index(self) -> usize {
-        Self::ALL.iter().position(|page| *page == self).unwrap_or(0)
+        Self::ALL.iter().position(|page| *page == self).unwrap_or(Self::ALL.len())
     }
 }
 
@@ -98,8 +103,9 @@ impl std::str::FromStr for Page {
             "iso" => Ok(Self::Iso),
             "timemachine" => Ok(Self::TimeMachine),
             "inspector" => Ok(Self::Inspector),
+            "settings" => Ok(Self::Settings),
             other => Err(format!(
-                "unknown module '{other}'; expected applications, tweaks, system, updates, iso, timemachine or inspector"
+                "unknown module '{other}'; expected applications, tweaks, system, updates, iso, timemachine, inspector or settings"
             )),
         }
     }
@@ -335,6 +341,13 @@ pub enum Message {
     Answer(bool),
     Notice(String),
     SetLanguage(Language),
+    // Settings
+    SetAppearance(Appearance),
+    SetInterval(CheckInterval),
+    SetAfterUpdates(bool),
+    ScheduleApplied(Result<(), String>),
+    CheckDriftNow,
+    DriftChecked(Vec<Drift>, String),
 }
 
 /// A selection that a job consumes when it succeeds.
@@ -377,6 +390,7 @@ pub struct App {
     mica: bool,
     pub appearance: Appearance,
     pub language: Language,
+    pub settings: Settings,
     pub window: Option<u64>,
     pub page: Page,
     pub query: String,
@@ -471,14 +485,16 @@ impl App {
         timeline.mode = if accessibility.animations { MotionMode::Spring } else { MotionMode::Reduced };
         timeline.channels[NAV].snap(page.index() as f64);
         let resumed = StudioSession::resume(&work_dir());
+        let saved = settings::load();
         let mut app = Self {
             catalog,
             engine,
             info,
             accessibility,
             mica,
-            appearance: Appearance::System,
+            appearance: saved.appearance,
             language,
+            settings: saved,
             window: None,
             page: Page::Applications,
             query: String::new(),
@@ -700,7 +716,9 @@ impl App {
         self.page = page;
         self.query.clear();
         self.hits.clear();
-        self.animate(NAV, page.index() as f64);
+        if page != Page::Settings {
+            self.animate(NAV, page.index() as f64);
+        }
         // Every page with a segmented control shares one tab indicator.
         match page {
             Page::Applications => self.animate(TAB, manager_index(self.manager)),
@@ -859,14 +877,46 @@ impl App {
                 return Task::batch([navigation, self.open_inspector(inspected)]);
             }
             Message::CycleAppearance => {
-                self.appearance = match self.appearance {
+                let next = match self.appearance {
                     Appearance::System => Appearance::Dark,
                     Appearance::Dark => Appearance::Light,
                     Appearance::Light => Appearance::System,
                 };
-                if let Some(handle) = self.window {
-                    platform::apply_backdrop(handle, self.palette().dark, self.translucent());
+                self.set_appearance(next);
+            }
+            Message::SetAppearance(appearance) => self.set_appearance(appearance),
+            Message::SetInterval(interval) => {
+                self.settings.interval = interval;
+                return self.save_schedule();
+            }
+            Message::SetAfterUpdates(on) => {
+                self.settings.after_updates = on;
+                return self.save_schedule();
+            }
+            Message::ScheduleApplied(result) => {
+                if let Err(error) = result {
+                    self.notice = Some(format_1(t(self.language, Msg::NoticeScheduleFailed), &error));
                 }
+            }
+            Message::CheckDriftNow => {
+                return self.blocking(
+                    |engine| {
+                        let build = sysinfo::query().map(|info| info.full_build()).unwrap_or_default();
+                        (engine.detect_drift().unwrap_or_default(), build)
+                    },
+                    |(drift, build)| Message::DriftChecked(drift, build),
+                );
+            }
+            Message::DriftChecked(drift, build) => {
+                if drift.is_empty() {
+                    self.notice = Some(t(self.language, Msg::NoticeNoDrift).to_owned());
+                }
+                self.drift = drift;
+                self.settings.last_check = windowcraft_engine::snapshot::unix_now();
+                if !build.is_empty() {
+                    self.settings.last_build = build;
+                }
+                self.save_settings();
             }
             Message::SystemThemeChanged => {
                 self.accessibility = platform::accessibility();
@@ -1461,6 +1511,29 @@ impl App {
         Task::none()
     }
 
+    fn set_appearance(&mut self, appearance: Appearance) {
+        self.appearance = appearance;
+        self.settings.appearance = appearance;
+        if let Some(handle) = self.window {
+            platform::apply_backdrop(handle, self.palette().dark, self.translucent());
+        }
+        self.save_settings();
+    }
+
+    fn save_settings(&mut self) {
+        if let Err(error) = settings::save(&self.settings) {
+            self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
+        }
+    }
+
+    /// Saves the check settings, then creates or removes the scheduled task.
+    fn save_schedule(&mut self) -> Task<Message> {
+        self.save_settings();
+        let chosen = self.settings.clone();
+        let description = t(self.language, Msg::SettingsTaskDescription).to_owned();
+        self.blocking(move |_| settings::apply_schedule(&chosen, &description), Message::ScheduleApplied)
+    }
+
     fn seconds(&self) -> f64 {
         self.epoch.elapsed().as_secs_f64()
     }
@@ -1965,7 +2038,7 @@ mod tests {
         let mut rig = rig("uipreset");
         send(&mut rig.app, Message::Navigate(Page::Tweaks));
         send(&mut rig.app, Message::Preset(PresetName::Standard));
-        assert_eq!(rig.app.selected_tweaks.len(), 12);
+        assert_eq!(rig.app.selected_tweaks.len(), 13);
         send(&mut rig.app, Message::ClearTweaks);
         assert!(rig.app.selected_tweaks.is_empty());
     }

@@ -19,6 +19,7 @@
 /log log.txt - зберігає журнал у вказаний файл. За замовчуванням файл журналу створюється у папці %TEMP%.</String>
   <String Id="HelpCloseButton">&amp;Закрити</String>
   <String Id="InstallAcceptCheckbox">Я &amp;погоджуюся з умовами ліцензії</String>
+  <String Id="InstallLaunchCheckbox">&amp;Запустити WindowCraft після встановлення</String>
   <String Id="InstallOptionsButton">&amp;Параметри</String>
   <String Id="InstallInstallButton">&amp;Встановити</String>
   <String Id="InstallCloseButton">&amp;Закрити</String>

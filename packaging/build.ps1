@@ -110,7 +110,10 @@ $portable = Join-Path $dist "$stem-portable.exe"
 Write-Host 'Building MSI'
 Invoke-Wix 'candle.exe' (@('-arch', $platform, '-ext', 'WixUtilExtension', '-ext', 'WixUIExtension') + $defines + `
     @('-out', (Join-Path $work 'windowcraft.wixobj'), (Join-Path $PSScriptRoot 'windowcraft.wxs')))
-Invoke-Wix 'light.exe' @('-ext', 'WixUtilExtension', '-ext', 'WixUIExtension', '-spdb', '-sice:ICE61',
+# ICE43 and ICE57 expect a per-user package for a plain Start menu shortcut. This one is
+# per-machine (ALLUSERS=1), so the shortcut goes to the all-users Start menu and the
+# executable is the right key path.
+Invoke-Wix 'light.exe' @('-ext', 'WixUtilExtension', '-ext', 'WixUIExtension', '-spdb', '-sice:ICE61', '-sice:ICE43', '-sice:ICE57',
     '-out', $msi, (Join-Path $work 'windowcraft.wixobj'))
 
 Write-Host 'Building setup.exe'

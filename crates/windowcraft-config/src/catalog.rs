@@ -11,6 +11,36 @@ const APPX: &str = include_str!("../catalog/appx.json");
 const DNS: &str = include_str!("../catalog/dns.json");
 const PRESETS: &str = include_str!("../catalog/preset.json");
 const UPDATES: &str = include_str!("../catalog/updates.json");
+/// WinUtil ids for importing configs exported by WinUtil.
+const WINUTIL_IMPORT: &str = include_str!("../catalog/winutil-import.json");
+
+#[derive(serde::Deserialize)]
+struct WinUtilIds {
+    tweaks: std::collections::BTreeMap<String, String>,
+    features: std::collections::BTreeMap<String, String>,
+    appx: std::collections::BTreeMap<String, String>,
+}
+
+/// Copies each WinUtil id onto the item it names. An id for an item that does
+/// not exist is a broken table, so it fails the load.
+fn attach_ids<'a>(
+    table: &str,
+    ids: &std::collections::BTreeMap<String, String>,
+    items: impl Iterator<Item = (&'a str, &'a mut String)>,
+) -> Result<(), String> {
+    let mut found = 0;
+    for (id, legacy) in items {
+        if let Some(value) = ids.get(id) {
+            legacy.clone_from(value);
+            found += 1;
+        }
+    }
+    if found == ids.len() {
+        Ok(())
+    } else {
+        Err(format!("winutil-import.json: {} of the {table} ids name no catalog item", ids.len() - found))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Catalog {
@@ -29,7 +59,7 @@ fn parse<T: DeserializeOwned>(name: &str, source: &str) -> Result<T, String> {
 
 impl Catalog {
     pub fn load() -> Result<Self, String> {
-        Ok(Self {
+        let mut catalog = Self {
             apps: parse("applications.json", APPLICATIONS)?,
             tweaks: parse("tweaks.json", TWEAKS)?,
             features: parse("feature.json", FEATURES)?,
@@ -37,7 +67,12 @@ impl Catalog {
             dns: parse("dns.json", DNS)?,
             presets: parse("preset.json", PRESETS)?,
             updates: parse("updates.json", UPDATES)?,
-        })
+        };
+        let ids: WinUtilIds = parse("winutil-import.json", WINUTIL_IMPORT)?;
+        attach_ids("tweak", &ids.tweaks, catalog.tweaks.iter_mut().map(|t| (t.id.as_str(), &mut t.legacy_id)))?;
+        attach_ids("feature", &ids.features, catalog.features.iter_mut().map(|f| (f.id.as_str(), &mut f.legacy_id)))?;
+        attach_ids("appx", &ids.appx, catalog.appx.iter_mut().map(|a| (a.id.as_str(), &mut a.legacy_id)))?;
+        Ok(catalog)
     }
 
     pub fn tweak(&self, id: &str) -> Option<&Tweak> {

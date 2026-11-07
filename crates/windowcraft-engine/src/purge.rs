@@ -81,7 +81,8 @@ fn has_mounted_image(dir: &Path) -> bool {
 }
 
 /// Deletes what WindowCraft keeps for itself: its data folders, plus, when
-/// elevated, the Windows Update backup folders and its scheduled task.
+/// elevated, the Windows Update backup folders and its scheduled tasks. Without
+/// elevation it removes the current user's scheduled drift check.
 /// Snapshots go too, so changes already applied can no longer be rolled back.
 pub fn purge_data() -> Result<PurgeSummary> {
     let elevated = sysinfo::is_elevated();
@@ -99,6 +100,16 @@ pub fn purge_data() -> Result<PurgeSummary> {
             summary.record(dir.display().to_string(), remove_data_dir(&dir));
         }
         let task = format!(r"\{}", tasks::REGISTRY_BACKUP_TASK);
+        let outcome = tasks::delete(&task);
+        summary.record(format!("scheduled task {task}"), outcome);
+        match tasks::delete_drift_checks() {
+            Ok(names) if names.is_empty() => summary.absent.push("drift check tasks".to_owned()),
+            Ok(names) => summary.removed.extend(names.into_iter().map(|name| format!("scheduled task \\{name}"))),
+            Err(error) => summary.failed.push(("drift check tasks".to_owned(), error.to_string())),
+        }
+    } else {
+        // Without elevation only this user's own scheduled check can go.
+        let task = format!(r"\{}", tasks::drift_check_task());
         let outcome = tasks::delete(&task);
         summary.record(format!("scheduled task {task}"), outcome);
     }

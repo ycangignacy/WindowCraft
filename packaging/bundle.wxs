@@ -12,9 +12,15 @@
           DisableModify="yes">
     <!-- Burn otherwise leaves a log in %TEMP% on every run. -->
     <Log Disable="yes" />
-    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense">
+    <!-- UseUILanguages: pick the theme language from the Windows display language.
+         Without it WixStdBA goes by the regional format, so a Polish Windows with
+         US formats got the English pages. -->
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.RtfLicense" bal:UseUILanguages="yes">
+      <!-- theme.xml is the stock RtfTheme plus a "launch when done" checkbox. -->
       <bal:WixStandardBootstrapperApplication LicenseFile="$(var.LicenseRtf)"
                                               LogoFile="$(var.Assets)\logo-64.png"
+                                              ThemeFile="$(var.Root)\packaging\theme.xml"
+                                              LocalizationFile="$(var.Root)\packaging\lang\1033\thm.wxl"
                                               SuppressOptionsUI="yes"
                                               SuppressRepair="yes" />
       <!-- The setup UI follows the Windows display language. -->
@@ -29,10 +35,17 @@
     </BootstrapperApplicationRef>
     <!-- setup.exe WCLANGUAGE=pl passes the language on to the MSI. -->
     <Variable Name="WCLANGUAGE" Value="" bal:Overridable="yes" />
+    <!-- The checkbox of the same name on the Install page starts checked.
+         The MSI starts the app only after a full-UI install, never with /quiet
+         or /passive. setup.exe LaunchWindowCraft=0 turns it off. -->
+    <Variable Name="LaunchWindowCraft" Type="numeric" Value="1" bal:Overridable="yes" />
     <bal:Condition Message="WindowCraft requires Windows 11 or later.">WindowsBuildNumber &gt;= 22000</bal:Condition>
     <Chain>
       <MsiPackage SourceFile="$(var.Msi)" DisplayInternalUI="no" Vital="yes" Compressed="yes">
         <MsiProperty Name="WCLANGUAGE" Value="[WCLANGUAGE]" />
+        <MsiProperty Name="WCLAUNCH" Value="[LaunchWindowCraft]" />
+        <MsiProperty Name="WCUILEVEL" Value="[WixBundleUILevel]" />
+        <MsiProperty Name="WCBUNDLEKEY" Value="[WixBundleProviderKey]" />
       </MsiPackage>
     </Chain>
   </Bundle>

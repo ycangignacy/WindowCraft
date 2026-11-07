@@ -19,6 +19,7 @@
 /log log.txt - registra en un archivo específico. De forma predeterminada, se crea un archivo de registro en %TEMP%.</String>
   <String Id="HelpCloseButton">&amp;Cerrar</String>
   <String Id="InstallAcceptCheckbox">&amp;Acepto los términos y condiciones de la licencia</String>
+  <String Id="InstallLaunchCheckbox">&amp;Iniciar WindowCraft al terminar la instalación</String>
   <String Id="InstallOptionsButton">&amp;Opciones</String>
   <String Id="InstallInstallButton">&amp;Instalar</String>
   <String Id="InstallCloseButton">&amp;Cerrar</String>

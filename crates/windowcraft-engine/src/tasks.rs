@@ -14,6 +14,26 @@ const TASK_ENUM_HIDDEN: i32 = 1;
 /// The daily task behind the `reg-backup` feature.
 pub const REGISTRY_BACKUP_TASK: &str = "AutoRegBackup";
 
+/// Start of the name of each user's scheduled drift check. The uninstaller
+/// removes every task in the root folder whose name starts with it.
+pub const DRIFT_CHECK_PREFIX: &str = "WindowCraft drift check";
+
+/// `DOMAIN\user` of the signed-in user, from the environment.
+fn current_user() -> String {
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    match std::env::var("USERDOMAIN") {
+        Ok(domain) if !domain.is_empty() => format!("{domain}\\{user}"),
+        _ => user,
+    }
+}
+
+/// Task name for the current user, for example `WindowCraft drift check (ignacy)`.
+pub fn drift_check_task() -> String {
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    let user: String = user.chars().filter(|c| !r#"\/:*?"<>|"#.contains(*c)).collect();
+    format!("{DRIFT_CHECK_PREFIX} ({user})")
+}
+
 fn connect() -> Result<ITaskService> {
     let fail = |error: &windows::core::Error| EngineError::windows("ITaskService", "Task Scheduler", error);
     // SAFETY: The CLSID is valid and the apartment was entered by the caller.
@@ -171,6 +191,75 @@ pub fn register_daily(name: &str, description: &str, program: &str, arguments: &
     Ok(())
 }
 
+/// Registers a task that runs as the signed-in user, without elevation, a
+/// few minutes after that user signs in and once a day at noon. A missed
+/// noon run starts as soon as the computer is on again.
+pub fn register_user_check(name: &str, description: &str, program: &str, arguments: &str) -> Result<()> {
+    let _apartment = ComApartment::enter()?;
+    let service = connect()?;
+    let fail = |error: windows::core::Error| EngineError::windows("RegisterTaskDefinition", name, &error);
+    let user = current_user();
+
+    // SAFETY: Every call below operates on live COM objects returned by the
+    // previous call, and BSTR arguments outlive their calls.
+    unsafe {
+        let root = service.GetFolder(&BSTR::from("\\")).map_err(fail)?;
+        let definition = service.NewTask(0).map_err(fail)?;
+        let info = definition.RegistrationInfo().map_err(fail)?;
+        info.SetDescription(&BSTR::from(description)).map_err(fail)?;
+        info.SetAuthor(&BSTR::from("WindowCraft")).map_err(fail)?;
+
+        let triggers = definition.Triggers().map_err(fail)?;
+        let logon: ILogonTrigger = triggers.Create(TASK_TRIGGER_LOGON).map_err(fail)?.cast().map_err(fail)?;
+        logon.SetUserId(&BSTR::from(user.as_str())).map_err(fail)?;
+        logon.SetDelay(&BSTR::from("PT3M")).map_err(fail)?;
+        let daily = triggers.Create(TASK_TRIGGER_DAILY).map_err(fail)?;
+        daily.SetStartBoundary(&BSTR::from("2026-01-01T12:00:00")).map_err(fail)?;
+        daily.cast::<IDailyTrigger>().map_err(fail)?.SetDaysInterval(1).map_err(fail)?;
+
+        let settings = definition.Settings().map_err(fail)?;
+        settings.SetStartWhenAvailable(VARIANT_TRUE).map_err(fail)?;
+        settings.SetDisallowStartIfOnBatteries(VARIANT_FALSE).map_err(fail)?;
+        settings.SetStopIfGoingOnBatteries(VARIANT_FALSE).map_err(fail)?;
+        settings.SetExecutionTimeLimit(&BSTR::from("PT10M")).map_err(fail)?;
+        settings.SetMultipleInstances(TASK_INSTANCES_IGNORE_NEW).map_err(fail)?;
+
+        let principal = definition.Principal().map_err(fail)?;
+        principal.SetUserId(&BSTR::from(user.as_str())).map_err(fail)?;
+        principal.SetLogonType(TASK_LOGON_INTERACTIVE_TOKEN).map_err(fail)?;
+        principal.SetRunLevel(TASK_RUNLEVEL_LUA).map_err(fail)?;
+
+        let action = definition.Actions().map_err(fail)?.Create(TASK_ACTION_EXEC).map_err(fail)?;
+        let action: IExecAction = action.cast().map_err(fail)?;
+        action.SetPath(&BSTR::from(program)).map_err(fail)?;
+        action.SetArguments(&BSTR::from(arguments)).map_err(fail)?;
+
+        let empty = VARIANT::default();
+        root.RegisterTaskDefinition(
+            &BSTR::from(name),
+            &definition,
+            TASK_CREATE_OR_UPDATE.0,
+            &VARIANT::from(BSTR::from(user.as_str())),
+            &empty,
+            TASK_LOGON_INTERACTIVE_TOKEN,
+            &empty,
+        )
+        .map_err(fail)?;
+    }
+    Ok(())
+}
+
+/// Deletes every user's drift check task. Returns the names removed.
+pub fn delete_drift_checks() -> Result<Vec<String>> {
+    let mut removed = Vec::new();
+    for task in list_folder("\\")? {
+        if task.name.starts_with(DRIFT_CHECK_PREFIX) && delete(&task.path)? {
+            removed.push(task.name);
+        }
+    }
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +276,25 @@ mod tests {
         assert_eq!(split("Task"), ("\\", "Task"));
         assert_eq!(split(r"\"), ("\\", ""));
         assert_eq!(split(""), ("\\", ""));
+    }
+
+    #[test]
+    fn drift_check_names_start_with_the_prefix_and_hold_no_path_characters() {
+        let name = drift_check_task();
+        assert!(name.starts_with(DRIFT_CHECK_PREFIX));
+        assert!(!name.contains('\\') && !name.contains('/'));
+    }
+
+    #[test]
+    fn a_user_check_registers_and_deletes() {
+        let name = format!("{DRIFT_CHECK_PREFIX} test {}", std::process::id());
+        let program = std::env::current_exe().unwrap();
+        register_user_check(&name, "WindowCraft test task", &program.to_string_lossy(), "--version").unwrap();
+        let listed = list_folder("\\").unwrap();
+        let task = listed.iter().find(|task| task.name == name).expect("the task is registered");
+        assert!(task.enabled);
+        assert!(delete(&format!("\\{name}")).unwrap());
+        assert!(!list_folder("\\").unwrap().iter().any(|task| task.name == name));
     }
 
     #[test]

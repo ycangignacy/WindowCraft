@@ -29,6 +29,13 @@
     <Property Id="ARPHELPLINK" Value="$(var.ProjectUrl)" />
     <Property Id="ARPURLINFOABOUT" Value="$(var.ProjectUrl)" />
     <Property Id="ARPNOREPAIR" Value="1" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
+
+    <!-- Set by setup.exe: the launch checkbox, its UI level (4 is the full UI)
+         and the registry key of its own Programs and Features entry. -->
+    <Property Id="WCLAUNCH" Secure="yes" />
+    <Property Id="WCUILEVEL" Secure="yes" />
+    <Property Id="WCBUNDLEKEY" Secure="yes" />
 
     <!-- WCLANGUAGE=pl (or en, de, fr, es, it, pt-BR, uk) presets the language
          WindowCraft starts in for every user. A later install without the
@@ -63,13 +70,15 @@
     <ComponentGroup Id="Application" Directory="INSTALLFOLDER">
       <Component Id="Executable" Guid="B6A1F0D4-0C52-4E93-8F3A-2D7C15E9A401" Win64="$(var.Win64)">
         <File Id="WindowCraftExe" Source="$(var.Binary)" Name="windowcraft.exe" KeyPath="yes">
+          <!-- Not advertised. An advertised shortcut belongs to this MSI, which
+               setup.exe hides from Installed apps, so Start offered no way to
+               uninstall. A plain shortcut is matched by its folder instead. -->
           <Shortcut Id="StartMenuShortcut"
                     Directory="ProgramMenuFolder"
                     Name="WindowCraft"
                     Description="Windows 11 administration, debloating and ISO mastering"
                     WorkingDirectory="INSTALLFOLDER"
-                    Icon="WindowCraft.ico"
-                    Advertise="yes" />
+                    Advertise="no" />
         </File>
       </Component>
       <Component Id="ConsoleFrontEnd" Guid="F0E514D8-4A96-42D7-CD7E-61B059CDE845" Win64="$(var.Win64)">
@@ -98,8 +107,21 @@
       </Component>
     </ComponentGroup>
 
+    <!-- Registry only, in the 32-bit view where Burn keeps its entry. -->
+    <DirectoryRef Id="TARGETDIR">
+      <!-- Burn writes no InstallLocation into the setup.exe entry; this adds it,
+           so Windows can tie the Start shortcut to the visible entry. Burn
+           deletes the whole key when the bundle goes. -->
+      <Component Id="BundleInstallLocation" Guid="5C1E7A90-3B2D-4F6A-8E15-9D4C27B6A3F1" Win64="no">
+        <Condition>WCBUNDLEKEY</Condition>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\[WCBUNDLEKEY]"
+                       Name="InstallLocation" Value="[INSTALLFOLDER]" Type="string" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
     <Feature Id="Complete" Title="WindowCraft" Level="1">
       <ComponentGroupRef Id="Application" />
+      <ComponentRef Id="BundleInstallLocation" />
     </Feature>
 
     <!-- Uninstall leaves nothing behind. It runs as SYSTEM to reach every profile,
@@ -117,9 +139,16 @@
                  Before="CloseRunningApp" Sequence="execute" />
     <CustomAction Id="CloseRunningApp" BinaryKey="WixCA" DllEntry="WixQuietExec64"
                   Execute="deferred" Impersonate="no" Return="ignore" />
+    <!-- The launch checkbox of setup.exe. msiexec runs this elevated, and
+         explorer.exe hands the path to the running shell, so the app starts
+         as the signed-in user without elevation. -->
+    <CustomAction Id="LaunchAfterSetup" Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[WindowsFolder]explorer.exe&quot; &quot;[INSTALLFOLDER]windowcraft.exe&quot;"
+                  Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
     <InstallExecuteSequence>
       <Custom Action="CloseRunningApp" Before="PurgeUserData">REMOVE="ALL"</Custom>
       <Custom Action="PurgeUserData" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="LaunchAfterSetup" After="InstallFinalize">WCLAUNCH = "1" AND WCUILEVEL = "4" AND NOT REMOVE</Custom>
     </InstallExecuteSequence>
 
     <UI>

@@ -51,6 +51,8 @@ fn registry_path(path: &str) -> String {
     let root = match hive {
         "HKLM" => "HKEY_LOCAL_MACHINE",
         "HKCU" => "HKEY_CURRENT_USER",
+        "HKU" => "HKEY_USERS",
+        "HKCR" => "HKEY_CLASSES_ROOT",
         other => panic!("unexpected hive {other}"),
     };
     format!("Registry::{root}\\{rest}")
@@ -430,4 +432,252 @@ fn t09_usb_guard_and_write() {
     ));
     println!("USB layout: {layout}");
     assert_eq!(layout, "GPT FAT32 WIN11 True True");
+}
+
+/// The WindowCraft PowerShell profile from the System page: installed over a
+/// profile of the user's own, kept as a backup, removed again.
+#[test]
+#[ignore = "changes the live system; VirtualBox guest only"]
+fn t10_powershell_profile_install_and_remove() {
+    if !live() {
+        return;
+    }
+    let engine = engine();
+    let path = ps("[Environment]::GetFolderPath('MyDocuments')") + r"\PowerShell\Microsoft.PowerShell_profile.ps1";
+    let path = PathBuf::from(path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "# the user's own profile\n").unwrap();
+
+    let install = engine.catalog.feature("install-psprofile").expect("install-psprofile").clone();
+    let remove = engine.catalog.feature("uninstall-psprofile").expect("uninstall-psprofile").clone();
+    engine.apply_feature(&install, None, &CancelToken::new()).unwrap();
+    engine.apply_feature(&install, None, &CancelToken::new()).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.starts_with("# WindowCraft PowerShell profile"), "profile written");
+    let backup = path.with_file_name("Microsoft.PowerShell_profile.ps1.bak");
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), "# the user's own profile\n", "backup kept after two installs");
+
+    // The profile has to load and its prompt and commands have to run.
+    let loaded = ps(&format!(
+        ". '{}'; $p = prompt; $u = uptime; $w = which powershell; \"ok $($p.Length -gt 0) $($u -match 'days') $($w -match 'powershell')\"",
+        path.display()
+    ));
+    println!("loaded: {loaded}");
+    assert_eq!(loaded, "ok True True True");
+
+    engine.apply_feature(&remove, None, &CancelToken::new()).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "# the user's own profile\n", "the user's profile is back");
+    assert!(!backup.exists());
+    std::fs::remove_file(&path).unwrap();
+}
+
+/// The scheduled check as Settings creates it: registered for this user
+/// without elevation, run once by Task Scheduler, recorded, removed again.
+#[test]
+#[ignore = "changes the live system; VirtualBox guest only"]
+fn t11_scheduled_check_from_settings() {
+    use windowcraft_app::settings::{self, CheckInterval, Settings};
+    if !live() {
+        return;
+    }
+    let program = PathBuf::from(r"C:\WC\bin\windowcraft.exe");
+    assert!(program.exists(), "the kit holds windowcraft.exe");
+    {
+        // A reverted tweak for the check to find.
+        let engine = engine();
+        run(&engine, "VM drift for the scheduled check", &[(tweak(&engine, "activity"), TweakAction::Apply)]);
+    }
+    ps(r"Set-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name EnableActivityFeed -Value 0 -Type DWord");
+
+    let chosen = Settings { interval: CheckInterval::Weekly, after_updates: true, ..Settings::default() };
+    settings::save(&chosen).unwrap();
+    settings::apply_schedule_for(&chosen, "WindowCraft live test", &program).unwrap();
+    let name = windowcraft_engine::tasks::drift_check_task();
+    let facts = ps(&format!(
+        "$t = Get-ScheduledTask -TaskName '{name}'; \"$($t.Principal.RunLevel) $($t.Principal.LogonType) $($t.Triggers.Count) $($t.Actions[0].Arguments)\""
+    ));
+    println!("task: {facts}");
+    assert_eq!(facts, "Limited Interactive 2 --scheduled-check");
+
+    ps(&format!("Start-ScheduledTask -TaskName '{name}'"));
+    let mut recorded = false;
+    for _ in 0..60 {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if settings::load().last_check > 0 {
+            recorded = true;
+            break;
+        }
+    }
+    // The run waits on its notification or message box; it is not needed any more.
+    ps("Get-Process windowcraft -ErrorAction SilentlyContinue | Stop-Process -Force");
+    assert!(recorded, "the task run recorded its check in settings.json");
+    let after = settings::load();
+    assert_eq!(after.interval, CheckInterval::Weekly);
+    assert!(!after.last_build.is_empty());
+    assert_eq!(dword(SYSTEM, "EnableActivityFeed"), Some(0), "the check changes nothing");
+
+    let off = Settings { interval: CheckInterval::Off, after_updates: false, ..after };
+    settings::save(&off).unwrap();
+    settings::apply_schedule_for(&off, "WindowCraft live test", &program).unwrap();
+    assert_eq!(ps(&format!("@(Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue).Count")), "0");
+
+    let engine = engine();
+    assert_eq!(engine.repair_drift().unwrap(), 1);
+    assert_eq!(dword(SYSTEM, "EnableActivityFeed"), Some(1));
+}
+
+/// The Group Policy value since 1.1.0. Up to 1.0.3 the tweak wrote the
+/// Settings store under CurrentVersion\Policies, which DiagTrack writes back
+/// after a delete, so a rollback could not remove it (KB-15).
+const ALLOW_TELEMETRY: (&str, &str) = (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry");
+const SETTINGS_STORE: &str = r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection";
+
+/// The Standard preset, which also contains Minimal, applied and rolled back.
+#[test]
+#[ignore = "changes the live system; VirtualBox guest only"]
+fn t12_standard_preset_applies_and_rolls_back() {
+    if !live() {
+        return;
+    }
+    let engine = engine();
+    let items: Vec<(&Tweak, TweakAction)> =
+        engine.catalog.presets.standard.iter().map(|id| (tweak(&engine, id), TweakAction::Apply)).collect();
+    assert_eq!(items.len(), 13);
+    let watched = [
+        (SYSTEM, "PublishUserActivities"),
+        (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization", "DODownloadMode"),
+        (r"HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures"),
+    ];
+    let read = || watched.iter().map(|(path, name)| dword(path, name)).collect::<Vec<_>>();
+    let before = read();
+    let session = run(&engine, "VM Standard preset", &items);
+    let applied = read();
+    println!("before {before:?} applied {applied:?}");
+    assert_eq!(applied[0], Some(0));
+    assert_eq!(dword(ALLOW_TELEMETRY.0, ALLOW_TELEMETRY.1), Some(0));
+    let restore_points = ps("@(Get-ComputerRestorePoint -ErrorAction SilentlyContinue).Count");
+    println!("restore points: {restore_points}");
+    assert_ne!(restore_points, "0", "the preset starts with a restore point");
+
+    engine.rollback_session(session).unwrap();
+    assert_eq!(read(), before);
+    let final_state = state(&engine, session);
+    println!("state after rollback: {final_state:?}");
+    assert!(matches!(final_state, SessionState::RolledBack | SessionState::PartlyRolledBack));
+}
+
+/// The telemetry tweak alone: every value it writes is gone or back after a
+/// rollback, also 20 s later, and the Settings store is never touched.
+#[test]
+#[ignore = "changes the live system; VirtualBox guest only"]
+fn t13_telemetry_rolls_back_every_value() {
+    if !live() {
+        return;
+    }
+    let engine = engine();
+    let telemetry = tweak(&engine, "telemetry");
+    let entries: Vec<(String, String)> = telemetry
+        .registry
+        .iter()
+        .filter(|e| e.kind == windowcraft_config::RegKind::DWord)
+        .map(|e| (e.path.clone(), e.name.clone()))
+        .collect();
+    let read = || entries.iter().map(|(path, name)| dword(path, name)).collect::<Vec<_>>();
+    let store_before = dword(SETTINGS_STORE, "AllowTelemetry");
+    let before = read();
+    let session = run(&engine, "VM telemetry", &[(telemetry, TweakAction::Apply)]);
+    assert_eq!(dword(ALLOW_TELEMETRY.0, ALLOW_TELEMETRY.1), Some(0), "the policy is set");
+    let applied = read();
+    engine.rollback_session(session).unwrap();
+    let now = read();
+    std::thread::sleep(std::time::Duration::from_secs(20));
+    let later = read();
+    for (index, (path, name)) in entries.iter().enumerate() {
+        let mark = if before[index] == now[index] && now[index] == later[index] { "same" } else { "DIFFERENT" };
+        println!("{mark}  {path}\\{name}: before {:?} applied {:?} rollback {:?} 20 s later {:?}", before[index], applied[index], now[index], later[index]);
+    }
+    assert_eq!(now, before, "right after the rollback");
+    assert_eq!(later, before, "20 s after the rollback");
+    assert_eq!(dword(SETTINGS_STORE, "AllowTelemetry"), store_before, "the Settings store is left alone");
+}
+
+/// Any value as text through PowerShell, `None` when absent. Binary values
+/// come back as their bytes joined with spaces.
+fn value(path: &str, name: &str) -> Option<String> {
+    let text = ps(&format!(
+        "$v = Get-ItemProperty -LiteralPath '{}' -Name '{name}' -ErrorAction SilentlyContinue; if ($null -ne $v) {{ '=' + ((@($v.'{name}') | ForEach-Object {{ \"$_\" }}) -join ' ') }}",
+        registry_path(path)
+    ));
+    text.strip_prefix('=').map(str::to_owned)
+}
+
+/// Every tweak that can be undone, one at a time: applied, rolled back, and
+/// after 10 s every registry value and service it touches is as before.
+/// Tweaks that remove apps, delete files or decrypt drives are left out.
+#[test]
+#[ignore = "changes the live system; VirtualBox guest only"]
+fn t14_every_reversible_tweak_rolls_back_cleanly() {
+    use windowcraft_config::TweakKind;
+    if !live() {
+        return;
+    }
+    const ONE_WAY: [&str; 9] = [
+        "widget",
+        "remove-edge",
+        "remove-one-drive",
+        "disable-bit-locker",
+        "windows-ai",
+        "disk-cleanup",
+        "delete-temp-files",
+        "restore-point",
+        "revert-start-menu",
+    ];
+    let engine = engine();
+    let mut problems = Vec::new();
+    let mut checked = 0;
+    for tweak in &engine.catalog.tweaks {
+        let action = match tweak.kind {
+            TweakKind::Check if !ONE_WAY.contains(&tweak.id.as_str()) => TweakAction::Apply,
+            TweakKind::Toggle => TweakAction::Set(true),
+            _ => continue,
+        };
+        let values: Vec<(String, String)> = tweak.registry.iter().map(|e| (e.path.clone(), e.name.clone())).collect();
+        let services: Vec<String> = tweak.services.iter().map(|rule| rule.name.clone()).collect();
+        let read = || {
+            (
+                values.iter().map(|(path, name)| value(path, name)).collect::<Vec<_>>(),
+                services.iter().map(|name| service_start(name)).collect::<Vec<_>>(),
+            )
+        };
+        let before = read();
+        let report = engine.run(&format!("VM sweep {}", tweak.id), &[(tweak, action)], &CancelToken::new(), |_, _| {}).unwrap();
+        if !report.failed.is_empty() {
+            problems.push(format!("{}: apply failed: {:?}", tweak.id, report.failed));
+            continue;
+        }
+        if let Err(error) = engine.rollback_session(report.session) {
+            problems.push(format!("{}: rollback failed: {error}", tweak.id));
+            continue;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        let after = read();
+        for (index, (path, name)) in values.iter().enumerate() {
+            if before.0[index] != after.0[index] {
+                problems.push(format!("{}: {path}\\{name} was {:?}, after rollback {:?}", tweak.id, before.0[index], after.0[index]));
+            }
+        }
+        for (index, name) in services.iter().enumerate() {
+            if before.1[index] != after.1[index] {
+                problems.push(format!("{}: service {name} start was {:?}, after rollback {:?}", tweak.id, before.1[index], after.1[index]));
+            }
+        }
+        checked += 1;
+        println!("  {} checked: {} values, {} services", tweak.id, values.len(), services.len());
+    }
+    println!("checked {checked} tweaks");
+    for problem in &problems {
+        println!("PROBLEM {problem}");
+    }
+    assert!(checked > 50, "only {checked} tweaks were checked");
+    assert!(problems.is_empty(), "{} problems, listed above", problems.len());
 }

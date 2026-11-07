@@ -159,11 +159,16 @@ The workflows have never run. Expect fixes on the first run.
 | KB-6 | Any unclassified snapshot database error counted as corruption. | 1.0.0: only `StorageError::Corrupted` and an `InvalidData` header move the file aside. `UpgradeRequired` and other errors leave it and report. |
 | KB-7 | Unknown fields on `NativeOp` variants without parameters were accepted. | 1.0.0: `native_ops_carry_no_unknown_fields` round-trips every operation in the catalogs. |
 | KB-8 | Enabled DISM features stayed enabled after a rollback. | 1.0.0: feature steps record `was_on` from `DismGetFeatureInfo`, and a rollback disables only those that were off. Sessions from 0.1.0 still roll back partly. |
-| SEC-1 | The CTT PowerShell profile came from a moving `main` branch. | 1.0.0: pinned to commit `daa7ba2` with SHA-256. The profile still updates itself weekly from `main`; that is upstream behavior and is in the release notes. |
+| SEC-1 | The CTT PowerShell profile came from a moving `main` branch. | 1.0.0: pinned to commit `daa7ba2` with SHA-256. 1.1.0: replaced by a profile built into WindowCraft, so nothing is downloaded. |
 | SEC-2 | The Adobe block list came from a moving branch. | 1.0.0: pinned to commit `3512d92` with SHA-256, and validation rejects unpinned lists. |
 | KB-9 | Uninstalling while WindowCraft was open left the window running. | 1.0.3: the uninstaller runs `windowcraft.exe --close-running` as SYSTEM before it removes files. Checked in the VM for the MSI and `setup.exe`. |
 | KB-10 | `setup.exe` of 1.0.2 over `setup.exe` of 1.0.2-rc1 left two "WindowCraft 1.0.2" entries in Installed apps. | 1.0.3: `setup.exe` of a higher version replaces both. Checked in the VM. |
 | KB-11 | The ten `.cpl` buttons on the System page failed with "ShellExecuteW failed" and 0x0000001F, because `cplfile` has no `open` verb. | 1.0.3: applets open through `control.exe`, other targets with their default verb. |
+| KB-12 | The Start menu offered no way to uninstall WindowCraft. Its advertised shortcut belonged to the MSI, which `setup.exe` hides. | 1.1.0: plain shortcut, and the `setup.exe` entry has an `InstallLocation`. |
+| KB-13 | The hover and press highlight of the first and last row in a group had square corners over the rounded border. | 1.1.0: those rows take the corner radius of the group. |
+| KB-14 | Installing the PowerShell profile twice replaced the backup of the user's own profile, so removing it could not restore that profile. | 1.1.0: a second install keeps the first backup; removing leaves a profile the user wrote later alone. |
+| KB-15 | Rolling back the telemetry tweak left `AllowTelemetry=0`: the value was the DiagTrack copy under `CurrentVersion\Policies\DataCollection`, which DiagTrack writes back after a delete. | 1.1.0: the tweak writes the Group Policy value. Sessions from 1.0.3 and earlier still roll back the old copy. |
+| KB-16 | Rolling back "Turn off hibernation" failed where the firmware has no S4, because `powercfg /hibernate on` errors. | 1.1.0: turning hibernation on is skipped without S4. |
 
 ### Open
 
@@ -212,12 +217,12 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 432 pass in 1.0.3 (407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
+| Unit and integration tests | 449 pass in 1.1.0 (432 in 1.0.3, 407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
 | GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |
 | Install and uninstall, x64 | Final packages: 2 rounds each of MSI and `setup.exe`, 66 of 66 checks, nothing left behind, including data folder, Package Cache, `%TEMP%`, PATH, services and tasks. An install in real use also uninstalled cleanly. |
-| Background footprint | No service, task, Run entry, registry key, child process or startup network traffic |
+| Background footprint | No service, task, Run entry, registry key, child process or startup network traffic. From 1.1.0 one scheduled task per user exists only while the automatic check in Settings is on. |
 | Memory and startup | 26 MB against a 30 MB budget. Titled window in 62 to 89 ms over 6 runs, against a 50 ms budget, so startup misses it. |
 | Autoruns | No Windows binary is reported as unsigned |
 | DNS benchmark | All 8 providers answer over UDP, TCP and DoH |

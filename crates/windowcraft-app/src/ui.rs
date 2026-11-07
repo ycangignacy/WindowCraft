@@ -3,7 +3,7 @@
 
 use crate::app::Message;
 use crate::icons::Icon;
-use crate::press::press;
+use crate::press::{corners, press};
 use crate::smooth::smooth;
 use crate::theme::*;
 use iced::widget::text::{IntoFragment, LineHeight, Wrapping};
@@ -47,7 +47,7 @@ fn press_tint(p: Palette) -> Color {
     p.selected
 }
 
-/// One-pixel line used as the specular highlight and row divider.
+/// One-pixel row divider.
 fn line<'a>(color: Color, left_inset: f32) -> El<'a> {
     container(
         container(Space::new().width(Length::Fill).height(1))
@@ -61,12 +61,20 @@ fn line<'a>(color: Color, left_inset: f32) -> El<'a> {
 
 /// Grouped inset list with hairlines aligned to the row text.
 pub fn group<'a>(p: Palette, rows: Vec<El<'a>>, inset: f32) -> El<'a> {
-    let mut list = Column::new().push(line(p.specular, 0.0));
+    // No highlight line along the top: drawn straight across, it ran past the
+    // rounded corners and read as a bar above every group.
+    let mut list = Column::new();
+    let last = rows.len().saturating_sub(1);
+    // The hover tint of the first and last rows follows the rounded border.
+    let edge = GROUP_RADIUS - 1.0;
     for (index, item) in rows.into_iter().enumerate() {
         if index > 0 {
             list = list.push(line(p.hairline, inset));
         }
-        list = list.push(item);
+        let top = if index == 0 { edge } else { 0.0 };
+        let bottom = if index == last { edge } else { 0.0 };
+        let radius = iced::border::Radius { top_left: top, top_right: top, bottom_right: bottom, bottom_left: bottom };
+        list = list.push(corners(item, radius));
     }
     container(list)
         .width(Length::Fill)

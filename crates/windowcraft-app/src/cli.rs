@@ -36,7 +36,7 @@ pub struct Cli {
     /// Write a privacy-safe environment report
     #[arg(long, value_name = "PATH")]
     pub export_report: Option<PathBuf>,
-    /// Module to open: applications, tweaks, system, updates, iso, timemachine or inspector
+    /// Module to open: applications, tweaks, system, updates, iso, timemachine, inspector or settings
     #[arg(long, value_name = "MODULE")]
     pub open: Option<StartPage>,
     /// Open the X-Ray Inspector on a tweak id
@@ -48,6 +48,9 @@ pub struct Cli {
     /// End every WindowCraft process started from this folder. The uninstaller runs it before it removes files
     #[arg(long, conflicts_with_all = ["run", "check_drift", "export_report", "purge_data"])]
     pub close_running: bool,
+    /// Run by the scheduled task from Settings: checks for reverted tweaks and shows a notification
+    #[arg(long, hide = true, conflicts_with_all = ["run", "check_drift", "export_report", "purge_data", "close_running"])]
+    pub scheduled_check: bool,
 }
 
 /// Newtype so clap can parse the app's page enum.
@@ -77,7 +80,12 @@ impl std::str::FromStr for PresetArg {
 impl Cli {
     /// True when any flag asks for headless work.
     pub fn is_headless(&self) -> bool {
-        self.run || self.check_drift || self.export_report.is_some() || self.purge_data || self.close_running
+        self.run
+            || self.check_drift
+            || self.export_report.is_some()
+            || self.purge_data
+            || self.close_running
+            || self.scheduled_check
     }
 }
 
@@ -100,6 +108,9 @@ fn load_profile(cli: &Cli, catalog: &Catalog) -> Result<ResolvedProfile, String>
 fn run(cli: &Cli) -> Result<(), String> {
     if cli.close_running {
         return close_running();
+    }
+    if cli.scheduled_check {
+        return crate::background::run();
     }
     // Before the engine, which would recreate the data folder.
     if cli.purge_data {
@@ -243,7 +254,7 @@ mod tests {
         let catalog = Catalog::load().unwrap();
         let cli = parse(&["--preset", "minimal"]).unwrap();
         assert!(!cli.is_headless());
-        assert_eq!(load_selection(&cli, &catalog).unwrap().unwrap().profile.tweaks.len(), 4);
+        assert_eq!(load_selection(&cli, &catalog).unwrap().unwrap().profile.tweaks.len(), 6);
         assert!(load_selection(&parse(&[]).unwrap(), &catalog).unwrap().is_none());
     }
 
@@ -270,6 +281,13 @@ mod tests {
     }
 
     #[test]
+    fn the_scheduled_check_is_headless_and_stands_alone() {
+        assert!(parse(&["--scheduled-check"]).unwrap().is_headless());
+        assert!(parse(&["--scheduled-check", "--purge-data"]).is_err());
+        assert!(parse(&["--scheduled-check", "--check-drift"]).is_err());
+    }
+
+    #[test]
     fn config_files_load_from_disk() {
         let catalog = Catalog::load().unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -286,6 +304,7 @@ mod tests {
             inspect: None,
             purge_data: false,
             close_running: false,
+            scheduled_check: false,
         };
         assert_eq!(load_profile(&cli, &catalog).unwrap().profile.tweaks, ["activity"]);
     }

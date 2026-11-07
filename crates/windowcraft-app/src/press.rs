@@ -4,17 +4,30 @@
 //! The highlight and `scale(0.98)` appear on the exact frame the button goes
 //! down. Dragging past the hit padding cancels, dragging back re-engages, and
 //! losing window focus releases the press so it can never stick.
+//!
+//! The hover tint fades in and out over a short time. A row inside a grouped
+//! list is wrapped in `corners`, which tells the row which of its corners
+//! meet the rounded edge of the group, so the tint follows that edge.
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::overlay;
 use iced::advanced::renderer::{self, Quad};
 use iced::advanced::widget::{Operation, Tree, Widget, tree};
 use iced::advanced::{Clipboard, Renderer as _, Shell};
+use iced::border::Radius;
 use iced::mouse::{self, Cursor};
 use iced::{Border, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Transformation, Vector, window};
+use std::cell::Cell;
+use std::time::{Duration, Instant};
 use windowcraft_physics::PressTracker;
 
 const PRESSED_SCALE: f32 = 0.98;
+const HOVER_FADE: Duration = Duration::from_millis(110);
+
+thread_local! {
+    /// Bounds and corner radii of the `corners` slot being drawn right now.
+    static SLOT: Cell<Option<(Rectangle, Radius)>> = const { Cell::new(None) };
+}
 
 pub struct Press<'a, Message> {
     content: Element<'a, Message>,
@@ -28,6 +41,49 @@ pub struct Press<'a, Message> {
 struct State {
     press: PressTracker,
     hovered: bool,
+    /// Tint level when the hover last changed, and when that was.
+    fade_from: f32,
+    fade_start: Option<Instant>,
+}
+
+impl State {
+    /// Hover tint from 0 to 1 at `now`.
+    fn hover_level(&self, now: Instant) -> f32 {
+        let target = if self.hovered { 1.0 } else { 0.0 };
+        let Some(start) = self.fade_start else { return target };
+        let t = now.saturating_duration_since(start).as_secs_f32() / HOVER_FADE.as_secs_f32();
+        if t >= 1.0 {
+            return target;
+        }
+        let eased = 1.0 - (1.0 - t) * (1.0 - t);
+        self.fade_from + (target - self.fade_from) * eased
+    }
+
+    fn fading(&self, now: Instant) -> bool {
+        self.fade_start.is_some_and(|start| now.saturating_duration_since(start) < HOVER_FADE)
+    }
+
+    fn set_hovered(&mut self, hovered: bool, now: Instant, motion: bool) {
+        self.fade_from = self.hover_level(now);
+        self.hovered = hovered;
+        self.fade_start = motion.then_some(now);
+    }
+}
+
+/// Radii for a fill drawn over `bounds`: the slot's own when the fill covers
+/// the whole slot, otherwise `fallback` on every corner.
+fn radius_for(bounds: Rectangle, fallback: f32) -> Radius {
+    match SLOT.with(Cell::get) {
+        Some((slot, radius))
+            if (slot.x - bounds.x).abs() < 0.5
+                && (slot.y - bounds.y).abs() < 0.5
+                && (slot.width - bounds.width).abs() < 0.5
+                && (slot.height - bounds.height).abs() < 0.5 =>
+        {
+            radius
+        }
+        _ => fallback.into(),
+    }
 }
 
 pub fn press<'a, Message>(content: impl Into<Element<'a, Message>>) -> Press<'a, Message> {
@@ -129,9 +185,17 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Press<'_, Message> {
             return;
         }
 
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+            if self.hover.is_some() && state.fading(*now) {
+                shell.request_redraw_at(crate::vsync::next_redraw(*now));
+            } else {
+                state.fade_start = None;
+            }
+        }
+
         let over = cursor.is_over(bounds);
         if over != state.hovered {
-            state.hovered = over;
+            state.set_hovered(over, Instant::now(), crate::smooth::motion_enabled());
             if self.hover.is_some() {
                 shell.request_redraw();
             }
@@ -186,20 +250,18 @@ impl<Message: Clone> Widget<Message, Theme, Renderer> for Press<'_, Message> {
         let pressed = state.press.is_pressed();
         let fill = if pressed {
             self.pressed
-        } else if state.hovered && self.on_press.is_some() {
-            self.hover
+        } else if self.on_press.is_some() {
+            let level = state.hover_level(Instant::now());
+            self.hover.filter(|_| level > 0.0).map(|color| Color { a: color.a * level, ..color })
         } else {
             None
         };
+        let radius = radius_for(bounds, self.radius);
 
         let paint = |renderer: &mut Renderer| {
             if let Some(color) = fill {
                 renderer.fill_quad(
-                    Quad {
-                        bounds,
-                        border: Border { radius: self.radius.into(), ..Border::default() },
-                        ..Quad::default()
-                    },
+                    Quad { bounds, border: Border { radius, ..Border::default() }, ..Quad::default() },
                     color,
                 );
             }
@@ -252,6 +314,99 @@ impl<'a, Message: Clone + 'a> From<Press<'a, Message>> for Element<'a, Message> 
     }
 }
 
+/// Gives a row the corner radii of the group edge it touches.
+pub struct Corners<'a, Message> {
+    content: Element<'a, Message>,
+    radius: Radius,
+}
+
+pub fn corners<'a, Message>(content: impl Into<Element<'a, Message>>, radius: Radius) -> Corners<'a, Message> {
+    Corners { content: content.into(), radius }
+}
+
+impl<Message> Widget<Message, Theme, Renderer> for Corners<'_, Message> {
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_ref(&self.content));
+    }
+
+    fn size(&self) -> Size<Length> {
+        self.content.as_widget().size()
+    }
+
+    fn size_hint(&self) -> Size<Length> {
+        self.content.as_widget().size_hint()
+    }
+
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+        self.content.as_widget_mut().layout(&mut tree.children[0], renderer, limits)
+    }
+
+    fn operate(&mut self, tree: &mut Tree, layout: Layout<'_>, renderer: &Renderer, operation: &mut dyn Operation) {
+        self.content.as_widget_mut().operate(&mut tree.children[0], layout, renderer, operation);
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) {
+        self.content.as_widget_mut().update(&mut tree.children[0], event, layout, cursor, renderer, clipboard, shell, viewport);
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+    ) {
+        let outer = SLOT.with(|slot| slot.replace(Some((layout.bounds(), self.radius))));
+        self.content.as_widget().draw(&tree.children[0], renderer, theme, style, layout, cursor, viewport);
+        SLOT.with(|slot| slot.set(outer));
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+    ) -> mouse::Interaction {
+        self.content.as_widget().mouse_interaction(&tree.children[0], layout, cursor, viewport, renderer)
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.as_widget_mut().overlay(&mut tree.children[0], layout, renderer, viewport, translation)
+    }
+}
+
+impl<'a, Message: 'a> From<Corners<'a, Message>> for Element<'a, Message> {
+    fn from(value: Corners<'a, Message>) -> Self {
+        Element::new(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,6 +428,36 @@ mod tests {
         let element: Element<'_, &str> = configured.into();
         assert_eq!(element.as_widget().size(), Size::new(Length::Fixed(120.0), Length::Fixed(36.0)));
         assert_eq!(element.as_widget().size_hint(), Size::new(Length::Fixed(120.0), Length::Fixed(36.0)));
+    }
+
+    #[test]
+    fn a_fill_takes_the_slot_corners_only_when_it_covers_the_slot() {
+        let slot = Rectangle { x: 10.0, y: 20.0, width: 300.0, height: 42.0 };
+        let top = Radius { top_left: 8.0, top_right: 8.0, bottom_right: 0.0, bottom_left: 0.0 };
+        assert_eq!(radius_for(slot, 0.0), Radius::from(0.0), "no slot, so the fallback applies");
+        SLOT.with(|cell| cell.set(Some((slot, top))));
+        assert_eq!(radius_for(slot, 0.0), top);
+        let button = Rectangle { x: 250.0, y: 28.0, width: 26.0, height: 26.0 };
+        assert_eq!(radius_for(button, 6.0), Radius::from(6.0), "a control inside the row keeps its own radius");
+        SLOT.with(|cell| cell.set(None));
+    }
+
+    #[test]
+    fn hover_fades_in_and_out_and_reverses_from_where_it_is() {
+        let start = Instant::now();
+        let mut state = State::default();
+        assert_eq!(state.hover_level(start), 0.0);
+        state.set_hovered(true, start, true);
+        let mid = state.hover_level(start + HOVER_FADE / 2);
+        assert!(mid > 0.0 && mid < 1.0);
+        assert!(state.fading(start + HOVER_FADE / 2));
+        assert_eq!(state.hover_level(start + HOVER_FADE), 1.0);
+        assert!(!state.fading(start + HOVER_FADE));
+
+        state.set_hovered(false, start + HOVER_FADE / 2, true);
+        let reversed = state.hover_level(start + HOVER_FADE / 2);
+        assert!((reversed - mid).abs() < 1e-4, "leaving mid-fade starts from the current tint, not from full");
+        assert_eq!(state.hover_level(start + HOVER_FADE * 2), 0.0);
     }
 
     #[test]

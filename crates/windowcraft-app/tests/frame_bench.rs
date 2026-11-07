@@ -560,6 +560,7 @@ fn page_name(page: Page) -> &'static str {
         Page::Iso => "Iso",
         Page::TimeMachine => "TimeMachine",
         Page::Inspector => "Inspector",
+        Page::Settings => "Settings",
     }
 }
 

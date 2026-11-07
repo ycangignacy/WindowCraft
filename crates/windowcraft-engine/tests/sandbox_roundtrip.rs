@@ -445,8 +445,8 @@ fn preset_runs_end_to_end() {
         .collect();
     let mut steps = 0;
     let report = rig.engine.run("Standard", &items, &CancelToken::new(), |_, _| steps += 1).unwrap();
-    assert_eq!(report.applied.len(), 12, "{:?}", report.failed);
-    assert_eq!(steps, 12);
+    assert_eq!(report.applied.len(), 13, "{:?}", report.failed);
+    assert_eq!(steps, 13);
     assert!(rig.native.ran.lock().unwrap().contains(&NativeOp::RestorePoint));
 }
 

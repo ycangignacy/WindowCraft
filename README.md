@@ -2,48 +2,38 @@
 
 # WindowCraft
 
-WindowCraft is a Windows 11 tool for installing apps, removing bloat, applying tweaks and building custom installation media. It is written in Rust and runs natively on x64 and ARM64. Before every change it records the previous value, so registry, service, task and Windows feature changes can be rolled back later.
+WindowCraft is a Windows 11 tool for installing apps, removing bloat, applying privacy and performance tweaks, and building custom installation media. It is a native program written in Rust for x64 and ARM64, with no PowerShell scripts behind it. Before every change it records the previous value, so registry, service, task and Windows feature changes can be rolled back later, one change or a whole session at a time.
 
-The catalogs of applications, tweaks, features, AppX packages, DNS providers and presets come from Chris Titus Tech's WinUtil (<https://github.com/ChrisTitusTech/winutil>). WindowCraft is not affiliated with Chris Titus Tech or WinUtil.
+The current release is 1.1.0. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.1.0.md](docs/RELEASE-NOTES-1.1.0.md) says what changed and what was tested.
+
+![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
 
 ## What it does
 
 | Page | Contents |
 | :--- | :--- |
-| Applications | 239 packages, installed through WinGet or Chocolatey |
-| Tweaks & Privacy | 68 tweaks and 34 removable AppX packages, with Minimal, Standard and Advanced presets |
-| System Config & Fixes | 33 tools: optional Windows features, repairs, network and update resets, Control Panel applets |
+| Applications | 239 packages in 10 categories, installed, upgraded or removed through WinGet or Chocolatey |
+| Tweaks & Privacy | 68 tweaks and 34 removable AppX packages, with Minimal (6), Standard (13) and Advanced (21) presets |
+| System Config & Fixes | 33 tools: optional Windows features, repairs, network and update resets, a PowerShell profile, OpenSSH Server, Control Panel applets |
 | Windows Updates | Default, Security (recommended) and Disabled update policies |
 | ISO Studio | Answer files, driver injection, app bundles, ISO output and USB writing |
 | Time Machine | Every session with its changes, rollback of a session or of a single change, drift detection |
 | System & Gaming Inspector | MSI interrupt mode, autoruns, cache cleaner, DNS benchmark over UDP, TCP and DoH |
+| Settings | Language, theme and a scheduled check for tweaks that Windows reverted |
 
-The X-Ray Inspector shows, for any tweak, each registry value or service it touches with its current, target and undo value. Global search (Ctrl+K) covers apps, tweaks, registry keys, services, fixes and AppX packages.
+The X-Ray Inspector shows, for any tweak, each registry value or service it touches with its current, target and undo value. A colored dot next to each tweak says whether it is applied. Global search (Ctrl+K) covers apps, tweaks, registry keys, services, fixes and AppX packages.
 
-![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
+Windows updates and other programs sometimes set a value back after it was changed. WindowCraft notices this as configuration drift, shows a banner when it opens, and puts the values back with one click. Settings can also check on a schedule.
 
-![Applications page](docs/screenshots/applications.png)
+![Applications, with the WinGet and Chocolatey switch and the category filters](docs/screenshots/applications.png)
+
+![Settings with the automatic check every 7 days and after Windows updates](docs/screenshots/settings.png)
+
+![Tweaks & Privacy in the light theme](docs/screenshots/tweaks-light.png)
 
 ![System Config & Fixes in Polish](docs/screenshots/system-pl.png)
 
-## Languages
-
-The interface is available in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. On first start WindowCraft uses the Windows display language if it is one of these, and English otherwise. The language list at the bottom of the sidebar changes it at once, without a restart. The choice is saved per user in `%LOCALAPPDATA%\WindowCraft\settings.json`.
-
-Names and descriptions of catalog entries (apps, tweaks, features) stay in English, and so do error details passed on from Windows and its tools, the job log and command line output.
-
-`setup.exe` shows its pages in the Windows display language as well. An administrator can preset the language for every user with `WCLANGUAGE`:
-
-```powershell
-msiexec /i WindowCraft-1.0.3-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.0.3-x64-setup.exe WCLANGUAGE=de
-```
-
-The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`. A user's own choice in the app wins over the preset.
-
-## Download
-
-Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases). Release notes for 1.0.3 are in [docs/RELEASE-NOTES-1.0.3.md](docs/RELEASE-NOTES-1.0.3.md).
+## Install
 
 | File | Use it when |
 | :--- | :--- |
@@ -51,9 +41,133 @@ Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/
 | `WindowCraft-<version>-<arch>.msi` | You deploy with Intune, GPO or `msiexec /qn`. |
 | `WindowCraft-<version>-<arch>-portable.exe` | You want to run it without installing. |
 
-Checksums are in `SHA256SUMS.txt`. The builds are unsigned, so SmartScreen warns on first run. See the code signing policy below.
+`setup.exe` shows its pages in the Windows display language. Its first page has a checkbox, checked by default, that starts WindowCraft when setup finishes; the app then runs as you, without elevation. With `/quiet` or `/passive` it never starts the app, and `LaunchWindowCraft=0` on the command line clears the checkbox. The MSI on its own offers the same choice on its last page.
 
-Every feature that changes the system ran on Windows 11 Home 26H2 in VirtualBox before 1.0.1; the release notes list what was checked and what was not. Create a restore point before you apply changes.
+WindowCraft starts as a standard user. The badge at the top of the sidebar restarts it as administrator, which most changes need.
+
+Checksums are in `SHA256SUMS.txt`. The builds are not code-signed yet, so SmartScreen warns on first run; see the code signing policy below.
+
+Every feature that changes the system ran on Windows 11 Home 26H2 in VirtualBox before 1.0.1, and the 1.1.0 changes ran there again, including an apply and rollback of each of the 54 tweaks that can be undone. Create a restore point before you apply changes anyway. Every preset starts with one.
+
+## Settings
+
+The gear at the bottom of the sidebar opens Settings. The sun or moon icon next to it switches the theme in one click.
+
+| Setting | What it does |
+| :--- | :--- |
+| Language | One of the eight interface languages. |
+| Theme | Follow Windows, always dark or always light. The choice is kept between runs. |
+| Check automatically | Never, daily, every 7 days or every 30 days. Off by default. |
+| Check after Windows updates | Also checks when the Windows build number changes, which is what a cumulative update does. Off by default. |
+| Check now | Compares the applied tweaks with the system at once. |
+
+When one of the two check settings is on, WindowCraft registers a scheduled task named `WindowCraft drift check (<user name>)`. It runs as you, without elevation, three minutes after you sign in and once a day at noon, or as soon as the computer is on again after a missed noon. Each run reads `settings.json` and compares only when the chosen interval has passed or the build changed; otherwise it exits at once. It reads the system and changes nothing.
+
+When something was reverted, a Windows notification says how many tweaks, and clicking it opens Time Machine, where Re-apply puts them back. If Windows notifications are turned off, a message box asks instead. While WindowCraft is open the task does nothing, because the window shows the same banner. Turning both settings off deletes the task, and so does uninstalling.
+
+## Languages
+
+The interface is available in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. On first start WindowCraft uses the Windows display language if it is one of these, and English otherwise. The language list in Settings changes it at once, without a restart. The choice is saved per user in `%LOCALAPPDATA%\WindowCraft\settings.json`.
+
+Names and descriptions of catalog entries stay in English, and so do error details passed on from Windows and its tools, the job log and command line output.
+
+An administrator can preset the language for every user with `WCLANGUAGE`. A user's own choice in the app wins over the preset.
+
+```powershell
+msiexec /i WindowCraft-1.1.0-x64.msi WCLANGUAGE=pl /qn
+.\WindowCraft-1.1.0-x64-setup.exe WCLANGUAGE=de
+```
+
+The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`.
+
+## Command line
+
+```bash
+windowcraft-cli --preset standard --run
+windowcraft-cli --config "C:\path\to\config.json" --run
+windowcraft-cli --check-drift --fix
+windowcraft-cli --export-report "C:\report.json"
+windowcraft-cli --open tweaks --inspect telemetry
+windowcraft-cli --open settings
+```
+
+The installers put `windowcraft-cli.exe` next to `windowcraft.exe`. A shell waits for it and gets its exit code, which `windowcraft.exe` cannot give because it is a GUI program. The portable build has only `windowcraft.exe`; in PowerShell use `Start-Process -Wait` or pipe it to `Out-Null`.
+
+`--config` takes a profile exported from the Tweaks page. Without `--run`, a preset or profile opens in the interface for review. Commands that change the system need an elevated terminal. `--export-report` writes a report of the system and the applied tweaks with no user name, computer name or path in it.
+
+## Safety
+
+Every change writes its previous value to the snapshot database before the first write. A tweak that fails reverts itself and the rest of the queue goes on. A rollback lists what it could not undo, and the session then shows "Partly rolled back".
+
+A rollback turns off the Windows features WindowCraft turned on and leaves the ones that were already on. Parent features that DISM enabled along with them stay on. Rolling back `reg-backup` deletes its task, and rolling back OpenSSH Server removes its firewall rule. Removed packages, uninstalled apps and BitLocker decryption cannot be undone, and WindowCraft asks before an irreversible tweak.
+
+These services can never be disabled, whatever a profile says: `RpcSs`, `DcomLaunch`, `LSM`, `BFE`, `mpssvc`, `WinDefend` and `ProfSvc`.
+
+Third-party files that end up running on the machine are pinned. The Adobe hosts block list downloads from a fixed commit and must match a SHA-256 hash, and hosts lists keep sinkhole entries only. Downloaded executables must pass Authenticode before launch. The PowerShell profile on the System page is part of WindowCraft itself, so installing it downloads nothing. It keeps your own profile as a `.bak` copy, and removing it puts that copy back.
+
+USB erasure requires the USB bus, no system volume, a sane disk layout and a matching model, checked again right before the first write. Generated answer files never configure disks, so Setup always asks where to install. The cache cleaner skips ISO Studio work files while an image is mounted or an ISO is open.
+
+Temporary ACL changes live in a `Drop` guard, and the release profile keeps unwinding on so a panic cannot skip it. System files are replaced atomically, with a `.bak` copy.
+
+## Footprint and uninstall
+
+WindowCraft runs no background service, tray icon, update check or telemetry. It adds a scheduled task only when you turn on the automatic check in Settings. It opens a network connection only when you start an action that needs one, for example a package download. The only registry key of its own is `HKLM\SOFTWARE\WindowCraft`, and only when an installer was given `WCLANGUAGE`.
+
+If you close the window during a job, WindowCraft asks first. Quit Anyway cancels the job, and the app exits once it stops.
+
+Its data lives in `%LOCALAPPDATA%\WindowCraft`: Time Machine snapshots, the job log, settings, exports, downloaded tools and ISO Studio work files.
+
+Uninstall from Installed apps in Windows Settings. Uninstall in the Start menu right-click menu opens the same page. The uninstaller closes WindowCraft if it is open, then removes that folder for every user, the `*.wcbak` folders left by Windows Update resets, the `AutoRegBackup` task, every user's drift check task and the registry key. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data.
+
+For the portable build, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation it removes only your own data folder and your own drift check task.
+
+Settings you changed stay after uninstalling: tweaks, removed apps, installed packages including Chocolatey, OpenSSH Server with its firewall rule, restore points and the backups kept beside system files, for example `hosts.bak`.
+
+## Build from source
+
+You need the Rust toolchain from `rust-toolchain.toml`, the MSVC build tools and the Windows SDK.
+
+```bash
+cargo build --release -p windowcraft-app
+```
+
+The binary is `target/release/windowcraft.exe`, with the C runtime linked statically.
+
+To build the installers into `dist/`, run this from PowerShell. It downloads WiX 3.14 into `target/tools` and installs nothing on the machine.
+
+```powershell
+./packaging/build.ps1
+```
+
+For ARM64, run `./packaging/build.ps1 -Architecture arm64`. It needs `rustup target add aarch64-pc-windows-msvc`, the MSVC ARM64 tools and clang on PATH or in `target/tools/llvm`. `./packaging/make-icons.ps1` regenerates the icons and installer images from `crates/windowcraft-app/assets/logo-source.jpg`.
+
+## Tests
+
+```bash
+cargo check --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo test --workspace -- --ignored
+```
+
+The tests do not change live settings. Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete the key on drop, services run against an in-memory table, and native operations go to a recording runner. The `--ignored` tests need network access: they check the pinned downloads, TLS and the DNS benchmark. `crates/windowcraft-engine/tests/real_machine_probe.rs` reads the live system and writes nothing.
+
+`./packaging/verify-install.ps1` installs and uninstalls both packages and checks that nothing stays behind. `crates/windowcraft-app/tests/live_vm.rs` holds the tests that change a real system; they run only in an elevated VirtualBox guest with `WINDOWCRAFT_LIVE_VM=1`. See [docs/VM-TEST-PLAN.md](docs/VM-TEST-PLAN.md).
+
+## Workspace
+
+| Crate | Purpose |
+| :--- | :--- |
+| `windowcraft-physics` | Spring solver, velocity tracking, momentum, gestures, demand-driven timeline |
+| `windowcraft-config` | Typed schemas, embedded catalogs, profiles, global search |
+| `windowcraft-engine` | Win32, COM, WinRT and DISM adapters, snapshots, drift, inspection, scheduled tasks |
+| `windowcraft-iso` | ISO Studio: WIM bindings, answer files, drivers, FAT32, USB guard |
+| `windowcraft-app` | Graphical interface, settings and translations |
+| `windowcraft-cli` | Console program that waits and returns exit codes |
+
+The interface draws on the GPU through `wgpu` with its Direct3D 12 backend only. On a computer without a Direct3D 12 GPU, such as a virtual machine without 3D acceleration, it draws on the CPU through `tiny-skia`. Set `ICED_BACKEND=tiny-skia` or `ICED_BACKEND=wgpu` to choose yourself.
+
+The two paths cost different amounts. Measured on one PC with the Applications page open, the GPU path used a 113 MB working set and the CPU path 32 MB. On a 2560 by 1440 window a scrolled frame took about 36 ms on the CPU, which is too slow for eased scrolling, while the GPU path kept up with a 164 Hz display. Only the CPU path shows Mica behind the sidebar, because only its GDI surface keeps an alpha channel that DWM composites.
 
 ## Code signing policy
 
@@ -72,92 +186,8 @@ This program will not transfer any information to other networked systems unless
 
 The actions that do connect are the ones a user starts: installing or updating packages through [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/) or [Chocolatey](https://chocolatey.org/privacy), downloading a Windows 11 ISO or a tool such as `OOSU10.exe`, the DNS benchmark, and the pinned downloads listed under Safety. Those services have their own privacy policies, for example [Microsoft's](https://privacy.microsoft.com/privacystatement) for WinGet and Windows downloads.
 
-## Command line
+## License
 
-```bash
-windowcraft-cli --preset standard --run
-windowcraft-cli --config "C:\path\to\config.json" --run
-windowcraft-cli --check-drift --fix
-windowcraft-cli --export-report "C:\report.json"
-windowcraft-cli --open tweaks --inspect telemetry
-```
-
-The installers put `windowcraft-cli.exe` next to `windowcraft.exe`. A shell waits for it and gets its exit code, which `windowcraft.exe` cannot give because it is a GUI program. The portable build has only `windowcraft.exe`; in PowerShell use `Start-Process -Wait` or pipe it to `Out-Null`.
-
-`--config` takes WindowCraft profiles and WinUtil JSON files. Without `--run`, a preset or config opens in the interface for review. Commands that change the system need an elevated terminal.
-
-## Safety
-
-Every change writes its previous value to the snapshot database before the first write. A tweak that fails reverts itself and the rest of the queue goes on. A rollback lists what it could not undo, and the session then shows "Partly rolled back".
-
-A rollback turns off the Windows features WindowCraft turned on and leaves the ones that were already on. Parent features that DISM enabled along with them stay on. Rolling back `reg-backup` deletes its task, and rolling back OpenSSH Server removes its firewall rule. Removed packages, uninstalled apps and BitLocker decryption cannot be undone.
-
-These services can never be disabled, whatever a config says: `RpcSs`, `DcomLaunch`, `LSM`, `BFE`, `mpssvc`, `WinDefend` and `ProfSvc`.
-
-Third-party files that end up running on the machine are pinned. The CTT PowerShell profile and the Adobe hosts block list download from a fixed commit and must match a SHA-256 hash. Hosts lists keep sinkhole entries only. Downloaded executables must pass Authenticode before launch.
-
-USB erasure requires the USB bus, no system volume, a sane disk layout and a matching model, checked again right before the first write. Generated answer files never configure disks, so Setup always asks where to install. The cache cleaner skips ISO Studio work files while an image is mounted or an ISO is open.
-
-Temporary ACL changes live in a `Drop` guard, and the release profile keeps unwinding on so a panic cannot skip it. System files are replaced atomically, with a `.bak` copy.
-
-## Footprint
-
-WindowCraft runs no background service, tray icon, scheduled task, update check or telemetry. It opens a network connection only when you start an action that needs one, for example a package download. The only registry key of its own is `HKLM\SOFTWARE\WindowCraft`, and only when an installer was given `WCLANGUAGE`.
-
-If you close the window during a job, WindowCraft asks first. Quit Anyway cancels the job, and the app exits once it stops.
-
-Its data lives in `%LOCALAPPDATA%\WindowCraft`: Time Machine snapshots, the job log, settings, exports, downloaded tools and ISO Studio work files.
-
-An uninstall closes WindowCraft if it is open, then removes that folder for every user, the `*.wcbak` folders left by Windows Update resets, the `AutoRegBackup` task and the registry key. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data. For the portable build, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation it removes only your own data folder.
-
-Settings you changed stay after uninstalling: tweaks, removed apps, installed packages including Chocolatey, OpenSSH Server with its firewall rule, restore points and the backups kept beside system files, for example `hosts.bak`.
-
-## Build
-
-You need the Rust toolchain from `rust-toolchain.toml`, the MSVC build tools and the Windows SDK.
-
-```bash
-cargo build --release -p windowcraft-app
-```
-
-The binary is `target/release/windowcraft.exe`, with the C runtime linked statically. It starts unelevated, and the sidebar badge restarts it as administrator.
-
-To build the installers into `dist/`, run this from PowerShell. It downloads WiX 3.14 into `target/tools` and installs nothing on the machine.
-
-```powershell
-./packaging/build.ps1
-```
-
-For ARM64, run `./packaging/build.ps1 -Architecture arm64`. It needs `rustup target add aarch64-pc-windows-msvc`, the MSVC ARM64 tools and clang on PATH or in `target/tools/llvm`. `./packaging/make-icons.ps1` regenerates the icons and installer images from `crates/windowcraft-app/assets/logo-source.jpg`.
-
-`./packaging/verify-install.ps1` installs and uninstalls both packages and checks that nothing stays behind. Run it from an elevated PowerShell on a machine you can afford to change. First runs of the system-changing features belong in a virtual machine, see [docs/VM-TEST-PLAN.md](docs/VM-TEST-PLAN.md).
-
-## Verify
-
-```bash
-cargo check --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo test --workspace -- --ignored
-```
-
-The tests do not change live settings. Registry tests are confined to `HKCU\Software\WindowCraft_TestSandbox` and delete the key on drop, services run against an in-memory table, and native operations go to a recording runner. The `--ignored` tests need network access: they check the pinned downloads, TLS and the DNS benchmark. `crates/windowcraft-engine/tests/real_machine_probe.rs` reads the live system and writes nothing. When elevated, one DISM test reads feature states and changes nothing.
-
-## Workspace
-
-| Crate | Purpose |
-| :--- | :--- |
-| `windowcraft-physics` | Spring solver, velocity tracking, momentum, gestures, demand-driven timeline |
-| `windowcraft-config` | Typed schemas, embedded catalogs, profiles, global search |
-| `windowcraft-engine` | Win32, COM, WinRT and DISM adapters, snapshots, drift, inspection |
-| `windowcraft-iso` | ISO Studio: WIM bindings, answer files, drivers, FAT32, USB guard |
-| `windowcraft-app` | Graphical interface and translations |
-| `windowcraft-cli` | Console program that waits and returns exit codes |
-
-The interface draws on the GPU through `wgpu` with its Direct3D 12 backend only. On a computer without a Direct3D 12 GPU, such as a virtual machine without 3D acceleration, it draws on the CPU through `tiny-skia`, not on WARP, the software rasterizer of Direct3D that wgpu can fall back to. Set `ICED_BACKEND=tiny-skia` or `ICED_BACKEND=wgpu` to choose yourself.
-
-The two paths cost different amounts. Measured on one PC with the Applications page open, the GPU path used a 113 MB working set and the CPU path 32 MB. The CPU path paints every frame itself: on a 2560 by 1440 window a scrolled frame took about 36 ms, which is too slow for eased scrolling, while the GPU path kept up with a 164 Hz display. Only the CPU path shows Mica behind the sidebar, because only its GDI surface keeps an alpha channel that DWM composites.
-
-See [NOTICE.md](NOTICE.md) for catalog and WiX attribution and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for Rust crate notices.
+WindowCraft is under the MIT License, see [LICENSE](LICENSE). [NOTICE.md](NOTICE.md) lists the third-party material in the repository and the installers, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) the licenses of the Rust crates.
 
 Made by ycangignacy.

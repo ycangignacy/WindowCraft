@@ -29,6 +29,7 @@ pub enum Icon {
     Chevron,
     Folder,
     Terminal,
+    Gear,
 }
 
 impl Icon {
@@ -56,6 +57,7 @@ impl Icon {
             Self::Chevron => r#"<path d="M9.5 6l6 6-6 6"/>"#,
             Self::Folder => r#"<path d="M3.75 7.5A2 2 0 0 1 5.75 5.5h3.5l2 2.25h7a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2H5.75a2 2 0 0 1-2-2V7.5z"/>"#,
             Self::Terminal => r#"<rect x="3.25" y="4.75" width="17.5" height="14.5" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"/>"#,
+            Self::Gear => r#"<path d="M10.33 5.3 10.73 2.99h2.54l.4 2.31a6.9 6.9 0 0 1 1.88.79l1.93-1.36 1.79 1.79-1.36 1.93a6.9 6.9 0 0 1 .79 1.88l2.31.4v2.54l-2.31.4a6.9 6.9 0 0 1-.79 1.88l1.36 1.93-1.79 1.79-1.93-1.36a6.9 6.9 0 0 1-1.88.79l-.4 2.31h-2.54l-.4-2.31a6.9 6.9 0 0 1-1.88-.79l-1.93 1.36-1.79-1.79 1.36-1.93a6.9 6.9 0 0 1-.79-1.88l-2.31-.4v-2.54l2.31-.4a6.9 6.9 0 0 1 .79-1.88L4.73 6.52l1.79-1.79 1.93 1.36a6.9 6.9 0 0 1 1.88-.79z"/><circle cx="12" cy="12" r="2.75"/>"#,
         }
     }
 
@@ -79,7 +81,7 @@ impl Icon {
 mod tests {
     use super::*;
 
-    const ALL_ICONS: [Icon; 22] = [
+    const ALL_ICONS: [Icon; 23] = [
         Icon::Apps,
         Icon::Tweaks,
         Icon::Wrench,
@@ -102,6 +104,7 @@ mod tests {
         Icon::Chevron,
         Icon::Folder,
         Icon::Terminal,
+        Icon::Gear,
     ];
 
     #[test]

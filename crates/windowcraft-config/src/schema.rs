@@ -242,6 +242,8 @@ pub struct ChoiceOption {
 #[serde(deny_unknown_fields)]
 pub struct Tweak {
     pub id: String,
+    /// WinUtil's id for the same item, filled from `winutil-import.json`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub legacy_id: String,
     pub name: String,
     pub description: String,
@@ -290,6 +292,8 @@ pub enum FeatureKind {
 #[serde(deny_unknown_fields)]
 pub struct Feature {
     pub id: String,
+    /// WinUtil's id for the same item, filled from `winutil-import.json`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub legacy_id: String,
     pub name: String,
     pub description: String,
@@ -315,6 +319,8 @@ pub struct Feature {
 #[serde(deny_unknown_fields)]
 pub struct AppxPackage {
     pub id: String,
+    /// WinUtil's id for the same item, filled from `winutil-import.json`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub legacy_id: String,
     pub name: String,
     pub category: String,

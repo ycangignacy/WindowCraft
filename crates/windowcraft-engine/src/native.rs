@@ -19,10 +19,10 @@ use windowcraft_config::{AclRights, App, NativeOp};
 
 const SHORT: Duration = Duration::from_secs(120);
 const LONG: Duration = Duration::from_secs(60 * 60);
-/// The CTT profile at a reviewed commit. Update both values together after
-/// reading the new version: it runs in every PowerShell 7 session.
-const PROFILE_URL: &str = "https://raw.githubusercontent.com/ChrisTitusTech/powershell-profile/daa7ba227573de2a97739f15762f2ec231817925/Microsoft.PowerShell_profile.ps1";
-const PROFILE_SHA256: &str = "e249c4f838b72fcaea0742c1922b6542567b42afcf11a9462d7bbc0f163e1ade";
+/// WindowCraft's own PowerShell 7 profile, built into the executable.
+const PROFILE: &str = include_str!("../assets/powershell-profile.ps1");
+/// First line of that profile, which tells it apart from the user's own.
+const PROFILE_MARKER: &str = "# WindowCraft PowerShell profile";
 
 /// Runs against the live system.
 #[derive(Debug, Default, Clone, Copy)]
@@ -116,25 +116,50 @@ fn remove_onedrive(cancel: &CancelToken) -> Result<()> {
     shell::restart_explorer()
 }
 
-fn install_profile(cancel: &CancelToken) -> Result<()> {
-    let target = powershell_profile_path()?;
+fn profile_backup(target: &Path) -> PathBuf {
+    target.with_file_name(format!(
+        "{}.bak",
+        target.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+    ))
+}
+
+/// Writes the WindowCraft profile to `target`. The user's own profile goes to
+/// `.bak` first. Installing over an earlier WindowCraft profile keeps that
+/// backup, so removing it later still restores the user's file.
+fn install_profile_at(target: &Path) -> Result<()> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|e| EngineError::io(parent.display().to_string(), e))?;
     }
-    block_on(download(PROFILE_URL, &target.with_extension("wc-new"), Some(PROFILE_SHA256), cancel, |_, _| {}))??;
-    let content =
-        std::fs::read(target.with_extension("wc-new")).map_err(|e| EngineError::io(target.display().to_string(), e))?;
-    atomic_write(&target, &content)?;
-    let _ = std::fs::remove_file(target.with_extension("wc-new"));
-    Ok(())
+    let ours = std::fs::read_to_string(target).is_ok_and(|text| text.starts_with(PROFILE_MARKER));
+    let backup = profile_backup(target);
+    let kept = if ours { std::fs::read(&backup).ok() } else { None };
+    atomic_write(target, PROFILE.as_bytes())?;
+    match kept {
+        Some(content) => std::fs::write(&backup, content).map_err(|e| EngineError::io(backup.display().to_string(), e)),
+        // Nothing of the user's existed, so the copy atomic_write made is ours.
+        None if ours => {
+            let _ = std::fs::remove_file(&backup);
+            Ok(())
+        }
+        None => Ok(()),
+    }
+}
+
+fn install_profile() -> Result<()> {
+    install_profile_at(&powershell_profile_path()?)
 }
 
 fn uninstall_profile() -> Result<()> {
-    let target = powershell_profile_path()?;
-    let backup = target.with_file_name(format!(
-        "{}.bak",
-        target.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-    ));
+    uninstall_profile_at(&powershell_profile_path()?)
+}
+
+fn uninstall_profile_at(target: &Path) -> Result<()> {
+    let target = target.to_path_buf();
+    // A profile the user wrote after installing ours is theirs to keep.
+    if std::fs::read_to_string(&target).is_ok_and(|text| !text.starts_with(PROFILE_MARKER)) {
+        return Ok(());
+    }
+    let backup = profile_backup(&target);
     if backup.exists() {
         std::fs::rename(&backup, &target).map_err(|e| EngineError::io(target.display().to_string(), e))
     } else {
@@ -193,6 +218,11 @@ impl NativeRunner for SystemRunner {
             NativeOp::RemoveAppx { pattern } => appx::remove(pattern, cancel).map(drop),
             NativeOp::MarkAppxEndOfLife { pattern } => appx::mark_end_of_life(pattern),
             NativeOp::Hibernate { enabled } => {
+                // Firmware without S4 has nothing to turn back on, and powercfg
+                // fails there, which used to fail the rollback of this tweak.
+                if *enabled && !power::firmware_supports_hibernation() {
+                    return Ok(());
+                }
                 let state = if *enabled { "on" } else { "off" };
                 run_ok(&system32("powercfg.exe"), &["/hibernate", state], cancel, SHORT).map(drop)
             }
@@ -302,7 +332,7 @@ impl NativeRunner for SystemRunner {
             NativeOp::FixWinget => fixes::repair_winget(),
             NativeOp::FixNtp => fixes::configure_ntp(cancel),
             NativeOp::PowershellProfile { install } => {
-                if *install { install_profile(cancel) } else { uninstall_profile() }
+                if *install { install_profile() } else { uninstall_profile() }
             }
             NativeOp::SshServer => crate::ssh::install_server(),
             NativeOp::RemoveSshFirewallRule => crate::ssh::remove_firewall_rule(),
@@ -334,15 +364,40 @@ impl NativeRunner for SystemRunner {
 mod tests {
     use super::*;
 
-    /// Reaches GitHub, so it only runs with `--ignored`. A failure means the
-    /// pinned commit or its hash no longer match.
-    #[tokio::test]
-    #[ignore = "needs network access"]
-    async fn pinned_powershell_profile_matches_its_hash() {
+    #[test]
+    fn the_profile_starts_with_its_marker_and_downloads_nothing() {
+        assert!(PROFILE.starts_with(PROFILE_MARKER));
+        for word in ["Invoke-WebRequest", "Invoke-RestMethod", "irm ", "iwr ", "DownloadString", "http"] {
+            assert!(!PROFILE.contains(word), "the profile must not reach the network: {word}");
+        }
+    }
+
+    #[test]
+    fn installing_backs_up_the_users_profile_once_and_removing_restores_it() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("profile.ps1");
-        download(PROFILE_URL, &path, Some(PROFILE_SHA256), &CancelToken::new(), |_, _| {}).await.unwrap();
-        assert!(std::fs::read_to_string(&path).unwrap().contains("function Update-Profile"));
+        let target = dir.path().join(r"PowerShell\Microsoft.PowerShell_profile.ps1");
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(&target, "# mine\n").unwrap();
+
+        install_profile_at(&target).unwrap();
+        install_profile_at(&target).unwrap();
+        assert!(std::fs::read_to_string(&target).unwrap().starts_with(PROFILE_MARKER));
+        assert_eq!(std::fs::read_to_string(profile_backup(&target)).unwrap(), "# mine\n");
+
+        uninstall_profile_at(&target).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "# mine\n");
+        assert!(!profile_backup(&target).exists());
+    }
+
+    #[test]
+    fn without_a_profile_of_the_users_removing_leaves_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("Microsoft.PowerShell_profile.ps1");
+        install_profile_at(&target).unwrap();
+        install_profile_at(&target).unwrap();
+        assert!(!profile_backup(&target).exists(), "a backup of our own profile must not count as the user's");
+        uninstall_profile_at(&target).unwrap();
+        assert!(!target.exists());
     }
 
     /// Fetches every pinned hosts block list in the catalog. Needs network.
