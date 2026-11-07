@@ -1,8 +1,9 @@
 # Release Checklist
 
-Status as of 2026-11-07: 1.0.2 is the current stable release. It draws on the GPU through wgpu
-(Direct3D 12) with tiny-skia as the fallback, and eases wheel scrolling; see
-`docs/RELEASE-NOTES-1.0.2.md`. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer
+Status as of 2026-11-07: 1.0.3 is the current stable release. It fixes the Control Panel applet
+buttons, closes an open WindowCraft on uninstall (KB-9) and replaces the two entries of KB-10; see
+`docs/RELEASE-NOTES-1.0.3.md`. 1.0.2 moved drawing to the GPU through wgpu (Direct3D 12) with
+tiny-skia as the fallback. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer
 alone. 0.1.0 and 1.0.0 were pre-releases.
 
 The system-changing features ran for the first time on a live system on 2026-11-04: Windows 11
@@ -97,9 +98,12 @@ The workflows have never run. Expect fixes on the first run.
 - [x] Settings shows exactly one WindowCraft entry after `setup.exe`. Of the two uninstall keys,
       the MSI one has `SystemComponent=1`, so only the `setup.exe` entry is listed (1.0.0).
 - [ ] Uninstall with two user profiles: data must go from both. Only one was tested.
-- [x] Uninstall while WindowCraft is running. Exit 0, files and data removed, but the window keeps
-      running (KB-9). WiX `CloseApplication` was tried and did not reach the window from the
-      quiet uninstall, so it was not kept.
+- [x] Uninstall while WindowCraft is running. In 1.0.2 the window kept running (KB-9); WiX
+      `CloseApplication` did not reach it from the quiet uninstall. 1.0.3 runs
+      `windowcraft.exe --close-running` as SYSTEM before it removes files. In the VM the MSI and
+      `setup.exe` uninstall closed the window, exit 0, nothing left.
+- [ ] Uninstall from Settings with the full MSI interface while WindowCraft is open. Windows may
+      show its "files in use" dialog before the close step runs.
 - [ ] Junction safety when elevated. It passed unelevated, and uninstall runs as SYSTEM.
 - [ ] Clean Windows 11 install with no Visual C++ runtime.
 - [ ] Oldest supported Windows 11, build 22000, and the refusal on Windows 10.
@@ -157,14 +161,15 @@ The workflows have never run. Expect fixes on the first run.
 | KB-8 | Enabled DISM features stayed enabled after a rollback. | 1.0.0: feature steps record `was_on` from `DismGetFeatureInfo`, and a rollback disables only those that were off. Sessions from 0.1.0 still roll back partly. |
 | SEC-1 | The CTT PowerShell profile came from a moving `main` branch. | 1.0.0: pinned to commit `daa7ba2` with SHA-256. The profile still updates itself weekly from `main`; that is upstream behavior and is in the release notes. |
 | SEC-2 | The Adobe block list came from a moving branch. | 1.0.0: pinned to commit `3512d92` with SHA-256, and validation rejects unpinned lists. |
+| KB-9 | Uninstalling while WindowCraft was open left the window running. | 1.0.3: the uninstaller runs `windowcraft.exe --close-running` as SYSTEM before it removes files. Checked in the VM for the MSI and `setup.exe`. |
+| KB-10 | `setup.exe` of 1.0.2 over `setup.exe` of 1.0.2-rc1 left two "WindowCraft 1.0.2" entries in Installed apps. | 1.0.3: `setup.exe` of a higher version replaces both. Checked in the VM. |
+| KB-11 | The ten `.cpl` buttons on the System page failed with "ShellExecuteW failed" and 0x0000001F, because `cplfile` has no `open` verb. | 1.0.3: applets open through `control.exe`, other targets with their default verb. |
 
 ### Open
 
 | ID | Severity | Issue | Workaround |
 | :--- | :--- | :--- | :--- |
 | SEC-3 | Low | `OOSU10.exe` and `Autologon.exe` have no pinned hash, because the vendors serve them from fixed "latest" URLs. Authenticode verifies the publisher signature. | None needed. |
-| KB-10 | Low | `setup.exe` of 1.0.2 over `setup.exe` of 1.0.2-rc1 leaves two "WindowCraft 1.0.2" entries in Installed apps; the WiX 3 engine keeps a related bundle of the same version. | Uninstall the pre-release first. Removing the entry installed first leaves 1.0.2 in place (tested in the VM). |
-| KB-9 | Low | Uninstalling while WindowCraft is open removes the files and data, and the open window keeps running until it is closed. | Close WindowCraft before you uninstall. |
 
 ## 6. Known limitations
 
@@ -207,7 +212,7 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 407 pass in 1.0.0, 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
+| Unit and integration tests | 432 pass in 1.0.3 (407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
 | GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |

@@ -108,7 +108,17 @@
                  Before="PurgeUserData" Sequence="execute" />
     <CustomAction Id="PurgeUserData" BinaryKey="WixCA" DllEntry="WixQuietExec64"
                   Execute="deferred" Impersonate="no" Return="ignore" />
+    <!-- An open WindowCraft window holds its exe and Time Machine database, and
+         a window in the user's session cannot be asked to close from the
+         installer service. So removing this version, alone or as part of an
+         upgrade, first ends every process started from INSTALLFOLDER, as
+         SYSTEM, and waits for it to exit. -->
+    <SetProperty Id="CloseRunningApp" Value="&quot;[INSTALLFOLDER]windowcraft.exe&quot; --close-running"
+                 Before="CloseRunningApp" Sequence="execute" />
+    <CustomAction Id="CloseRunningApp" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
     <InstallExecuteSequence>
+      <Custom Action="CloseRunningApp" Before="PurgeUserData">REMOVE="ALL"</Custom>
       <Custom Action="PurgeUserData" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>
 

@@ -3,6 +3,7 @@
 
 use std::fmt;
 use windowcraft_config::{SearchKind, StartupType, TweakGroup};
+use windowcraft_engine::Drift;
 use windowcraft_engine::autoruns::EntrySource;
 use windowcraft_engine::gaming::{DeviceClass, InterruptPriority};
 use windowcraft_engine::snapshot::SessionState;
@@ -281,6 +282,8 @@ pub enum Msg {
     // Time Machine Page
     ConfigurationDrift,
     DriftDetailFormat,
+    DriftResetFormat,
+    DriftResetByUpdateFormat,
     NoChangesRecorded,
     SnapshotTimeline,
     JustNow,
@@ -572,6 +575,8 @@ impl Msg {
         Self::IsoBundleAppsDetail,
         Self::ConfigurationDrift,
         Self::DriftDetailFormat,
+        Self::DriftResetFormat,
+        Self::DriftResetByUpdateFormat,
         Self::NoChangesRecorded,
         Self::SnapshotTimeline,
         Self::JustNow,
@@ -767,6 +772,15 @@ pub fn format_2(pattern: &str, a: &str, b: &str) -> String {
 
 pub fn format_3(pattern: &str, a: &str, b: &str, c: &str) -> String {
     fill(pattern, &[a, b, c])
+}
+
+/// The drift banner text, or None when nothing drifted.
+pub fn drift_summary(lang: Language, drifted: &[Drift]) -> Option<String> {
+    if drifted.is_empty() {
+        return None;
+    }
+    let pattern = if drifted.iter().any(|drift| drift.after_update) { Msg::DriftResetByUpdateFormat } else { Msg::DriftResetFormat };
+    Some(format_1(t(lang, pattern), &drifted.len().to_string()))
 }
 
 pub fn session_state(lang: Language, state: SessionState) -> &'static str {
@@ -1041,6 +1055,8 @@ fn en(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Configuration Drift",
         Msg::DriftDetailFormat => "{}: expected {}, found {}",
+        Msg::DriftResetFormat => "Tweaks reset since they were applied: {}",
+        Msg::DriftResetByUpdateFormat => "Tweaks reset by a recent Windows Update: {}",
         Msg::NoChangesRecorded => "No changes recorded yet. Every apply creates a snapshot here.",
         Msg::SnapshotTimeline => "Snapshot Timeline",
         Msg::JustNow => "Just now",
@@ -1329,6 +1345,8 @@ fn pl(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Niezgodność konfiguracji",
         Msg::DriftDetailFormat => "{}: oczekiwano {}, znaleziono {}",
+        Msg::DriftResetFormat => "Optymalizacje cofnięte od ich zastosowania: {}",
+        Msg::DriftResetByUpdateFormat => "Optymalizacje cofnięte przez ostatnią aktualizację Windows: {}",
         Msg::NoChangesRecorded => "Brak zarejestrowanych zmian. Każde zastosowanie tworzy tutaj migawkę.",
         Msg::SnapshotTimeline => "Oś czasu migawek",
         Msg::JustNow => "Przed chwilą",
@@ -1617,6 +1635,8 @@ fn de(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Konfigurationsabweichung",
         Msg::DriftDetailFormat => "{}: erwartet {}, gefunden {}",
+        Msg::DriftResetFormat => "Seit dem Anwenden zurückgesetzte Tweaks: {}",
+        Msg::DriftResetByUpdateFormat => "Durch ein aktuelles Windows-Update zurückgesetzte Tweaks: {}",
         Msg::NoChangesRecorded => "Noch keine Änderungen aufgezeichnet. Jeder Vorgang erstellt einen Snapshot.",
         Msg::SnapshotTimeline => "Snapshot-Zeitachse",
         Msg::JustNow => "Gerade eben",
@@ -1905,6 +1925,8 @@ fn fr(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Dérive de configuration",
         Msg::DriftDetailFormat => "{}: attendu {}, trouvé {}",
+        Msg::DriftResetFormat => "Ajustements réinitialisés depuis leur application : {}",
+        Msg::DriftResetByUpdateFormat => "Ajustements réinitialisés par une mise à jour Windows récente : {}",
         Msg::NoChangesRecorded => "Aucune modification enregistrée. Chaque action crée un instantané ici.",
         Msg::SnapshotTimeline => "Chronologie des instantanés",
         Msg::JustNow => "À l'instant",
@@ -2193,6 +2215,8 @@ fn es(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Desviación de configuración",
         Msg::DriftDetailFormat => "{}: esperado {}, encontrado {}",
+        Msg::DriftResetFormat => "Ajustes restablecidos desde que se aplicaron: {}",
+        Msg::DriftResetByUpdateFormat => "Ajustes restablecidos por una actualización reciente de Windows: {}",
         Msg::NoChangesRecorded => "No hay cambios registrados. Cada aplicación crea una instantánea aquí.",
         Msg::SnapshotTimeline => "Línea de tiempo de instantáneas",
         Msg::JustNow => "Hace un momento",
@@ -2481,6 +2505,8 @@ fn it(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Discrepanza di configurazione",
         Msg::DriftDetailFormat => "{}: atteso {}, trovato {}",
+        Msg::DriftResetFormat => "Ottimizzazioni ripristinate dopo l'applicazione: {}",
+        Msg::DriftResetByUpdateFormat => "Ottimizzazioni ripristinate da un recente aggiornamento di Windows: {}",
         Msg::NoChangesRecorded => "Nessuna modifica registrata. Ogni operazione crea un punto di ripristino.",
         Msg::SnapshotTimeline => "Cronologia snapshot",
         Msg::JustNow => "Proprio ora",
@@ -2769,6 +2795,8 @@ fn pt_br(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Desvio de configuração",
         Msg::DriftDetailFormat => "{}: esperado {}, encontrado {}",
+        Msg::DriftResetFormat => "Ajustes redefinidos desde que foram aplicados: {}",
+        Msg::DriftResetByUpdateFormat => "Ajustes redefinidos por uma atualização recente do Windows: {}",
         Msg::NoChangesRecorded => "Nenhuma alteração registrada ainda. Cada operação cria um ponto de restauração.",
         Msg::SnapshotTimeline => "Linha do tempo de instantâneos",
         Msg::JustNow => "Agora mesmo",
@@ -3057,6 +3085,8 @@ fn uk(msg: Msg) -> &'static str {
 
         Msg::ConfigurationDrift => "Відхилення конфігурації",
         Msg::DriftDetailFormat => "{}: очікувалося {}, знайдено {}",
+        Msg::DriftResetFormat => "Налаштування, скинуті після застосування: {}",
+        Msg::DriftResetByUpdateFormat => "Налаштування, скинуті нещодавнім оновленням Windows: {}",
         Msg::NoChangesRecorded => "Змін ще не записано. Кожна дія створює тут знімок системи.",
         Msg::SnapshotTimeline => "Хронологія знімків",
         Msg::JustNow => "Щойно",
@@ -3291,6 +3321,25 @@ mod tests {
         assert_eq!(p(12), "aplikacji");
         assert_eq!(p(22), "aplikacje");
         assert_eq!(p(25), "aplikacji");
+    }
+
+    #[test]
+    fn drift_summary_is_translated_and_names_the_cause() {
+        let drift = |after_update| Drift {
+            tweak_id: "t".into(),
+            tweak_name: "T".into(),
+            entries: Vec::new(),
+            after_update,
+        };
+        assert_eq!(drift_summary(Language::En, &[]), None);
+        assert_eq!(
+            drift_summary(Language::En, &[drift(false), drift(false)]).unwrap(),
+            "Tweaks reset since they were applied: 2"
+        );
+        assert_eq!(
+            drift_summary(Language::Pl, &[drift(false), drift(true)]).unwrap(),
+            "Optymalizacje cofnięte przez ostatnią aktualizację Windows: 2"
+        );
     }
 
     #[test]

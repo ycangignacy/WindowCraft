@@ -168,7 +168,7 @@ fn center(app: &App, p: Palette) -> El<'_> {
     };
 
     let mut main = Column::new().push(toolbar);
-    if let Some(summary) = windowcraft_engine::Engine::drift_summary(&app.drift)
+    if let Some(summary) = i18n::drift_summary(app.language, &app.drift)
         && app.page != Page::TimeMachine
     {
         main = main.push(
@@ -862,14 +862,15 @@ fn change_row<'a>(lang: Language, p: Palette, view: &'a ChangeView) -> El<'a> {
 
 fn time_machine(app: &App, p: Palette) -> El<'_> {
     let mut sections = Column::new().spacing(16);
-    if let Some(summary) = windowcraft_engine::Engine::drift_summary(&app.drift) {
+    if let Some(summary) = i18n::drift_summary(app.language, &app.drift) {
         sections = sections.push(banner(p, Icon::Alert, p.amber, summary, vec![(t(app.language, Msg::ReApply), Message::RepairDrift)]));
         let rows: Vec<El<'_>> = app
             .drift
             .iter()
             .flat_map(|drift| {
                 drift.entries.iter().map(move |(target, expected, live)| {
-                    list_row(p, None, drift.tweak_name.as_str(), format!("{target}: expected {expected}, found {live}"), dot(p.amber), None)
+                    let detail = format_3(t(app.language, Msg::DriftDetailFormat), target, expected, live);
+                    list_row(p, None, drift.tweak_name.as_str(), detail, dot(p.amber), None)
                 })
             })
             .collect();

@@ -107,6 +107,24 @@ function New-UserData([string] $Name) {
     Set-ItemProperty -Path $image -Name IsReadOnly -Value $true
 }
 
+# KB-9: uninstall must close an open window instead of leaving it running.
+function Start-OpenWindow([string] $Name) {
+    $process = Start-Process -FilePath $exe -PassThru
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($process.MainWindowHandle -eq 0 -and -not $process.HasExited -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+        $process.Refresh()
+    }
+    Test-Check "$Name opened a WindowCraft window before uninstall" ($process.MainWindowHandle -ne 0)
+    $process
+}
+
+function Test-WindowClosed([string] $Name, $Process) {
+    $Process.Refresh()
+    Test-Check "$Name uninstall closed the open window" $Process.HasExited
+    if (-not $Process.HasExited) { $Process | Stop-Process -Force }
+}
+
 function Get-Leftover {
     $installer = Get-ItemProperty 'HKLM:\SOFTWARE\Classes\Installer\Products\*' -ErrorAction SilentlyContinue |
         Where-Object ProductName -EQ 'WindowCraft' | ForEach-Object { $_.PSPath }
@@ -168,7 +186,9 @@ try {
         $code = Invoke-Installer 'msiexec.exe' @('/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$msiLog`"")
         Test-Installed 'MSI' $code
         New-UserData 'MSI'
+        $open = Start-OpenWindow 'MSI'
         $code = Invoke-Installer 'msiexec.exe' @('/x', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$(Join-Path $package "msi-uninstall-$round.log")`"")
+        Test-WindowClosed 'MSI' $open
         Test-Removed 'MSI' $code
         Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -187,7 +207,9 @@ try {
         $code = Invoke-Installer $setup @('/quiet', '/norestart')
         Test-Installed 'setup.exe' $code
         New-UserData 'setup.exe'
+        $open = Start-OpenWindow 'setup.exe'
         $code = Invoke-Installer $setup @('/uninstall', '/quiet', '/norestart', '/log', "`"$(Join-Path $package "setup-uninstall-$round.log")`"")
+        Test-WindowClosed 'setup.exe' $open
         Test-Removed 'setup.exe' $code
         Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
     }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 - 2026-11-07
+
+Bug fixes. Nothing that changes the system is different from 1.0.2.
+
+- The ten Control Panel buttons on the System page that open a `.cpl` applet (Mouse, Network Connections, Power, Programs and Features, Region, Security and Maintenance, Sound, System Properties, Time and Date, Windows Defender Firewall) failed with "ShellExecuteW failed for main.cpl" and error 0x0000001F. Windows has no `open` verb for `.cpl` files, so the request failed, and code 31 was then shown with the unrelated system message for ERROR_GEN_FAILURE. Applets now open through `control.exe`, every other target opens with its default verb, and an error shows the real Windows message. Declining the UAC prompt for Windows Restore no longer shows an error.
+- Uninstalling while WindowCraft is open closes it (KB-9). Before it removes files, the uninstaller ends every WindowCraft process started from the program folder and waits for it to exit. An upgrade from 1.0.3 to a later version does the same when it removes 1.0.3. A job that is still running stops as if the process had crashed.
+- `windowcraft.exe --close-running` is the command the uninstaller uses for this.
+- If 1.0.2-rc1 and 1.0.2 were both installed with `setup.exe`, Installed apps listed WindowCraft twice (KB-10). `setup.exe` of 1.0.3 replaces both entries with one (checked in the VM).
+- The configuration drift banner and the drift details on the Time Machine page were in English in every language. They are translated now.
+
 ## 1.0.2 - 2026-11-07
 
 Smooth scrolling and a GPU renderer. Nothing that changes the system is different from 1.0.1.

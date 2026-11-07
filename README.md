@@ -35,15 +35,15 @@ Names and descriptions of catalog entries (apps, tweaks, features) stay in Engli
 `setup.exe` shows its pages in the Windows display language as well. An administrator can preset the language for every user with `WCLANGUAGE`:
 
 ```powershell
-msiexec /i WindowCraft-1.0.1-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.0.1-x64-setup.exe WCLANGUAGE=de
+msiexec /i WindowCraft-1.0.3-x64.msi WCLANGUAGE=pl /qn
+.\WindowCraft-1.0.3-x64-setup.exe WCLANGUAGE=de
 ```
 
 The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`. A user's own choice in the app wins over the preset.
 
 ## Download
 
-Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases). Release notes for 1.0.1 are in [docs/RELEASE-NOTES-1.0.1.md](docs/RELEASE-NOTES-1.0.1.md).
+Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases). Release notes for 1.0.3 are in [docs/RELEASE-NOTES-1.0.3.md](docs/RELEASE-NOTES-1.0.3.md).
 
 | File | Use it when |
 | :--- | :--- |
@@ -108,7 +108,7 @@ If you close the window during a job, WindowCraft asks first. Quit Anyway cancel
 
 Its data lives in `%LOCALAPPDATA%\WindowCraft`: Time Machine snapshots, the job log, settings, exports, downloaded tools and ISO Studio work files.
 
-An uninstall removes that folder for every user, the `*.wcbak` folders left by Windows Update resets, the `AutoRegBackup` task and the registry key. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data. For the portable build, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation it removes only your own data folder.
+An uninstall closes WindowCraft if it is open, then removes that folder for every user, the `*.wcbak` folders left by Windows Update resets, the `AutoRegBackup` task and the registry key. Time Machine history goes with it, so roll changes back first if you want them undone. An upgrade keeps your data. For the portable build, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Without elevation it removes only your own data folder.
 
 Settings you changed stay after uninstalling: tweaks, removed apps, installed packages including Chocolatey, OpenSSH Server with its firewall rule, restore points and the backups kept beside system files, for example `hosts.bak`.
 

@@ -45,6 +45,9 @@ pub struct Cli {
     /// Delete WindowCraft's own data, including Time Machine snapshots. Changes already applied stay and can no longer be rolled back
     #[arg(long, conflicts_with_all = ["run", "check_drift", "export_report"])]
     pub purge_data: bool,
+    /// End every WindowCraft process started from this folder. The uninstaller runs it before it removes files
+    #[arg(long, conflicts_with_all = ["run", "check_drift", "export_report", "purge_data"])]
+    pub close_running: bool,
 }
 
 /// Newtype so clap can parse the app's page enum.
@@ -74,7 +77,7 @@ impl std::str::FromStr for PresetArg {
 impl Cli {
     /// True when any flag asks for headless work.
     pub fn is_headless(&self) -> bool {
-        self.run || self.check_drift || self.export_report.is_some() || self.purge_data
+        self.run || self.check_drift || self.export_report.is_some() || self.purge_data || self.close_running
     }
 }
 
@@ -95,6 +98,9 @@ fn load_profile(cli: &Cli, catalog: &Catalog) -> Result<ResolvedProfile, String>
 }
 
 fn run(cli: &Cli) -> Result<(), String> {
+    if cli.close_running {
+        return close_running();
+    }
     // Before the engine, which would recreate the data folder.
     if cli.purge_data {
         return purge();
@@ -148,6 +154,15 @@ fn run(cli: &Cli) -> Result<(), String> {
             return Err(format!("{} items failed", summary.failed.len()));
         }
     }
+    Ok(())
+}
+
+fn close_running() -> Result<(), String> {
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let folder = executable.parent().ok_or("the executable has no folder")?;
+    let ended = windowcraft_engine::shell::close_processes_in(folder, std::time::Duration::from_secs(10))
+        .map_err(|e| e.to_string())?;
+    println!("WindowCraft processes closed in {}: {ended}", folder.display());
     Ok(())
 }
 
@@ -248,6 +263,13 @@ mod tests {
     }
 
     #[test]
+    fn close_running_is_headless_and_stands_alone() {
+        assert!(parse(&["--close-running"]).unwrap().is_headless());
+        assert!(parse(&["--close-running", "--purge-data"]).is_err());
+        assert!(parse(&["--close-running", "--run", "--preset", "minimal"]).is_err());
+    }
+
+    #[test]
     fn config_files_load_from_disk() {
         let catalog = Catalog::load().unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -263,6 +285,7 @@ mod tests {
             open: None,
             inspect: None,
             purge_data: false,
+            close_running: false,
         };
         assert_eq!(load_profile(&cli, &catalog).unwrap().profile.tweaks, ["activity"]);
     }
