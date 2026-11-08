@@ -46,7 +46,7 @@ Windows updates and other programs sometimes set a value back after it was chang
 
 WindowCraft starts as a standard user. The badge at the top of the sidebar restarts it as administrator, which most changes need.
 
-Checksums are in `SHA256SUMS.txt`. The builds are not code-signed yet, so SmartScreen warns on first run; see the code signing policy below.
+Checksums are in `SHA256SUMS.txt`. The builds are not code-signed yet, so SmartScreen warns on first run. Free code signing is provided by [SignPath.io](https://about.signpath.io), with the certificate by [SignPath Foundation](https://signpath.org), once the application is granted; see the [code signing policy](#code-signing-policy).
 
 Every feature that changes the system ran on Windows 11 Home 26H2 in VirtualBox before 1.0.1, and the 1.1.0 changes ran there again, including an apply and rollback of each of the 54 tweaks that can be undone. Create a restore point before you apply changes anyway. Every preset starts with one.
 
