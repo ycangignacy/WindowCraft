@@ -264,6 +264,65 @@ pub async fn pick_open_file(title: &'static str, label: &'static str, pattern: &
     task.await.ok().flatten()
 }
 
+/// Shows the open dialog with multiple selection. The picked files are kept
+/// out of the Recent list of Windows.
+pub async fn pick_open_files(title: &'static str, label: &'static str, pattern: &'static str) -> Vec<PathBuf> {
+    use windows::Win32::UI::Shell::{FOS_ALLOWMULTISELECT, FOS_DONTADDTORECENT, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM};
+    let task = tokio::task::spawn_blocking(move || {
+        // SAFETY: As in `pick_open_file`. Items are read on this thread only.
+        unsafe {
+            if CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_err() {
+                return Vec::new();
+            }
+            let result = (|| {
+                let dialog: IFileOpenDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+                let (name, spec) = (HSTRING::from(label), HSTRING::from(pattern));
+                let filter = [COMDLG_FILTERSPEC {
+                    pszName: windows::core::PCWSTR(name.as_ptr()),
+                    pszSpec: windows::core::PCWSTR(spec.as_ptr()),
+                }];
+                dialog.SetFileTypes(&filter).ok()?;
+                let options = dialog.GetOptions().ok()?;
+                dialog
+                    .SetOptions(options | FOS_ALLOWMULTISELECT | FOS_DONTADDTORECENT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM)
+                    .ok()?;
+                dialog.SetTitle(&HSTRING::from(title)).ok()?;
+                dialog.Show(None).ok()?;
+                let items = dialog.GetResults().ok()?;
+                let count = items.GetCount().ok()?;
+                Some((0..count).filter_map(|index| items.GetItemAt(index).ok().and_then(dialog_path)).collect::<Vec<_>>())
+            })();
+            CoUninitialize();
+            result.unwrap_or_default()
+        }
+    });
+    task.await.unwrap_or_default()
+}
+
+/// Shows the open dialog in folder mode.
+pub async fn pick_folder(title: &'static str) -> Option<PathBuf> {
+    use windows::Win32::UI::Shell::{FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS};
+    let task = tokio::task::spawn_blocking(move || {
+        // SAFETY: As in `pick_open_file`.
+        unsafe {
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().ok()?;
+            let result = (|| {
+                let dialog: IFileOpenDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+                let options = dialog.GetOptions().ok()?;
+                dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_DONTADDTORECENT).ok()?;
+                dialog.SetTitle(&HSTRING::from(title)).ok()?;
+                dialog.Show(None).ok()?;
+                dialog_path(dialog.GetResult().ok()?)
+            })();
+            CoUninitialize();
+            result
+        }
+    });
+    task.await.ok().flatten()
+}
+
 /// Shows the system save dialog on a dedicated STA thread.
 pub async fn pick_save_file(title: &'static str, default_name: &'static str) -> Option<PathBuf> {
     let task = tokio::task::spawn_blocking(move || {

@@ -73,11 +73,24 @@ pub fn run(
     args: &[&str],
     cancel: &CancelToken,
     timeout: Duration,
+    on_line: impl FnMut(&str),
+) -> Result<Output> {
+    run_with_env(program, args, &[], cancel, timeout, on_line)
+}
+
+/// Like `run`, with extra environment variables for the child.
+pub fn run_with_env(
+    program: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+    cancel: &CancelToken,
+    timeout: Duration,
     mut on_line: impl FnMut(&str),
 ) -> Result<Output> {
     let name = program.file_name().map_or_else(|| program.display().to_string(), |n| n.to_string_lossy().into_owned());
     let child = Command::new(program)
         .args(args)
+        .envs(env.iter().copied())
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

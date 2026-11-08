@@ -29,6 +29,9 @@ pub enum EngineError {
     Network(String),
     #[error("checksum mismatch for {file}: expected {expected}, got {actual}")]
     Checksum { file: String, expected: String, actual: String },
+    /// A sentence already written for the user, shown as it is.
+    #[error("{0}")]
+    Message(String),
     #[error("{target}: {source}")]
     Io {
         target: String,

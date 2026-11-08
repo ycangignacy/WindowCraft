@@ -21,6 +21,10 @@ use windowcraft_engine::error::Result as EngineResult;
 use windowcraft_engine::fixes;
 use windowcraft_engine::gaming::{self, InterruptPriority, PciDevice, TimerResolution};
 use windowcraft_engine::jobs::{self, CancelToken, JobContext, JobEvent, LogRing};
+use windowcraft_engine::metadata;
+use windowcraft_engine::convert;
+use windowcraft_engine::tools::{self, Extension};
+use windowcraft_engine::youtube::{self, Format, Stage};
 use windowcraft_engine::packages::{self, InstalledProgram, PackageManager};
 use windowcraft_engine::snapshot::{ChangeRecord, Session};
 use windowcraft_engine::sysinfo::{self, SystemInfo};
@@ -53,12 +57,14 @@ pub enum Page {
     Iso,
     TimeMachine,
     Inspector,
+    /// Optional tools, each installed on its own. Last in the sidebar.
+    Extensions,
     /// Opened from the gear at the bottom of the sidebar, so not in `ALL`.
     Settings,
 }
 
 impl Page {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Applications,
         Self::Tweaks,
         Self::System,
@@ -66,6 +72,7 @@ impl Page {
         Self::Iso,
         Self::TimeMachine,
         Self::Inspector,
+        Self::Extensions,
     ];
 
     pub fn title(self) -> &'static str {
@@ -79,6 +86,7 @@ impl Page {
             Self::System => t(lang, Msg::PageSystem),
             Self::Updates => t(lang, Msg::PageUpdates),
             Self::Iso => t(lang, Msg::PageIso),
+            Self::Extensions => t(lang, Msg::PageExtensions),
             Self::TimeMachine => t(lang, Msg::PageTimeMachine),
             Self::Inspector => t(lang, Msg::PageInspector),
             Self::Settings => t(lang, Msg::PageSettings),
@@ -101,11 +109,12 @@ impl std::str::FromStr for Page {
             "system" => Ok(Self::System),
             "updates" => Ok(Self::Updates),
             "iso" => Ok(Self::Iso),
+            "extensions" | "misc" => Ok(Self::Extensions),
             "timemachine" => Ok(Self::TimeMachine),
             "inspector" => Ok(Self::Inspector),
             "settings" => Ok(Self::Settings),
             other => Err(format!(
-                "unknown module '{other}'; expected applications, tweaks, system, updates, iso, timemachine, inspector or settings"
+                "unknown module '{other}'; expected applications, tweaks, system, updates, iso, timemachine, inspector, extensions or settings"
             )),
         }
     }
@@ -310,6 +319,20 @@ pub enum Message {
     IsoRefreshDisks,
     IsoDisks(Vec<DiskFacts>),
     IsoWriteUsb(u32),
+    // Extensions
+    InstallExtension(Extension),
+    UninstallExtension(Extension),
+    StripPick,
+    StripPicked(Vec<PathBuf>),
+    VideoUrl(String),
+    VideoFormat(Format),
+    VideoFolder(String),
+    VideoBrowseFolder,
+    VideoFolderPicked(Option<PathBuf>),
+    VideoDownload,
+    ConvertTarget(convert::Target),
+    ConvertPick,
+    ConvertPicked(Vec<PathBuf>),
     // Time Machine
     Refreshed(Vec<Session>, Vec<Drift>),
     SelectSession(u64),
@@ -366,6 +389,9 @@ pub struct ActiveJob {
     pub cancel: CancelToken,
     pub log: LogRing,
     pub queue: Option<Queue>,
+    /// Keeps the job out of windowcraft.log, because its steps and summary
+    /// name the user's files or the video.
+    pub private: bool,
 }
 
 pub struct IsoState {
@@ -379,6 +405,30 @@ pub struct IsoState {
     pub bundle_apps: bool,
     pub output: String,
     pub disks: Vec<DiskFacts>,
+}
+
+pub struct MiscState {
+    pub url: String,
+    pub format: Format,
+    pub folder: String,
+    pub target: convert::Target,
+    /// Read when the page opens and after each job, not on every frame.
+    pub installed: Vec<Extension>,
+    /// ffmpeg is there, from the additional formats or the YouTube downloader.
+    pub ffmpeg: bool,
+}
+
+impl MiscState {
+    pub fn has(&self, extension: Extension) -> bool {
+        self.installed.contains(&extension)
+    }
+}
+
+pub fn format_index(format: Format) -> f64 {
+    match format {
+        Format::Mp4 => 0.0,
+        Format::Mp3 => 1.0,
+    }
 }
 
 pub struct App {
@@ -396,6 +446,8 @@ pub struct App {
     pub query: String,
     pub hits: Vec<SearchHit>,
     pub notice: Option<String>,
+    /// The notice text when it reports a failed job, so it gets a warning icon.
+    pub notice_failed: Option<String>,
     pub modifiers: Modifiers,
     pub timeline: Timeline,
     epoch: Instant,
@@ -420,6 +472,7 @@ pub struct App {
     pub fix_modes: BTreeMap<String, String>,
     pub update_mode: String,
     pub iso: IsoState,
+    pub misc: MiscState,
     // Time Machine
     pub sessions: Vec<Session>,
     pub drift: Vec<Drift>,
@@ -455,6 +508,134 @@ pub struct App {
     pub needs_elevation: bool,
     pub last_log_label: String,
     pub last_log: Vec<String>,
+}
+
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |name| name.to_string_lossy().into_owned())
+}
+
+/// Progress share and localized step line while a tool is fetched.
+fn tool_step(lang: Language, stage: tools::Stage) -> (f32, String) {
+    match stage {
+        tools::Stage::Fetching(tool, received, Some(total)) if total > 0 => (
+            received as f32 / total as f32,
+            i18n::format_3(t(lang, Msg::StepFetchingTool), tool.name(), &(received >> 20).to_string(), &(total >> 20).to_string()),
+        ),
+        tools::Stage::Fetching(tool, received, _) => {
+            (0.0, format_2(t(lang, Msg::StepFetchingToolNoTotal), tool.name(), &(received >> 20).to_string()))
+        }
+        tools::Stage::Unpacking(tool) => (1.0, format_1(t(lang, Msg::StepUnpackingTool), tool.name())),
+        tools::Stage::Retrying(tool, attempt) => (0.0, format_2(t(lang, Msg::StepRetrying), tool.name(), &attempt.to_string())),
+    }
+}
+
+/// Progress share and localized step line for a downloader stage.
+fn stage_step(lang: Language, stage: Stage) -> (f32, String) {
+    match stage {
+        Stage::Tools(stage) => tool_step(lang, stage),
+        Stage::Downloading(fraction, part) => (
+            fraction,
+            format_2(t(lang, Msg::StepDownloadingPart), &part.to_string(), &format!("{:.0}", fraction * 100.0)),
+        ),
+        Stage::Converting => (1.0, t(lang, Msg::StepConverting).to_owned()),
+        Stage::Cleaning => (1.0, t(lang, Msg::StepCleaningMetadata).to_owned()),
+    }
+}
+
+pub fn extension_name(lang: Language, extension: Extension) -> &'static str {
+    match extension {
+        Extension::Stripper => t(lang, Msg::MiscStripperGroup),
+        Extension::Converter => t(lang, Msg::ConverterGroup),
+        Extension::Ffmpeg => t(lang, Msg::FfmpegGroup),
+        Extension::YouTube => t(lang, Msg::MiscDownloaderGroup),
+    }
+}
+
+/// Turns a network failure into a sentence about GitHub. The reqwest text
+/// names the status in brackets, for example "(504 Gateway Timeout)".
+fn readable(lang: Language, error: EngineError) -> EngineError {
+    match error {
+        EngineError::Network(detail) => {
+            let status = detail
+                .split_once('(')
+                .and_then(|(_, rest)| rest.split_once(')'))
+                .map(|(status, _)| status.to_owned())
+                .filter(|status| status.chars().next().is_some_and(|c| c.is_ascii_digit()))
+                .unwrap_or(detail);
+            EngineError::Message(format_1(t(lang, Msg::NoticeGithubUnavailable), &status))
+        }
+        other => other,
+    }
+}
+
+/// Converts each file next to itself. Fails only when no file could be converted.
+fn convert_files(lang: Language, files: &[PathBuf], target: convert::Target, context: &JobContext) -> EngineResult<String> {
+    // WindowCraft converts what it can itself; ffmpeg, when installed, does the rest.
+    let tools = tools::Tools::in_dir(&tools::tools_dir());
+    let ffmpeg = tools.has(tools::Tool::Ffmpeg).then_some(&tools);
+    let mut saved: Vec<PathBuf> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    let count = files.len() as f32;
+    for (index, file) in files.iter().enumerate() {
+        context.cancel.check()?;
+        let step = format!("{} / {}: {}", index + 1, files.len(), file_name(file));
+        context.progress(index as f32 / count, step.clone());
+        let result = convert::convert_file(ffmpeg, file, target, &context.cancel, |share| {
+            context.progress((index as f32 + share) / count, step.clone());
+        });
+        match result {
+            Ok(output) => saved.push(output),
+            Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
+            Err(error) => {
+                let reason = match &error {
+                    EngineError::Invalid(kind) if kind == "NoPicture" => t(lang, Msg::ConvertNoPicture).to_owned(),
+                    EngineError::Invalid(kind) if kind == "NoVideo" => t(lang, Msg::ConvertNoVideo).to_owned(),
+                    EngineError::Invalid(kind) if kind == "NoAudio" => t(lang, Msg::ConvertNoAudio).to_owned(),
+                    EngineError::Unsupported(_) => t(lang, Msg::ConvertUnreadable).to_owned(),
+                    EngineError::NotFound(what) if what == "ffmpeg" => t(lang, Msg::ConvertNeedsFfmpeg).to_owned(),
+                    other => other.to_string(),
+                };
+                failed.push(format!("{}: {reason}", file_name(file)));
+            }
+        }
+    }
+    let Some(first) = saved.first() else {
+        return Err(EngineError::Message(failed.first().cloned().unwrap_or_default()));
+    };
+    let mut summary = format_2(t(lang, Msg::NoticeConverted), &saved.len().to_string(), &file_name(first));
+    if let Some(error) = failed.first() {
+        summary.push(' ');
+        summary.push_str(&format_2(t(lang, Msg::NoticeFailures), &failed.len().to_string(), error));
+    }
+    Ok(summary)
+}
+
+/// Writes a clean copy of each file. Fails only when no file could be cleaned.
+fn strip_files(lang: Language, files: &[PathBuf], context: &JobContext) -> EngineResult<String> {
+    let ffmpeg = tools::installed_ffmpeg();
+    let mut saved: Vec<PathBuf> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    for (index, file) in files.iter().enumerate() {
+        context.cancel.check()?;
+        context.progress(index as f32 / files.len() as f32, format!("{} / {}", index + 1, files.len()));
+        match metadata::strip_file(file, ffmpeg.as_deref(), &context.cancel) {
+            Ok(result) => saved.push(result.output),
+            Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
+            Err(EngineError::NotFound(_)) => {
+                failed.push(format!("{}: {}", file_name(file), t(lang, Msg::MiscStripperFormats)));
+            }
+            Err(error) => failed.push(format!("{}: {error}", file_name(file))),
+        }
+    }
+    let Some(first) = saved.first() else {
+        return Err(EngineError::Message(failed.first().cloned().unwrap_or_default()));
+    };
+    let mut summary = format_2(t(lang, Msg::NoticeStripped), &saved.len().to_string(), &file_name(first));
+    if let Some(error) = failed.first() {
+        summary.push(' ');
+        summary.push_str(&format_2(t(lang, Msg::NoticeFailures), &failed.len().to_string(), error));
+    }
+    Ok(summary)
 }
 
 /// Input box id for `Ctrl+K`.
@@ -500,6 +681,7 @@ impl App {
             query: String::new(),
             hits: Vec::new(),
             notice: None,
+            notice_failed: None,
             modifiers: Modifiers::default(),
             timeline,
             epoch: Instant::now(),
@@ -529,6 +711,14 @@ impl App {
                 bundle_apps: false,
                 output: String::new(),
                 disks: Vec::new(),
+            },
+            misc: MiscState {
+                url: String::new(),
+                format: Format::Mp4,
+                folder: youtube::downloads_dir().display().to_string(),
+                target: convert::Target::Png,
+                installed: Vec::new(),
+                ffmpeg: false,
             },
             sessions: Vec::new(),
             drift: Vec::new(),
@@ -656,6 +846,19 @@ impl App {
         self.start_queue_job(label, None, body)
     }
 
+    /// Starts a job that writes nothing to windowcraft.log.
+    fn start_private_job(
+        &mut self,
+        label: &str,
+        body: impl FnOnce(&JobContext) -> EngineResult<String> + Send + 'static,
+    ) -> Task<Message> {
+        let task = self.start_queue_job(label, None, body);
+        if let Some(job) = &mut self.job {
+            job.private = true;
+        }
+        task
+    }
+
     /// Starts a job. `queue` is cleared only if this job succeeds, so a quick
     /// toggle never wipes a selection the user is still building.
     fn start_queue_job(
@@ -676,6 +879,7 @@ impl App {
             cancel: handle.cancel.clone(),
             log: handle.log.clone(),
             queue,
+            private: false,
         });
         self.update_dock();
         if let Some(window) = self.window {
@@ -724,6 +928,11 @@ impl App {
             Page::Applications => self.animate(TAB, manager_index(self.manager)),
             Page::Tweaks => self.animate(TAB, self.tab.index() as f64),
             Page::Inspector => self.animate(TAB, self.inspector_tab.index() as f64),
+            Page::Extensions => {
+                self.animate(TAB, format_index(self.misc.format));
+                self.misc.installed = tools::installed();
+                self.misc.ffmpeg = tools::installed_ffmpeg().is_some();
+            }
             _ => {}
         }
         self.update_dock();
@@ -1321,6 +1530,105 @@ impl App {
                     self.confirm = Some(Confirm::EraseDisk { number, model: disk.model.clone() });
                 }
             }
+            Message::StripPick => {
+                return Task::perform(
+                    platform::pick_open_files(
+                        t(self.language, Msg::DialogSelectMediaTitle),
+                        t(self.language, Msg::DialogMediaLabel),
+                        metadata::SUPPORTED_PATTERN,
+                    ),
+                    Message::StripPicked,
+                );
+            }
+            Message::StripPicked(files) => {
+                if files.is_empty() {
+                    return Task::none();
+                }
+                let lang = self.language;
+                return self.start_private_job(t(lang, Msg::JobStrippingMetadata), move |context| {
+                    strip_files(lang, &files, context)
+                });
+            }
+            Message::VideoUrl(url) => self.misc.url = url,
+            Message::VideoFormat(format) => {
+                self.misc.format = format;
+                self.animate(TAB, format_index(format));
+            }
+            Message::VideoFolder(folder) => self.misc.folder = folder,
+            Message::VideoBrowseFolder => {
+                return Task::perform(
+                    platform::pick_folder(t(self.language, Msg::DialogSelectFolderTitle)),
+                    Message::VideoFolderPicked,
+                );
+            }
+            Message::VideoFolderPicked(folder) => {
+                if let Some(folder) = folder {
+                    self.misc.folder = folder.display().to_string();
+                }
+            }
+            Message::VideoDownload => {
+                let url = self.misc.url.trim().to_owned();
+                if !youtube::is_youtube_url(&url) {
+                    self.notice = Some(t(self.language, Msg::NoticeInvalidYoutubeUrl).to_owned());
+                    return Task::none();
+                }
+                let folder = if self.misc.folder.trim().is_empty() {
+                    youtube::downloads_dir()
+                } else {
+                    PathBuf::from(self.misc.folder.trim())
+                };
+                let (lang, format) = (self.language, self.misc.format);
+                return self.start_private_job(t(lang, Msg::JobDownloadingVideo), move |context| {
+                    let report = |stage: Stage| {
+                        let (fraction, step) = stage_step(lang, stage);
+                        context.progress(fraction, step);
+                    };
+                    let tools = tools::ready(Extension::YouTube, &context.cancel, |stage| report(Stage::Tools(stage)))
+                        .map_err(|error| readable(lang, error))?;
+                    let saved = youtube::download_video(&tools, &url, format, &folder, &context.cancel, report)?;
+                    Ok(format_1(t(lang, Msg::NoticeVideoSaved), &file_name(&saved)))
+                });
+            }
+            Message::InstallExtension(extension) => {
+                let lang = self.language;
+                let name = extension_name(lang, extension);
+                return self.start_private_job(&format_1(t(lang, Msg::JobInstallingExtension), name), move |context| {
+                    tools::install(extension, &context.cancel, |stage| {
+                        let (fraction, step) = tool_step(lang, stage);
+                        context.progress(fraction, step);
+                    })
+                    .map_err(|error| readable(lang, error))?;
+                    Ok(format_1(t(lang, Msg::NoticeExtensionInstalled), name))
+                });
+            }
+            Message::UninstallExtension(extension) => {
+                let lang = self.language;
+                let name = extension_name(lang, extension);
+                return self.start_private_job(&format_1(t(lang, Msg::JobRemovingExtension), name), move |_| {
+                    tools::uninstall(extension)?;
+                    Ok(format_1(t(lang, Msg::NoticeExtensionRemoved), name))
+                });
+            }
+            Message::ConvertTarget(target) => self.misc.target = target,
+            Message::ConvertPick => {
+                return Task::perform(
+                    platform::pick_open_files(
+                        t(self.language, Msg::DialogConvertTitle),
+                        t(self.language, Msg::DialogConvertLabel),
+                        convert::INPUT_PATTERN,
+                    ),
+                    Message::ConvertPicked,
+                );
+            }
+            Message::ConvertPicked(files) => {
+                if files.is_empty() {
+                    return Task::none();
+                }
+                let (lang, target) = (self.language, self.misc.target);
+                return self.start_private_job(&format_1(t(lang, Msg::JobConverting), target.label()), move |context| {
+                    convert_files(lang, &files, target, context)
+                });
+            }
             Message::Refreshed(sessions, drift) => {
                 self.sessions = sessions;
                 self.drift = drift;
@@ -1738,12 +2046,18 @@ impl App {
                 let job = self.job.take();
                 let label = job.as_ref().map(|job| job.label.clone()).unwrap_or_default();
                 let queue = job.as_ref().and_then(|job| job.queue);
+                let private = job.as_ref().is_some_and(|job| job.private);
                 let mut lines = job.map_or_else(Vec::new, |job| job.log.snapshot());
                 lines.push(match &outcome {
                     Ok(summary) => summary.clone(),
                     Err(error) => format!("Failed: {error}"),
                 });
-                actions::append_log(&windowcraft_engine::win::local_app_dir().join("windowcraft.log"), &label, &lines);
+                if private {
+                    self.misc.installed = tools::installed();
+                self.misc.ffmpeg = tools::installed_ffmpeg().is_some();
+                } else {
+                    actions::append_log(&windowcraft_engine::win::local_app_dir().join("windowcraft.log"), &label, &lines);
+                }
                 self.last_log_label.clone_from(&label);
                 self.last_log = lines;
                 if self.quit_pending {
@@ -1764,6 +2078,7 @@ impl App {
                     Err(error) => {
                         self.needs_elevation = error.contains("administrator rights");
                         self.notice = Some(format!("{label}: {error}"));
+                        self.notice_failed.clone_from(&self.notice);
                     }
                 }
                 self.update_dock();
@@ -2088,6 +2403,7 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: None,
+            private: false,
         }
     }
 
@@ -2134,6 +2450,7 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: Some(Queue::Apps),
+            private: false,
         });
         send(&mut rig.app, Message::Job(JobEvent::Progress { fraction: 0.5, step: "Step".to_owned() }));
         assert_eq!(rig.app.job.as_ref().unwrap().fraction, 0.5);
@@ -2158,6 +2475,7 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: None,
+            private: false,
         });
         send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok("Done".to_owned()) }));
         assert_eq!(rig.app.selected_tweaks.len(), 1, "a toggle must not wipe the queue");
@@ -2174,6 +2492,7 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: Some(Queue::Apps),
+            private: false,
         });
         let error = "administrator rights are required for RegSetValueExW".to_owned();
         send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Err(error) }));

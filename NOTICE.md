@@ -68,6 +68,43 @@ The MIT notice for the Feather icons is:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## LAME
+
+The file converter on the Extensions page encodes MP3 with LAME 4.0, which is
+compiled from source into `windowcraft.exe` through the `mp3lame-sys` and
+`mp3lame-encoder` crates. LAME is Copyright the LAME project
+(<https://lame.sourceforge.io/>) and distributed under the GNU Library General
+Public License, version 2 or later; the two crates are under the GNU Lesser
+General Public License, version 3. Both texts are in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). WindowCraft does not modify
+LAME. The LAME sources it builds are the ones published in `mp3lame-sys` 0.2.0
+on crates.io, and the complete source of WindowCraft is at
+<https://github.com/ycangignacy/WindowCraft>, so `windowcraft.exe` can be
+rebuilt with a changed LAME as described under "Build from source" in the
+README.
+
+## Symphonia
+
+Sound is decoded by Symphonia 0.5 (<https://github.com/pdeljanov/Symphonia>),
+distributed under the Mozilla Public License 2.0. WindowCraft uses it
+unmodified. Its source code is published on crates.io and at the address above,
+and the license text is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Tools fetched by extensions
+
+WindowCraft does not ship yt-dlp, ffmpeg or Deno. The Additional formats and
+YouTube downloader extensions on the Extensions page fetch them from their own
+GitHub releases when you install the extension, and they stay under their own
+licenses:
+
+- yt-dlp (<https://github.com/yt-dlp/yt-dlp>), released into the public domain
+  under the Unlicense.
+- ffmpeg, the builds published by yt-dlp at
+  <https://github.com/yt-dlp/FFmpeg-Builds>, the GPL variant, under the GNU
+  General Public License. The source code is at <https://ffmpeg.org>.
+- Deno (<https://github.com/denoland/deno>), Copyright the Deno authors, under
+  the MIT License.
+
 ## Rust Crates
 
 Notices and licenses for third-party Rust crates used by WindowCraft are in

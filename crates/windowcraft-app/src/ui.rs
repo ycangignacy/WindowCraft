@@ -95,6 +95,16 @@ pub fn group_titled<'a>(p: Palette, title: impl IntoFragment<'a>, rows: Vec<El<'
     .into()
 }
 
+/// A titled group with a badge after the title.
+pub fn group_titled_badged<'a>(p: Palette, title: impl IntoFragment<'a>, tag: El<'a>, rows: Vec<El<'a>>, inset: f32) -> El<'a> {
+    column![
+        container(row![section(title, p.ink_secondary), tag].spacing(8).align_y(Alignment::Center))
+            .padding(Padding { left: 4.0, bottom: 6.0, ..Padding::ZERO }),
+        group(p, rows, inset)
+    ]
+    .into()
+}
+
 /// Standard row: optional leading control, title, monospace detail, trailing.
 pub fn list_row<'a>(
     p: Palette,

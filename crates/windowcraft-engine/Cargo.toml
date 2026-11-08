@@ -20,6 +20,11 @@ thiserror.workspace = true
 tokio.workspace = true
 windows.workspace = true
 windows-collections.workspace = true
+# The file converter. Pure Rust except LAME, which the MP3 encoder builds from C.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "bmp", "ico", "tiff", "webp", "qoi", "tga", "pnm"] }
+symphonia = { version = "0.5", default-features = false, features = ["aac", "alac", "flac", "mp3", "pcm", "vorbis", "adpcm", "isomp4", "mkv", "ogg", "wav", "aiff", "caf"] }
+flacenc = { version = "0.5.1", default-features = false }
+mp3lame-encoder = "0.3.0"
 
 [dev-dependencies]
 tempfile.workspace = true

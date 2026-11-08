@@ -1,8 +1,11 @@
-//! The three-column workspace and its seven modules.
+//! The three-column workspace and its eight modules.
 
 use crate::app::*;
 use crate::i18n::{self, Language, Msg, format_1, format_2, format_3, t};
 use crate::settings::CheckInterval;
+use windowcraft_engine::convert::{Family, Target};
+use windowcraft_engine::tools::Extension;
+use windowcraft_engine::youtube::Format;
 use crate::icons::Icon;
 use crate::press::press;
 use crate::theme::*;
@@ -20,6 +23,8 @@ use windowcraft_engine::snapshot::{Change, SessionState, unix_now};
 /// Wider than the visible hairline, so the edge is easy to grab.
 const DRAWER_GRIP: f32 = 14.0;
 const LOG_LINES_SHOWN: usize = 40;
+/// Marks the extensions whose code is WindowCraft's own.
+const OWN_CODE_BLUE: Color = Color::from_rgb8(0x15, 0x77, 0xA8);
 
 pub fn view(app: &App) -> El<'_> {
     let p = app.palette();
@@ -50,7 +55,7 @@ pub fn view(app: &App) -> El<'_> {
 }
 
 fn sidebar(app: &App, p: Palette) -> El<'_> {
-    const ICONS: [Icon; 7] = [
+    const ICONS: [Icon; 8] = [
         Icon::Apps,
         Icon::Tweaks,
         Icon::Wrench,
@@ -58,6 +63,7 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
         Icon::Disc,
         Icon::Clock,
         Icon::Gauge,
+        Icon::Layers,
     ];
 
     let elevation: El<'_> = if app.info.elevated {
@@ -161,6 +167,7 @@ fn center(app: &App, p: Palette) -> El<'_> {
             Page::System => system(app, p),
             Page::Updates => updates(app, p),
             Page::Iso => iso_studio(app, p),
+            Page::Extensions => extensions_page(app, p),
             Page::TimeMachine => time_machine(app, p),
             Page::Inspector => inspector_page(app, p),
             Page::Settings => settings_page(app, p),
@@ -182,7 +189,11 @@ fn center(app: &App, p: Palette) -> El<'_> {
             actions.insert(0, (t(app.language, Msg::RestartAsAdministrator), Message::Relaunch));
         }
         main = main.push(
-            container(banner(p, Icon::Check, p.ink_secondary, notice.clone(), actions))
+            container(if app.notice_failed.as_ref() == Some(notice) {
+                banner(p, Icon::Alert, p.amber, notice.clone(), actions)
+            } else {
+                banner(p, Icon::Check, p.ink_secondary, notice.clone(), actions)
+            })
                 .padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }),
         );
     }
@@ -805,6 +816,160 @@ fn iso_studio(app: &App, p: Palette) -> El<'_> {
     sections = sections.push(group_titled(p, t(app.language, Msg::IsoConfigurationTitle), options, ROW_INSET));
     sections = sections.push(group_titled(p, t(app.language, Msg::IsoExportTitle), export_rows, ROW_INSET));
     scroll_area(p, sections)
+}
+
+/// A full-width caption row inside a group.
+fn note_row<'a>(text: &'a str, color: Color) -> El<'a> {
+    container(caption(text, color)).width(Length::Fill).padding([10.0, ROW_INSET]).into()
+}
+
+/// Last row of an installed extension: what uninstalling does, and the button.
+fn installed_row(app: &App, p: Palette, extension: Extension) -> El<'_> {
+    let lang = app.language;
+    container(
+        row![
+            caption(t(lang, Msg::ExtInstalled), p.ink_tertiary).width(Length::Fill),
+            button(p, t(lang, Msg::ExtUninstall), Some(Icon::Trash), Tone::Secondary, app.job.is_none().then_some(Message::UninstallExtension(extension))),
+        ]
+        .spacing(16)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding([10.0, ROW_INSET])
+    .into()
+}
+
+/// Rows of an extension that is not installed: what it does, and Install.
+fn install_rows<'a>(app: &'a App, p: Palette, extension: Extension, title: &'a str, detail: &'a str, needs: &'a str) -> Vec<El<'a>> {
+    let lang = app.language;
+    vec![
+        setting_row(
+            p,
+            title,
+            detail,
+            button(p, t(lang, Msg::ExtInstall), Some(Icon::Download), Tone::Primary, app.job.is_none().then_some(Message::InstallExtension(extension))),
+        ),
+        note_row(needs, p.ink_tertiary),
+    ]
+}
+
+fn stripper_rows(app: &App, p: Palette) -> Vec<El<'_>> {
+    let lang = app.language;
+    if !app.misc.has(Extension::Stripper) {
+        return install_rows(app, p, Extension::Stripper, t(lang, Msg::MiscStripperTitle), t(lang, Msg::MiscStripperDetail), t(lang, Msg::ExtStripperNeeds));
+    }
+    vec![
+        setting_row(
+            p,
+            t(lang, Msg::MiscStripperTitle),
+            t(lang, Msg::MiscStripperDetail),
+            button(p, t(lang, Msg::MiscChooseFiles), Some(Icon::Folder), Tone::Primary, app.job.is_none().then_some(Message::StripPick)),
+        ),
+        note_row(t(lang, Msg::MiscStripperFormats), p.ink_tertiary),
+        installed_row(app, p, Extension::Stripper),
+    ]
+}
+
+fn converter_rows(app: &App, p: Palette) -> Vec<El<'_>> {
+    let lang = app.language;
+    if !app.misc.has(Extension::Converter) {
+        return install_rows(app, p, Extension::Converter, t(lang, Msg::ConverterTitle), t(lang, Msg::ConverterDetail), t(lang, Msg::ExtStripperNeeds));
+    }
+    let mut families = Column::new().spacing(8);
+    for (family, msg) in [(Family::Image, Msg::ConverterImage), (Family::Video, Msg::ConverterVideo), (Family::Audio, Msg::ConverterAudio)] {
+        let mut chips = Row::new().spacing(6);
+        for target in Target::ALL.into_iter().filter(|target| target.family() == family) {
+            chips = chips.push(chip(p, target.label().to_owned(), app.misc.target == target, Message::ConvertTarget(target)));
+        }
+        families = families.push(
+            row![caption(t(lang, msg), p.ink_secondary).width(Length::Fixed(90.0)), chips.wrap().vertical_spacing(6)]
+                .spacing(8)
+                .align_y(Alignment::Center),
+        );
+    }
+    vec![
+        setting_row(
+            p,
+            t(lang, Msg::ConverterTitle),
+            t(lang, Msg::ConverterDetail),
+            button(p, t(lang, Msg::MiscChooseFiles), Some(Icon::Folder), Tone::Primary, app.job.is_none().then_some(Message::ConvertPick)),
+        ),
+        container(families).width(Length::Fill).padding([10.0, ROW_INSET]).into(),
+        note_row(if app.misc.ffmpeg { t(lang, Msg::ConverterCopyNote) } else { t(lang, Msg::ConverterNativeNote) }, p.ink_tertiary),
+        installed_row(app, p, Extension::Converter),
+    ]
+}
+
+fn ffmpeg_rows(app: &App, p: Palette) -> Vec<El<'_>> {
+    let lang = app.language;
+    if !app.misc.has(Extension::Ffmpeg) {
+        return install_rows(app, p, Extension::Ffmpeg, t(lang, Msg::FfmpegTitle), t(lang, Msg::FfmpegDetail), t(lang, Msg::ExtFfmpegNeeds));
+    }
+    vec![setting_row(p, t(lang, Msg::FfmpegTitle), t(lang, Msg::FfmpegDetail), space().width(0).into()), installed_row(app, p, Extension::Ffmpeg)]
+}
+
+fn youtube_rows(app: &App, p: Palette) -> Vec<El<'_>> {
+    let lang = app.language;
+    let misc = &app.misc;
+    if !misc.has(Extension::YouTube) {
+        let mut rows = install_rows(app, p, Extension::YouTube, t(lang, Msg::YoutubeTitle), t(lang, Msg::YoutubeDetail), t(lang, Msg::ExtYoutubeNeeds));
+        rows.push(note_row(t(lang, Msg::MiscPrivacyNote), p.ink_tertiary));
+        return rows;
+    }
+    let formats = tabs(p, vec!["MP4", "MP3"], app.timeline.channels[TAB].value(), 64.0, |index| {
+        Message::VideoFormat(if index == 0 { Format::Mp4 } else { Format::Mp3 })
+    });
+    let format_detail = match misc.format {
+        Format::Mp4 => t(lang, Msg::MiscFormatDetailMp4),
+        Format::Mp3 => t(lang, Msg::MiscFormatDetailMp3),
+    };
+    let can_download = app.job.is_none() && !misc.url.trim().is_empty();
+    vec![
+        container(
+            column![
+                row![
+                    input(p, t(lang, Msg::MiscUrlPlaceholder), &misc.url, Message::VideoUrl),
+                    formats,
+                    button(p, t(lang, Msg::Download), Some(Icon::Download), Tone::Primary, can_download.then_some(Message::VideoDownload)),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+                caption(format_detail, p.ink_tertiary),
+            ]
+            .spacing(6),
+        )
+        .padding(ROW_INSET)
+        .into(),
+        container(
+            row![
+                caption(t(lang, Msg::MiscSaveTo), p.ink_secondary),
+                input(p, "", &misc.folder, Message::VideoFolder),
+                button(p, t(lang, Msg::Browse), Some(Icon::Folder), Tone::Secondary, Some(Message::VideoBrowseFolder)),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding([10.0, ROW_INSET])
+        .into(),
+        note_row(t(lang, Msg::MiscPrivacyNote), p.ink_secondary),
+        installed_row(app, p, Extension::YouTube),
+    ]
+}
+
+fn extensions_page(app: &App, p: Palette) -> El<'_> {
+    let lang = app.language;
+    scroll_area(
+        p,
+        column![
+            container(caption(t(lang, Msg::ExtIntro), p.ink_secondary)).padding(Padding { left: 4.0, ..Padding::ZERO }),
+            group_titled_badged(p, t(lang, Msg::MiscStripperGroup), badge(p, t(lang, Msg::ExtOwnCode), OWN_CODE_BLUE), stripper_rows(app, p), ROW_INSET),
+            group_titled_badged(p, t(lang, Msg::ConverterGroup), badge(p, t(lang, Msg::ExtOwnCode), OWN_CODE_BLUE), converter_rows(app, p), ROW_INSET),
+            group_titled(p, t(lang, Msg::FfmpegGroup), ffmpeg_rows(app, p), ROW_INSET),
+            group_titled(p, t(lang, Msg::MiscDownloaderGroup), youtube_rows(app, p), ROW_INSET),
+            container(caption(t(lang, Msg::MiscComingSoon), p.ink_tertiary)).padding(Padding { left: 4.0, ..Padding::ZERO }),
+        ]
+        .spacing(16),
+    )
 }
 
 fn relative_time(lang: Language, unix: u64) -> String {

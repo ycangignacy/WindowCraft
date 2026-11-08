@@ -4,7 +4,7 @@
 
 WindowCraft is a Windows 11 tool for installing apps, removing bloat, applying privacy and performance tweaks, and building custom installation media. It is a native program written in Rust for x64 and ARM64, with no PowerShell scripts behind it. Before every change it records the previous value, so registry, service, task and Windows feature changes can be rolled back later, one change or a whole session at a time.
 
-The current release is 1.1.0. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.1.0.md](docs/RELEASE-NOTES-1.1.0.md) says what changed and what was tested.
+The current release is 1.2.0. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.2.0.md](docs/RELEASE-NOTES-1.2.0.md) says what changed and what was tested.
 
 ![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
 
@@ -19,6 +19,7 @@ The current release is 1.1.0. Downloads are on the [Releases page](https://githu
 | ISO Studio | Answer files, driver injection, app bundles, ISO output and USB writing |
 | Time Machine | Every session with its changes, rollback of a session or of a single change, drift detection |
 | System & Gaming Inspector | MSI interrupt mode, autoruns, cache cleaner, DNS benchmark over UDP, TCP and DoH |
+| Extensions | Optional tools, none installed by default: a metadata stripper, a file converter, additional formats through ffmpeg and a YouTube downloader |
 | Settings | Language, theme and a scheduled check for tweaks that Windows reverted |
 
 The X-Ray Inspector shows, for any tweak, each registry value or service it touches with its current, target and undo value. A colored dot next to each tweak says whether it is applied. Global search (Ctrl+K) covers apps, tweaks, registry keys, services, fixes and AppX packages.
@@ -65,6 +66,21 @@ When one of the two check settings is on, WindowCraft registers a scheduled task
 
 When something was reverted, a Windows notification says how many tweaks, and clicking it opens Time Machine, where Re-apply puts them back. If Windows notifications are turned off, a message box asks instead. While WindowCraft is open the task does nothing, because the window shows the same banner. Turning both settings off deletes the task, and so does uninstalling.
 
+## Extensions
+
+The Extensions page holds tools that are not about Windows itself. None of them is installed by default; each has its own Install button, and Uninstall removes it again.
+
+| Extension | What it does | Downloads |
+| :--- | :--- | :--- |
+| Metadata stripper | Writes a copy of a photo, audio or video file without GPS location, camera data, dates, author, comments, cover art, chapters or encoder names. The copy gets `-clean` in its name. | Nothing |
+| File converter | Converts pictures, video and sound between 21 formats, for example JPG to PNG, MP4 to MKV or FLAC to MP3. Video changes container without re-encoding where the target can hold the streams. | Nothing |
+| Additional formats | ffmpeg, for what WindowCraft cannot do itself: AVIF, AVI, OGG, WMA and HEIC, video re-encoding such as MP4 to WebM, and metadata removal for FLV. | ffmpeg, about 90 MB |
+| YouTube downloader | Saves one video as MP4 or its sound as MP3, without an account, cookies or history. The file goes through the metadata stripper afterwards. | yt-dlp, ffmpeg and Deno, about 150 MB |
+
+Everything runs on the computer and no file is uploaded. The stripper and the converter are written in Rust as part of WindowCraft: pictures through the `image` crate, sound decoding through Symphonia, MP3 encoding through LAME, FLAC through flacenc, and MP4, MOV, MKV, WebM and Ogg through readers and writers of its own. Downloaded tools come from their own GitHub releases, are checked against the SHA-256 the release publishes and are kept in `%LOCALAPPDATA%\WindowCraft\tools`. No extension writes file names or links to the job log.
+
+![The Extensions page](docs/screenshots/extensions.png)
+
 ## Languages
 
 The interface is available in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. On first start WindowCraft uses the Windows display language if it is one of these, and English otherwise. The language list in Settings changes it at once, without a restart. The choice is saved per user in `%LOCALAPPDATA%\WindowCraft\settings.json`.
@@ -74,8 +90,8 @@ Names and descriptions of catalog entries stay in English, and so do error detai
 An administrator can preset the language for every user with `WCLANGUAGE`. A user's own choice in the app wins over the preset.
 
 ```powershell
-msiexec /i WindowCraft-1.1.0-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.1.0-x64-setup.exe WCLANGUAGE=de
+msiexec /i WindowCraft-1.2.0-x64.msi WCLANGUAGE=pl /qn
+.\WindowCraft-1.2.0-x64-setup.exe WCLANGUAGE=de
 ```
 
 The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`.
@@ -89,6 +105,7 @@ windowcraft-cli --check-drift --fix
 windowcraft-cli --export-report "C:\report.json"
 windowcraft-cli --open tweaks --inspect telemetry
 windowcraft-cli --open settings
+windowcraft-cli --open extensions
 ```
 
 The installers put `windowcraft-cli.exe` next to `windowcraft.exe`. A shell waits for it and gets its exit code, which `windowcraft.exe` cannot give because it is a GUI program. The portable build has only `windowcraft.exe`; in PowerShell use `Start-Process -Wait` or pipe it to `Out-Null`.
@@ -184,7 +201,7 @@ Signed files are built by the [release workflow](.github/workflows/release.yml) 
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-The actions that do connect are the ones a user starts: installing or updating packages through [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/) or [Chocolatey](https://chocolatey.org/privacy), downloading a Windows 11 ISO or a tool such as `OOSU10.exe`, the DNS benchmark, and the pinned downloads listed under Safety. Those services have their own privacy policies, for example [Microsoft's](https://privacy.microsoft.com/privacystatement) for WinGet and Windows downloads.
+The actions that do connect are the ones a user starts: installing or updating packages through [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/) or [Chocolatey](https://chocolatey.org/privacy), downloading a Windows 11 ISO or a tool such as `OOSU10.exe`, installing an extension that downloads tools from GitHub, the YouTube downloader, the DNS benchmark, and the pinned downloads listed under Safety. The metadata stripper and the file converter work offline. Those services have their own privacy policies, for example [Microsoft's](https://privacy.microsoft.com/privacystatement) for WinGet and Windows downloads.
 
 ## License
 

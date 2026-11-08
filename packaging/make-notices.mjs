@@ -86,9 +86,21 @@ for (const crate of crates) {
     }
   }
 
+  // mp3lame-sys builds the LAME C sources it bundles into the binary. Its
+  // own LICENSE is the LGPL-3.0; LAME's COPYING (LGPL-2.0) sits one folder down.
+  if (foundDir && crate.name === 'mp3lame-sys') {
+    for (const f of fs.readdirSync(foundDir, { withFileTypes: true })) {
+      const copying = path.join(foundDir, f.name, 'COPYING');
+      if (f.isDirectory() && f.name.startsWith('lame') && fs.existsSync(copying)) {
+        licenseFiles.push(copying);
+      }
+    }
+  }
+
   // These crates publish no license file. iced keeps its text in the root
   // crate, and clipboard-win shares its author and license with error-code.
   // The zune crates offer Apache-2.0, which needs no copyright line.
+  // symphonia 0.5 ships no MPL-2.0 text; symphonia 0.6.1 carries the same one.
   if (licenseFiles.length === 0) {
     const fallback = crate.name.startsWith('iced_')
       ? ['iced-0.14.0', 'LICENSE']
@@ -96,7 +108,9 @@ for (const crate of crates) {
         ? ['error-code-3.4.0', 'LICENSE']
         : crate.name.startsWith('zune-')
           ? ['cfg-if-1.0.5', 'LICENSE-APACHE']
-          : null;
+          : crate.name.startsWith('symphonia')
+            ? ['symphonia-0.6.1', 'LICENSE']
+            : null;
     for (const regDir of registryDirs) {
       if (fallback && fs.existsSync(path.join(regDir, ...fallback))) {
         licenseFiles.push(path.join(regDir, ...fallback));

@@ -65,13 +65,29 @@ pub async fn download(
     destination: &Path,
     expected_sha256: Option<&str>,
     cancel: &CancelToken,
+    progress: impl FnMut(u64, Option<u64>),
+) -> Result<()> {
+    download_accepting(url, None, destination, expected_sha256, cancel, progress).await
+}
+
+/// Like `download`, with an `Accept` header. GitHub's API hands out a
+/// release asset only for `application/octet-stream`.
+pub async fn download_accepting(
+    url: &str,
+    accept: Option<&str>,
+    destination: &Path,
+    expected_sha256: Option<&str>,
+    cancel: &CancelToken,
     mut progress: impl FnMut(u64, Option<u64>),
 ) -> Result<()> {
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent).map_err(|e| EngineError::io(parent.display().to_string(), e))?;
     }
-    let mut response = http_client()?
-        .get(url)
+    let mut request = http_client()?.get(url);
+    if let Some(accept) = accept {
+        request = request.header(reqwest::header::ACCEPT, accept);
+    }
+    let mut response = request
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)
@@ -118,8 +134,15 @@ pub async fn download(
 }
 
 pub async fn fetch_text(url: &str) -> Result<String> {
-    http_client()?
-        .get(url)
+    fetch_text_accepting(url, None).await
+}
+
+pub async fn fetch_text_accepting(url: &str, accept: Option<&str>) -> Result<String> {
+    let mut request = http_client()?.get(url);
+    if let Some(accept) = accept {
+        request = request.header(reqwest::header::ACCEPT, accept);
+    }
+    request
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)

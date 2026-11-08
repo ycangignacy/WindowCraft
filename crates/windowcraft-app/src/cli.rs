@@ -36,7 +36,7 @@ pub struct Cli {
     /// Write a privacy-safe environment report
     #[arg(long, value_name = "PATH")]
     pub export_report: Option<PathBuf>,
-    /// Module to open: applications, tweaks, system, updates, iso, timemachine, inspector or settings
+    /// Module to open: applications, tweaks, system, updates, iso, timemachine, inspector, extensions or settings
     #[arg(long, value_name = "MODULE")]
     pub open: Option<StartPage>,
     /// Open the X-Ray Inspector on a tweak id
@@ -320,6 +320,8 @@ mod tests {
             ("system", Page::System),
             ("updates", Page::Updates),
             ("iso", Page::Iso),
+            ("extensions", Page::Extensions),
+            ("misc", Page::Extensions),
             ("timemachine", Page::TimeMachine),
             ("TimeMachine", Page::TimeMachine),
             ("inspector", Page::Inspector),
