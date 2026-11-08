@@ -43,11 +43,24 @@ pub fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
     if path.exists() {
         let backup = path.with_file_name(format!("{name}.bak"));
         fs::copy(path, &backup).map_err(|e| EngineError::io(backup.display().to_string(), e))?;
-        // SAFETY: All strings are null-terminated and outlive the call.
-        unsafe {
-            ReplaceFileW(pcwstr(&target), pcwstr(&source), PCWSTR::null(), REPLACEFILE_WRITE_THROUGH, None, None)
+        // Defender and the DNS Client open `hosts` for a moment after every
+        // change, so a sharing violation is retried before giving up. With
+        // that error nothing has moved yet, so trying again is safe.
+        let mut attempt = 0u32;
+        loop {
+            // SAFETY: All strings are null-terminated and outlive the call.
+            let replaced = unsafe {
+                ReplaceFileW(pcwstr(&target), pcwstr(&source), PCWSTR::null(), REPLACEFILE_WRITE_THROUGH, None, None)
+            };
+            match replaced {
+                Ok(()) => break,
+                Err(error) if attempt < REPLACE_RETRIES && is_sharing_error(&error) => {
+                    attempt += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(100 << attempt));
+                }
+                Err(error) => return Err(EngineError::windows("ReplaceFileW", label(), &error)),
+            }
         }
-        .map_err(|error| EngineError::windows("ReplaceFileW", label(), &error))?;
     } else {
         // SAFETY: Both strings are null-terminated and outlive the call.
         unsafe { MoveFileExW(pcwstr(&source), pcwstr(&target), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) }
@@ -55,6 +68,16 @@ pub fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
     }
     drop(cleanup);
     Ok(())
+}
+
+/// Retries after 200, 400, 800, 1600 and 3200 ms, about six seconds in all.
+const REPLACE_RETRIES: u32 = 5;
+
+/// ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION: another process has the
+/// file open right now.
+fn is_sharing_error(error: &windows::core::Error) -> bool {
+    let code = error.code();
+    code == windows::core::HRESULT::from_win32(32) || code == windows::core::HRESULT::from_win32(33)
 }
 
 fn begin_marker(section: &str) -> String {
@@ -154,6 +177,23 @@ mod tests {
         let blocked = dir.path().join("no-such-dir").join("target");
         assert!(atomic_write(&blocked, b"new").is_err());
         assert_eq!(fs::read(&path).unwrap(), b"original");
+    }
+
+    #[test]
+    fn a_briefly_held_target_is_replaced_once_it_is_released() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hosts");
+        atomic_write(&path, b"original").unwrap();
+        // Readers may share it, as a scanner does, but nobody may replace it.
+        let held = fs::OpenOptions::new().read(true).share_mode(1).open(&path).unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            drop(held);
+        });
+        atomic_write(&path, b"new").unwrap();
+        release.join().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new");
     }
 
     #[test]

@@ -234,6 +234,13 @@ pub fn chip<'a>(p: Palette, label: String, active: bool, on_press: Message) -> E
 }
 
 /// Segmented control whose highlight slides on a spring.
+/// Width of each tab in a segmented control, wide enough for the longest
+/// label on one line. Labels are 12 px text, which averages under 6 px per
+/// character in Latin and Cyrillic; 6.6 leaves room for wide letters.
+pub fn tab_width(labels: &[&str], minimum: f32) -> f32 {
+    labels.iter().map(|label| label.chars().count() as f32 * 6.6 + 20.0).fold(minimum, f32::max).ceil()
+}
+
 pub fn tabs<'a>(p: Palette, labels: Vec<&'a str>, position: f64, width: f32, select: impl Fn(usize) -> Message) -> El<'a> {
     let total = width * labels.len() as f32;
     let pill = container(

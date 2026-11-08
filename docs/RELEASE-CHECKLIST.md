@@ -1,8 +1,9 @@
 # Release Checklist
 
-Status as of 2026-11-08: 1.1.0 is the current stable release. 1.2.0 is built locally and not
-published yet; it adds the Extensions page (metadata stripper, file converter, ffmpeg, YouTube
-downloader), see `docs/RELEASE-NOTES-1.2.0.md`. 1.0.3 fixed the Control Panel applet buttons, KB-9
+Status as of 2026-11-08: 1.2.0 is the current stable release. 1.2.1 is built locally and not
+published yet; it fixes what the full VM test of 1.2.0 found, see `docs/RELEASE-NOTES-1.2.1.md`.
+1.2.0 added the Extensions page (metadata stripper, file converter, ffmpeg, YouTube downloader),
+see `docs/RELEASE-NOTES-1.2.0.md`. 1.0.3 fixed the Control Panel applet buttons, KB-9
 and KB-10. 1.0.2 moved drawing to the GPU through wgpu (Direct3D 12) with tiny-skia as the
 fallback. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer alone. 0.1.0 and
 1.0.0 were pre-releases.
@@ -218,7 +219,7 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 504 pass in 1.2.0 (449 in 1.1.0, 432 in 1.0.3, 407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
+| Unit and integration tests | 511 pass in 1.2.1 (504 in 1.2.0, 449 in 1.1.0, 432 in 1.0.3, 407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
 | GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |

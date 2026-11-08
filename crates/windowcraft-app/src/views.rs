@@ -174,29 +174,25 @@ fn center(app: &App, p: Palette) -> El<'_> {
         }
     };
 
-    let mut main = Column::new().push(toolbar);
-    if let Some(summary) = i18n::drift_summary(app.language, &app.drift)
-        && app.page != Page::TimeMachine
-    {
-        main = main.push(
-            container(banner(p, Icon::Alert, p.amber, summary, vec![(t(app.language, Msg::ReApply), Message::RepairDrift)]))
-                .padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }),
-        );
-    }
-    if let Some(notice) = &app.notice {
+    // The drift banner and the notice always hold their own slot, empty or
+    // not. Iced matches children by position, so a banner that came and went
+    // in front of the body would hand the body a fresh state and throw the
+    // page back to the top.
+    let drift = i18n::drift_summary(app.language, &app.drift)
+        .filter(|_| app.page != Page::TimeMachine)
+        .map(|summary| banner(p, Icon::Alert, p.amber, summary, vec![(t(app.language, Msg::ReApply), Message::RepairDrift)]));
+    let notice = app.notice.as_ref().map(|notice| {
         let mut actions = vec![(t(app.language, Msg::Dismiss), Message::DismissNotice)];
         if app.needs_elevation {
             actions.insert(0, (t(app.language, Msg::RestartAsAdministrator), Message::Relaunch));
         }
-        main = main.push(
-            container(if app.notice_failed.as_ref() == Some(notice) {
-                banner(p, Icon::Alert, p.amber, notice.clone(), actions)
-            } else {
-                banner(p, Icon::Check, p.ink_secondary, notice.clone(), actions)
-            })
-                .padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }),
-        );
-    }
+        if app.notice_failed.as_ref() == Some(notice) {
+            banner(p, Icon::Alert, p.amber, notice.clone(), actions)
+        } else {
+            banner(p, Icon::Check, p.ink_secondary, notice.clone(), actions)
+        }
+    });
+    let mut main = Column::new().push(toolbar).push(banner_slot(drift)).push(banner_slot(notice));
     // A new page or tab rises into place by a few pixels. The key changes only
     // when the visible module does, so typing or toggling never replays it.
     let module = match app.page {
@@ -213,6 +209,16 @@ fn center(app: &App, p: Palette) -> El<'_> {
         layers = layers.push(dock(app, p, dock_progress));
     }
     layers.width(Length::Fill).height(Length::Fill).into()
+}
+
+/// A banner, or nothing, in a container that stays in the tree either way.
+/// Column::push drops children of zero fixed size, so an empty space alone
+/// would not hold the slot.
+fn banner_slot(content: Option<El<'_>>) -> El<'_> {
+    match content {
+        Some(content) => container(content).padding(Padding { right: 22.0, left: 22.0, bottom: 6.0, ..Padding::ZERO }).into(),
+        None => container(space()).into(),
+    }
 }
 
 fn banner<'a>(p: Palette, icon: Icon, color: Color, content: String, actions: Vec<(&'a str, Message)>) -> El<'a> {
@@ -299,13 +305,11 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
                 .vertical_spacing(8)
                 .into()
         }
-        Page::Inspector => tabs(
-            p,
-            InspectorTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect(),
-            app.timeline.channels[TAB].value(),
-            100.0,
-            |index| Message::InspectorTab(InspectorTab::ALL[index]),
-        ),
+        Page::Inspector => {
+            let labels: Vec<&str> = InspectorTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect();
+            let width = tab_width(&labels, 100.0);
+            tabs(p, labels, app.timeline.channels[TAB].value(), width, |index| Message::InspectorTab(InspectorTab::ALL[index]))
+        }
         _ => space().height(0).into(),
     }
 }
@@ -828,7 +832,8 @@ fn installed_row(app: &App, p: Palette, extension: Extension) -> El<'_> {
     let lang = app.language;
     container(
         row![
-            caption(t(lang, Msg::ExtInstalled), p.ink_tertiary).width(Length::Fill),
+            caption(t(lang, if extension.tools().is_empty() { Msg::ExtInstalledBuiltIn } else { Msg::ExtInstalled }), p.ink_tertiary)
+                .width(Length::Fill),
             button(p, t(lang, Msg::ExtUninstall), Some(Icon::Trash), Tone::Secondary, app.job.is_none().then_some(Message::UninstallExtension(extension))),
         ]
         .spacing(16)

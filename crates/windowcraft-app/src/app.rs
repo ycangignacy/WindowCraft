@@ -2174,6 +2174,17 @@ mod tests {
     use windowcraft_engine::services::MemoryServices;
     use windowcraft_engine::testing::Sandbox;
 
+    #[test]
+    fn inspector_tabs_fit_a_1024_pixel_window_in_every_language() {
+        // 1024 px minus the 220 px sidebar and the 44 px page padding.
+        const ROOM: f32 = 1024.0 - 220.0 - 44.0;
+        for &lang in Language::ALL {
+            let labels: Vec<&str> = InspectorTab::ALL.iter().map(|tab| tab.title_in(lang)).collect();
+            let width = crate::ui::tab_width(&labels, 100.0);
+            assert!(width * labels.len() as f32 <= ROOM, "{lang:?}: {labels:?} need {width} px each");
+        }
+    }
+
     struct Rig {
         app: App,
         _sandbox: Sandbox,
@@ -2222,6 +2233,100 @@ mod tests {
 
     fn send(app: &mut App, message: Message) {
         drop(app.update(message));
+    }
+
+    /// The real view behind the same diff, layout, update and operate calls
+    /// the runtime makes, without a window.
+    mod headless {
+        use super::super::*;
+        use iced::advanced::widget::{Operation, Tree};
+        use iced::advanced::{Layout, Shell, layout};
+        use iced::mouse::Cursor;
+        use iced::{Event, Point, Rectangle, Renderer, Size, Vector};
+
+        pub const BOUNDS: Size = Size::new(1000.0, 520.0);
+
+        pub fn renderer() -> Renderer {
+            use iced::advanced::renderer::Headless as _;
+            use std::task::{Context, Poll, Waker};
+            let future = Renderer::new(iced::Font::DEFAULT, iced::Pixels(16.0), Some("tiny-skia"));
+            let mut future = std::pin::pin!(future);
+            match future.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+                Poll::Ready(Some(renderer)) => renderer,
+                _ => panic!("tiny-skia must be available without waiting"),
+            }
+        }
+
+        /// Content height and offset of every scrollable, in tree order.
+        struct Offsets(Vec<(f32, f32)>);
+
+        impl Operation for Offsets {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+
+            fn scrollable(
+                &mut self,
+                _id: Option<&iced::advanced::widget::Id>,
+                _bounds: Rectangle,
+                content_bounds: Rectangle,
+                translation: Vector,
+                _state: &mut dyn iced::advanced::widget::operation::Scrollable,
+            ) {
+                self.0.push((content_bounds.height, translation.y));
+            }
+        }
+
+        pub fn tree(app: &App) -> Tree {
+            Tree::new(crate::views::view(app).as_widget())
+        }
+
+        /// One runtime pass. Returns the offset of the tallest scrollable,
+        /// which is the page body, and the messages the event produced.
+        pub fn pass(app: &App, tree: &mut Tree, renderer: &Renderer, event: Option<(Event, Point)>) -> (f32, Vec<Message>) {
+            let mut root = crate::views::view(app);
+            tree.diff(root.as_widget());
+            let node = root.as_widget_mut().layout(tree, renderer, &layout::Limits::new(Size::ZERO, BOUNDS));
+            let mut messages = Vec::new();
+            if let Some((event, at)) = event {
+                let mut shell = Shell::new(&mut messages);
+                root.as_widget_mut().update(
+                    tree,
+                    &event,
+                    Layout::new(&node),
+                    Cursor::Available(at),
+                    renderer,
+                    &mut iced::advanced::clipboard::Null,
+                    &mut shell,
+                    &Rectangle::with_size(BOUNDS),
+                );
+            }
+            let mut offsets = Offsets(Vec::new());
+            root.as_widget_mut().operate(tree, Layout::new(&node), renderer, &mut offsets);
+            let page = offsets.0.iter().copied().max_by(|a, b| a.0.total_cmp(&b.0)).map_or(0.0, |(_, offset)| offset);
+            (page, messages)
+        }
+    }
+
+    #[test]
+    fn a_notice_that_comes_and_goes_keeps_the_page_where_it_was() {
+        use iced::mouse::{self, ScrollDelta};
+        let mut rig = rig("noticescroll");
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        settle(&mut rig.app);
+        let renderer = headless::renderer();
+        let mut tree = headless::tree(&rig.app);
+        assert_eq!(headless::pass(&rig.app, &mut tree, &renderer, None).0, 0.0);
+
+        let wheel = iced::Event::Mouse(mouse::Event::WheelScrolled { delta: ScrollDelta::Pixels { x: 0.0, y: -300.0 } });
+        headless::pass(&rig.app, &mut tree, &renderer, Some((wheel, iced::Point::new(700.0, 400.0))));
+        let scrolled = headless::pass(&rig.app, &mut tree, &renderer, None).0;
+        assert!(scrolled > 250.0, "the wheel moved the page to {scrolled}");
+
+        rig.app.notice = Some("Done.".to_owned());
+        assert_eq!(headless::pass(&rig.app, &mut tree, &renderer, None).0, scrolled, "a new notice");
+        send(&mut rig.app, Message::DismissNotice);
+        assert_eq!(headless::pass(&rig.app, &mut tree, &renderer, None).0, scrolled, "a dismissed notice");
     }
 
     #[test]

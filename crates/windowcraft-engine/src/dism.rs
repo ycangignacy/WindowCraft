@@ -135,10 +135,27 @@ impl Api {
             let _ = unsafe { (self.delete)(text.cast()) };
             message
         } else {
-            status.message()
+            String::new()
         };
+        let detail = describe(detail, status);
         Err(EngineError::Win32 { operation, target: target.to_owned(), code: status.0.cast_unsigned(), message: detail })
     }
+}
+
+/// DISM's own text, then the system's text for the code. Many CBS codes have
+/// neither, so the last resort points at the log that names the cause.
+fn describe(dism_text: String, status: HRESULT) -> String {
+    let dism_text = dism_text.trim();
+    if !dism_text.is_empty() {
+        return dism_text.to_owned();
+    }
+    let system_text = status.message();
+    let system_text = system_text.trim();
+    if !system_text.is_empty() {
+        return system_text.to_owned();
+    }
+    let windows = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_owned());
+    format!("DISM gave no description; the cause is in {windows}\\Logs\\DISM\\dism.log. Windows may be installing updates, so restart and try again")
 }
 
 impl Drop for Api {
@@ -550,6 +567,19 @@ mod tests {
             EngineError::Win32 { operation: "DismEnableFeature", target, code: 0x800F_080C, .. }
                 if target == "Recall"
         ));
+    }
+
+    #[test]
+    fn describe_never_leaves_the_message_empty() {
+        let reserved = HRESULT(0x800F_0975_u32.cast_signed());
+        assert_eq!(describe("  The image is busy.\r\n".to_owned(), reserved), "The image is busy.");
+        let access = HRESULT::from_win32(5);
+        assert_eq!(describe("   ".to_owned(), access), access.message().trim());
+        let fallback = describe(String::new(), reserved);
+        assert!(!fallback.trim().is_empty());
+        if reserved.message().trim().is_empty() {
+            assert!(fallback.contains(r"Logs\DISM\dism.log"), "{fallback}");
+        }
     }
 
     #[test]

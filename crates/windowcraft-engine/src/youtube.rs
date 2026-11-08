@@ -115,15 +115,47 @@ pub fn download_video(
     std::fs::create_dir_all(folder).map_err(io_error(folder))?;
     // Parts and fragments go to a private folder that is emptied afterwards,
     // so a cancelled download leaves nothing next to the user's files.
+    // The finished file is also cleaned there and only then moved into
+    // `folder`, so the user never sees an uncleaned copy, and a file that
+    // already has the same name gets " (2)" instead of being reused.
     let staging = staging_dir();
     let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging).map_err(io_error(&staging))?;
-    let result = run_yt_dlp(tools, url, format, folder, &staging, cancel, &mut progress);
+    let (finished, parts) = (staging.join("finished"), staging.join("parts"));
+    for dir in [&finished, &parts] {
+        std::fs::create_dir_all(dir).map_err(io_error(dir))?;
+    }
+    let result = run_yt_dlp(tools, url, format, &finished, &parts, cancel, &mut progress).and_then(|path| {
+        progress(Stage::Cleaning);
+        metadata::strip_in_place(&path, Some(&tools.ffmpeg()), cancel)?;
+        move_into(&path, folder)
+    });
     let _ = std::fs::remove_dir_all(&staging);
-    let path = result?;
-    progress(Stage::Cleaning);
-    metadata::strip_in_place(&path, Some(&tools.ffmpeg()), cancel)?;
-    Ok(path)
+    result
+}
+
+/// Moves `file` into `folder` under a name nothing there uses yet.
+fn move_into(file: &Path, folder: &Path) -> Result<PathBuf> {
+    let name = file.file_name().ok_or_else(|| EngineError::NotFound("the downloaded file".to_owned()))?;
+    let target = free_path(folder, Path::new(name));
+    if std::fs::rename(file, &target).is_err() {
+        // Downloads can sit on another drive, where a rename cannot work.
+        std::fs::copy(file, &target).map_err(io_error(&target))?;
+        let _ = std::fs::remove_file(file);
+    }
+    Ok(target)
+}
+
+/// `name.ext` in `folder`, or `name (2).ext` and up when that is taken.
+fn free_path(folder: &Path, name: &Path) -> PathBuf {
+    let stem = name.file_stem().map_or_else(|| "video".into(), |stem| stem.to_string_lossy().into_owned());
+    let extension = name.extension().map(|extension| format!(".{}", extension.to_string_lossy())).unwrap_or_default();
+    let mut candidate = folder.join(format!("{stem}{extension}"));
+    let mut number = 2;
+    while candidate.exists() {
+        candidate = folder.join(format!("{stem} ({number}){extension}"));
+        number += 1;
+    }
+    candidate
 }
 
 fn staging_dir() -> PathBuf {
@@ -180,7 +212,8 @@ fn run_yt_dlp(
         "-P",
         temp.as_str(),
         "-o",
-        "%(title).150B [%(id)s].%(ext)s",
+        // The video id would put the link back into the file name.
+        "%(title).150B.%(ext)s",
     ];
     args.extend_from_slice(format_args(format));
     // The URL can never be read as an option.
@@ -282,6 +315,23 @@ mod tests {
     }
 
     #[test]
+    fn a_taken_name_gets_a_number_and_the_move_keeps_the_file() {
+        let staging = tempfile::tempdir().unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        std::fs::write(folder.path().join("Me at the zoo.mp3"), b"older").unwrap();
+        std::fs::write(folder.path().join("Me at the zoo (2).mp3"), b"older").unwrap();
+        let fresh = staging.path().join("Me at the zoo.mp3");
+        std::fs::write(&fresh, b"new").unwrap();
+
+        let moved = move_into(&fresh, folder.path()).unwrap();
+        assert_eq!(moved, folder.path().join("Me at the zoo (3).mp3"));
+        assert_eq!(std::fs::read(&moved).unwrap(), b"new");
+        assert!(!fresh.exists());
+        assert_eq!(std::fs::read(folder.path().join("Me at the zoo.mp3")).unwrap(), b"older");
+        assert_eq!(free_path(folder.path(), Path::new("clip.mp4")), folder.path().join("clip.mp4"));
+    }
+
+    #[test]
     fn reads_progress_lines() {
         assert_eq!(parse_progress("WCP 512 1024 NA"), Some((512.0, Some(1024.0))));
         assert_eq!(parse_progress("WCP 512 NA 2048.5"), Some((512.0, Some(2048.5))));
@@ -305,6 +355,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         for format in [Format::Mp3, Format::Mp4] {
             let path = download_video(&tools, &url, format, dir.path(), &cancel, |_| {}).unwrap();
+            assert_eq!(path.parent(), Some(dir.path()));
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let id = url.rsplit(['=', '/']).next().unwrap_or_default();
+            assert!(id.is_empty() || !name.contains(id), "the video id is in the file name {name}");
             let probe = crate::process::run_ok(
                 &tools.ffprobe(),
                 &["-v", "error", "-show_entries", "format_tags:stream_tags", "-of", "default", &path.display().to_string()],

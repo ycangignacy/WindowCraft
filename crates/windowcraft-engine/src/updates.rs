@@ -73,6 +73,23 @@ impl Engine {
                 cleaner::clean_dir(&PathBuf::from(root).join("SoftwareDistribution"));
             }
         }
+        // ChangeServiceConfigW can succeed while Windows Update Medic puts
+        // wuauserv or BITS back at once, so the result is read back.
+        let mut reverted = Vec::new();
+        for rule in &mode.services {
+            if let Some(info) = self.services.query(&rule.name)?
+                && info.startup != rule.startup
+            {
+                reverted.push(rule.name.as_str());
+            }
+        }
+        if !reverted.is_empty() {
+            return Err(EngineError::Message(format!(
+                "Windows put {} back to its own start type right after the change, so nothing was applied. \
+                 This usually happens while Windows Update is working; try again once it has finished.",
+                reverted.join(", ")
+            )));
+        }
         Ok(())
     }
 
@@ -195,6 +212,20 @@ mod tests {
         assert_eq!(rig.engine.current_update_mode().unwrap(), "default");
         let sessions = rig.engine.store.sessions().unwrap();
         assert_eq!(sessions[0].state, SessionState::Failed);
+    }
+
+    #[test]
+    fn a_service_that_windows_puts_back_fails_the_mode_and_reverts_everything() {
+        let rig = rig("updatepinned");
+        rig.services.pin("wuauserv");
+        let disabled = rig.engine.catalog.update_mode("disabled").unwrap().clone();
+
+        let error = rig.engine.apply_update_mode(&disabled).unwrap_err();
+        assert!(matches!(&error, EngineError::Message(text) if text.contains("wuauserv") && !text.contains("UsoSvc")), "{error}");
+        assert_eq!(rig.engine.current_update_mode().unwrap(), "default");
+        assert_eq!(rig.services.startup("UsoSvc"), Some(StartupType::Automatic));
+        assert_eq!(rig.services.startup("BITS"), Some(StartupType::Manual));
+        assert_eq!(rig.engine.store.sessions().unwrap()[0].state, SessionState::Failed);
     }
 
     #[test]

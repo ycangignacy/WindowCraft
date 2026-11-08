@@ -337,12 +337,21 @@ pub fn start(name: &str) -> Result<()> {
 #[derive(Debug, Default)]
 pub struct MemoryServices {
     table: Mutex<HashMap<String, StartupType>>,
+    /// Services that accept a write and keep their old start type, as
+    /// Windows Update Medic does for wuauserv and BITS.
+    pinned: Mutex<Vec<String>>,
 }
 
 impl MemoryServices {
     pub fn with(entries: &[(&str, StartupType)]) -> Self {
         let table = entries.iter().map(|(name, startup)| (name.to_lowercase(), *startup)).collect();
-        Self { table: Mutex::new(table) }
+        Self { table: Mutex::new(table), pinned: Mutex::new(Vec::new()) }
+    }
+
+    pub fn pin(&self, name: &str) {
+        if let Ok(mut pinned) = self.pinned.lock() {
+            pinned.push(name.to_lowercase());
+        }
     }
 
     pub fn startup(&self, name: &str) -> Option<StartupType> {
@@ -371,6 +380,9 @@ impl ServiceBackend for MemoryServices {
         guard_change(name, startup)?;
         if self.startup(name).is_none() {
             return Err(EngineError::NotFound(format!("service {name}")));
+        }
+        if self.pinned.lock().is_ok_and(|pinned| pinned.contains(&name.to_lowercase())) {
+            return Ok(());
         }
         self.force(name, startup);
         Ok(())

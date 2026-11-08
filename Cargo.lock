@@ -4006,7 +4006,7 @@ dependencies = [
 
 [[package]]
 name = "windowcraft-app"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "clap",
  "iced",
@@ -4024,11 +4024,11 @@ dependencies = [
 
 [[package]]
 name = "windowcraft-cli"
-version = "1.2.0"
+version = "1.2.1"
 
 [[package]]
 name = "windowcraft-config"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4037,7 +4037,7 @@ dependencies = [
 
 [[package]]
 name = "windowcraft-engine"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "flacenc",
  "image",
@@ -4060,7 +4060,7 @@ dependencies = [
 
 [[package]]
 name = "windowcraft-iso"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "rayon",
  "serde",
@@ -4074,7 +4074,7 @@ dependencies = [
 
 [[package]]
 name = "windowcraft-physics"
-version = "1.2.0"
+version = "1.2.1"
 
 [[package]]
 name = "windows"

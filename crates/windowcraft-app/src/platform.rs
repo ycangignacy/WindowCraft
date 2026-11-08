@@ -107,6 +107,35 @@ pub fn accessibility() -> Accessibility {
     }
 }
 
+/// The primary monitor's work area (the screen without the taskbar) in
+/// logical pixels, the unit window sizes are given in. The process is
+/// per-monitor DPI aware, so the rectangle arrives in physical pixels.
+pub fn work_area() -> Option<iced::Rectangle> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Gdi::{GetDC, GetDeviceCaps, LOGPIXELSX, ReleaseDC};
+    use windows::Win32::UI::WindowsAndMessaging::SPI_GETWORKAREA;
+    let mut area = RECT::default();
+    // SAFETY: `area` is a valid RECT for this request.
+    unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, Some((&raw mut area).cast()), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)) }
+        .ok()?;
+    // SAFETY: The screen DC is released right after the one query.
+    let dpi = unsafe {
+        let screen = GetDC(None);
+        let dpi = GetDeviceCaps(Some(screen), LOGPIXELSX);
+        ReleaseDC(None, screen);
+        dpi
+    };
+    let scale = if dpi > 0 { dpi as f32 / 96.0 } else { 1.0 };
+    let logical = |value: i32| value as f32 / scale;
+    let rect = iced::Rectangle {
+        x: logical(area.left),
+        y: logical(area.top),
+        width: logical(area.right - area.left),
+        height: logical(area.bottom - area.top),
+    };
+    (rect.width > 0.0 && rect.height > 0.0).then_some(rect)
+}
+
 /// Lines per wheel notch. "One screen at a time" reads as u32::MAX and is
 /// capped by the caller; a failed query keeps the Windows default of 3.
 fn wheel_scroll_lines() -> u32 {

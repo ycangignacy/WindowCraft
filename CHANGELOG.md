@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1 - 2026-11-08
+
+Fixes for what a full test of 1.2.0 in a VirtualBox VM found, in all eight languages, on a 1024x768 screen.
+
+- A list no longer jumps back to the top when a notice appears or is dismissed. The empty place holders for the drift banner and the notice had a fixed height of 0, and iced leaves such children out of a column, so the page body moved to another position in the widget tree and lost its scroll state. Both banners now keep a slot that stays in the tree.
+- The first window fits the screen. It opened at 1280x800 and was centred on the whole monitor, so on 1024x768 and 1366x768 it ran under the taskbar. It now shrinks to the work area when needed and is centred in it. The smallest size shrinks with it on small or scaled screens.
+- The Inspector tabs are as wide as their longest label, so "Benchmark de DNS" in Portuguese no longer wraps onto two lines. The Italian Autoruns tab is "Avvio automatico" now; "Esecuzione automatica" would not fit five tabs into a 1024 px window.
+- YouTube downloads are saved as `<title>.mp4` or `<title>.mp3`. Up to 1.2.0 the name ended in the video id, for example `[jNQXAC9IVRw]`, which is the link. The file is cleaned before it is moved to the chosen folder, and a name that is taken gets " (2)". Before, yt-dlp would have taken an existing file of the same name for the finished download. The privacy note on the page now says that the file name comes from the title.
+- The installed metadata stripper and file converter said that uninstalling deletes downloaded tools. They download nothing, and the line now says so.
+- After switching the Windows Update mode, WindowCraft reads the start type of each service back. When Windows puts wuauserv or BITS back at once, which Windows Update Medic does while updates are running, the mode is rolled back and the message names the service. Before, the mode reported success while the services kept their old start type.
+- When DISM gives no text for an error, the message falls back to the Windows text for the code, and when that is empty too, it points to `Logs\DISM\dism.log`. Changing reserved storage while Windows was servicing showed only "(0x800F0975)".
+- Replacing `hosts` and other system files is tried again for about six seconds when another process has the file open. A rollback of the Adobe block list once failed with "used by another process" (0x80070020).
+
 ## 1.2.0 - 2026-11-08
 
 An Extensions page with a metadata stripper, a file converter and a YouTube downloader. Nothing on it is installed until you choose it.

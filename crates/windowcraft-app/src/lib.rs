@@ -19,7 +19,7 @@ pub mod vsync;
 
 use app::App;
 use clap::Parser;
-use iced::{Size, window};
+use iced::{Point, Rectangle, Size, window};
 use std::process::ExitCode;
 use std::sync::Arc;
 use windowcraft_config::Catalog;
@@ -27,6 +27,36 @@ use windowcraft_engine::{Engine, sysinfo};
 
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon-64.rgba");
 const ICON_SIZE: u32 = 64;
+
+/// The size the window opens at, and the smallest it may be dragged to.
+const PREFERRED: Size = Size::new(1280.0, 800.0);
+const SMALLEST: Size = Size::new(980.0, 600.0);
+/// What the title bar and borders add around the client area on Windows 11,
+/// measured in the VM: 1008x703 outside for 992x664 inside.
+const FRAME: Size = Size::new(16.0, 39.0);
+/// Space kept free around the window when the screen is small.
+const GAP: f32 = 8.0;
+
+/// Where the first window goes on a screen whose work area (the screen
+/// without the taskbar) is `work`, in logical pixels: the client size, the
+/// smallest client size, and the outer position. On 1024x768 or 1366x768 the
+/// preferred size would run under the taskbar, so it shrinks to what fits,
+/// and the window is centred in the work area rather than on the whole
+/// monitor, which would push its bottom edge under the taskbar again.
+fn window_layout(work: Option<Rectangle>) -> (Size, Size, Option<Point>) {
+    let Some(work) = work else {
+        return (PREFERRED, SMALLEST, None);
+    };
+    let room = Size::new(
+        (work.width - FRAME.width - 2.0 * GAP).max(1.0),
+        (work.height - FRAME.height - 2.0 * GAP).max(1.0),
+    );
+    let size = Size::new(PREFERRED.width.min(room.width), PREFERRED.height.min(room.height));
+    let min = Size::new(SMALLEST.width.min(size.width), SMALLEST.height.min(size.height));
+    let x = work.x + ((work.width - size.width - FRAME.width) / 2.0).max(0.0);
+    let y = work.y + ((work.height - size.height - FRAME.height) / 2.0).max(0.0);
+    (size, min, Some(Point::new(x.round(), y.round())))
+}
 
 fn report_fatal(lang: i18n::Language, message: &str) -> ExitCode {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
@@ -96,9 +126,11 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
     };
     let translucent = mica;
 
+    let (size, min_size, position) = window_layout(platform::work_area());
     let settings = window::Settings {
-        size: Size::new(1280.0, 800.0),
-        min_size: Some(Size::new(980.0, 600.0)),
+        size,
+        min_size: Some(min_size),
+        position: position.map_or(window::Position::Centered, window::Position::Specific),
         icon: window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok(),
         transparent: translucent,
         // Closing during a job asks first, see `Message::CloseRequested`.
@@ -148,4 +180,33 @@ pub fn entry() -> ExitCode {
         }
     };
     if cli.is_headless() { cli::execute(&cli) } else { run_gui(cli) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn area(x: f32, y: f32, width: f32, height: f32) -> Option<Rectangle> {
+        Some(Rectangle { x, y, width, height })
+    }
+
+    #[test]
+    fn the_first_window_fits_the_work_area_and_keeps_its_size_on_large_screens() {
+        assert_eq!(window_layout(None), (PREFERRED, SMALLEST, None));
+        // 2560x1440 with a 48 px taskbar: the preferred size, centred.
+        let (size, min, position) = window_layout(area(0.0, 0.0, 2560.0, 1392.0));
+        assert_eq!((size, min), (PREFERRED, SMALLEST));
+        assert_eq!(position, Some(Point::new(632.0, 277.0)));
+        // 1024x768 as in the VM: 1008x703 outside, 8 px from the top and the taskbar.
+        let (size, min, position) = window_layout(area(0.0, 0.0, 1024.0, 720.0));
+        assert_eq!((size, min), (Size::new(992.0, 665.0), SMALLEST));
+        assert_eq!(position, Some(Point::new(8.0, 8.0)));
+        // 1366x768 at 150 % leaves 910x480 logical pixels; the minimum follows.
+        let (size, min, _) = window_layout(area(0.0, 0.0, 910.0, 480.0));
+        assert_eq!(size, Size::new(878.0, 425.0));
+        assert_eq!(min, size);
+        // A taskbar on the left moves the work area, and the window with it.
+        let (_, _, position) = window_layout(area(48.0, 0.0, 1318.0, 768.0));
+        assert_eq!(position, Some(Point::new(59.0, 8.0)));
+    }
 }
