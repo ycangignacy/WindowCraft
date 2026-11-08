@@ -25,19 +25,23 @@ The scroll problem came from iced: `Column::push` leaves out a child whose width
 
 The unit and integration tests pass (511, clippy clean). New tests cover the scroll position around notices, the first window size and position on five screen sizes, the tab width in every language, the YouTube file names, the update mode read-back, the DISM fallback text and a replace while the target is held open.
 
-A development build of 1.2.1 ran in the same VM:
+The x64 packages of 1.2.1, built locally with `packaging/build.ps1`, and the same binaries ran in the VM:
 
 | Test | Result |
 | :--- | :--- |
+| `verify-install.ps1 -Version 1.2.1` (MSI, MSI with `WCLANGUAGE=pl`, `setup.exe`) | No failed checks, nothing left after uninstall |
+| `setup.exe` of 1.2.1 over the published 1.2.0 with a recorded session and German dark settings | One visible entry, the binary reports 1.2.1, history byte for byte the same, settings kept, the drift check reads the 1.2.0 history, uninstall leaves nothing |
+| `WCLANGUAGE` unset and set to each of the eight languages, through the MSI and `setup.exe` | The value lands in HKLM, the app opens in that language, uninstall removes the key |
+| Every page in every language, maximized, plus English and Ukrainian dark and German light | 168 checks pass; the screenshots were looked through |
 | First window on 1024x768 with a 48 px taskbar | Opens at 8,8 to 1016,712 inside the 1024x720 work area; 1.2.0 opened at 156,156 to 1452,995 |
-| Extensions page, scrolled, a notice dismissed and a new one shown by clicking | The page stays where it was both times |
+| Extensions page of the installed 1.2.1, scrolled, a notice dismissed and a new one shown by clicking | The page stays where it was both times |
 | Inspector in Italian, Portuguese, Ukrainian and English | Every tab label on one line |
 | A real YouTube video as MP3 and MP4 | Saved as "Me at the zoo.mp3" and "Me at the zoo.mp4", with no id in the name and no metadata inside |
 | Engine unit tests in the VM | 241 pass |
 | Update modes (t06) without network | Pass |
 | Every reversible tweak applied and rolled back (t14) without network | 53 tweaks clean; the Adobe block list needs the network to fetch its list |
 
-Not tested: the update mode read-back while Windows really reverts a service. With the network on, Windows Update was busy and wuauserv did not stop within 10 seconds, so the mode was rolled back before the read-back, as in 1.2.0. The DISM fallback text was not seen in the VM, because the error appears only while Windows is servicing. The installers did not change and were not run again. ARM64 is untested on ARM hardware, as before.
+Not tested: the update mode read-back while Windows really reverts a service. With the network on, Windows Update was busy and wuauserv did not stop within 10 seconds, so the mode was rolled back before the read-back, as in 1.2.0. The DISM fallback text was not seen in the VM, because the error appears only while Windows is servicing. ARM64 is untested on ARM hardware, as before.
 
 ## Known bugs
 
