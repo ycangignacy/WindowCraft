@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0 - 2026-11-09
+
+An introduction on the first start and a short tip on each page.
+
+- On the first plain start, four questions open over the window: what to do with WindowCraft, whether to keep your files, whether you build your own ISO, and how much should change. Each screen has a progress bar, Skip and, from the second screen on, Back. The answers carry numbers, and the keys 1 to 4 pick them. Escape is Skip.
+- The last screen lists the plan, and Start puts it into the queues without running anything. The answer about change picks the Minimal, Standard or Advanced preset. A fresh install, or Everything, also marks the 14 default AppX packages for removal. The answer about files decides what the cleaner ticks after its first scan: temporary files, logs and minidumps, or those plus the GPU shader and developer caches. ISO Studio work files are never ticked. Start opens Tweaks & Privacy, or the Cleaner tab for a tidy-up.
+- After the questions each page shows a tip of two or three sentences once. Next marks it as read and opens the next page in the sidebar whose tip is unread; on the last one the button reads Done. Don't show again turns all tips off. A click outside the tip closes it without saving and still reaches what was clicked.
+- Settings has a new group with "Show the introduction again" and "Show the tips again".
+- The state is kept under the `onboarding` key of `settings.json`, versioned and checked like a profile. A state that this version cannot read turns the questions and the tips off. A start with `--open`, `--inspect`, `--config` or `--preset` shows neither, so screenshots and scripts see the page they asked for.
+- Settings are now written to a temporary file and renamed over `settings.json`. When the file cannot be written, a notice says so and the choice holds until the app closes.
+- All new text is in the eight interface languages.
+
 ## 1.2.1 - 2026-11-08
 
 Fixes for what a full test of 1.2.0 in a VirtualBox VM found, in all eight languages, on a 1024x768 screen.

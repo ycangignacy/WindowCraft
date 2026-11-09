@@ -8,6 +8,7 @@
 use crate::app::Appearance;
 use serde_json::{Value, json};
 use std::path::PathBuf;
+use windowcraft_config::Onboarding;
 
 const SECONDS_PER_DAY: u64 = 86_400;
 
@@ -51,6 +52,8 @@ pub struct Settings {
     pub last_check: u64,
     /// Windows build and UBR seen by the last check, for example `26300.7171`.
     pub last_build: String,
+    /// First-start questions and page tips, under the `onboarding` key.
+    pub onboarding: Onboarding,
 }
 
 impl Default for Settings {
@@ -61,6 +64,7 @@ impl Default for Settings {
             after_updates: false,
             last_check: 0,
             last_build: String::new(),
+            onboarding: Onboarding::new(),
         }
     }
 }
@@ -105,6 +109,7 @@ impl Settings {
             after_updates: check["after_updates"].as_bool().unwrap_or(false),
             last_check: state["last_run"].as_u64().unwrap_or(0),
             last_build: state["build"].as_str().unwrap_or_default().to_owned(),
+            onboarding: onboarding_from(&value["onboarding"]),
         }
     }
 
@@ -117,12 +122,38 @@ impl Settings {
         value["appearance"] = json!(appearance_tag(self.appearance));
         value["drift_check"] = json!({ "interval_days": self.interval.days(), "after_updates": self.after_updates });
         value["drift_check_state"] = json!({ "last_run": self.last_check, "build": self.last_build });
+        value["onboarding"] = self.onboarding.to_value();
         serde_json::to_string_pretty(&value).unwrap_or_default()
     }
 }
 
+/// A missing key means the questions were never shown. A state this build
+/// cannot read turns both the questions and the tips off.
+fn onboarding_from(value: &Value) -> Onboarding {
+    if value.is_null() {
+        return Onboarding::new();
+    }
+    Onboarding::from_value(value.clone()).unwrap_or_else(|_| Onboarding::quiet())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A settings file for the current test thread only, see `use_test_file`.
+    static TEST_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Points `path` at `file` for the calling test thread.
+#[cfg(test)]
+pub fn use_test_file(file: Option<PathBuf>) {
+    TEST_FILE.with(|slot| *slot.borrow_mut() = file);
+}
+
 /// Unit tests write to a file of their own, never to the user's settings.
 pub fn path() -> PathBuf {
+    #[cfg(test)]
+    if let Some(file) = TEST_FILE.with(|slot| slot.borrow().clone()) {
+        return file;
+    }
     if cfg!(test) {
         return std::env::temp_dir().join(format!("windowcraft-test-settings-{}.json", std::process::id()));
     }
@@ -139,7 +170,13 @@ pub fn save(settings: &Settings) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
-    std::fs::write(&path, settings.merge_into(&existing)).map_err(|e| e.to_string())
+    // Write and rename, so a crash never leaves half a file.
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, settings.merge_into(&existing)).map_err(|e| e.to_string())?;
+    std::fs::rename(&temporary, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&temporary);
+        e.to_string()
+    })
 }
 
 /// Arguments the scheduled task passes to `windowcraft.exe`.
@@ -182,6 +219,7 @@ mod tests {
             after_updates: true,
             last_check: 1_700_000_000,
             last_build: "26300.7171".into(),
+            onboarding: Onboarding::quiet(),
         };
         let text = settings.merge_into(r#"{"language":"pl","future":{"x":1}}"#);
         let value: Value = serde_json::from_str(&text).unwrap();
@@ -189,6 +227,45 @@ mod tests {
         assert_eq!(value["future"]["x"], 1);
         assert_eq!(Settings::parse(&text), settings);
         assert_eq!(crate::i18n::Language::from_tag(value["language"].as_str().unwrap()), Some(crate::i18n::Language::Pl));
+    }
+
+    #[test]
+    fn onboarding_state_round_trips_and_unreadable_states_stay_quiet() {
+        use windowcraft_config::{Answers, Area, Goal};
+        assert_eq!(Settings::parse(r#"{"language":"pl"}"#).onboarding, Onboarding::new(), "1.2 files ask the questions");
+
+        let mut settings = Settings::default();
+        settings.onboarding.finish(Answers { goal: Some(Goal::Gaming), ..Answers::default() });
+        settings.onboarding.tip_seen(Area::Iso);
+        let text = settings.merge_into(r#"{"language":"de"}"#);
+        assert_eq!(Settings::parse(&text), settings);
+        let value: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["onboarding"]["status"], "finished");
+        assert_eq!(value["language"], "de");
+
+        for broken in [r#"{"onboarding":{"version":9}}"#, r#"{"onboarding":{"version":1,"new_field":true}}"#, r#"{"onboarding":"yes"}"#] {
+            assert_eq!(Settings::parse(broken).onboarding, Onboarding::quiet(), "{broken}");
+        }
+    }
+
+    #[test]
+    fn save_and_load_use_the_test_file_and_report_a_failed_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        use_test_file(Some(file.clone()));
+        let mut settings = Settings::default();
+        settings.onboarding.skip(windowcraft_config::Answers::default());
+        save(&settings).unwrap();
+        assert_eq!(load(), settings);
+        assert!(!file.with_extension("json.tmp").exists(), "the temporary file is renamed");
+
+        // A file where the folder should be: the folder cannot be created.
+        let blocked = dir.path().join("blocked");
+        std::fs::write(&blocked, "").unwrap();
+        use_test_file(Some(blocked.join("settings.json")));
+        assert!(save(&settings).is_err());
+        assert_eq!(load(), Settings::default(), "nothing could be read either");
+        use_test_file(None);
     }
 
     #[test]

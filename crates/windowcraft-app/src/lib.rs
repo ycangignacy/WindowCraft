@@ -7,6 +7,7 @@ pub mod background;
 pub mod cli;
 pub mod i18n;
 pub mod icons;
+pub mod outside;
 pub mod platform;
 pub mod press;
 pub mod reveal;
@@ -115,7 +116,8 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
     // Only tiny-skia presents through a GDI surface that keeps its alpha
     // channel, so only it can show Mica. The GPU path draws solid surfaces.
     let mica = !gpu && accessibility.transparency && !accessibility.high_contrast;
-    let start = app::StartView { page, inspect: cli.inspect, profile, language: lang, mica };
+    let guided = cli.open.is_none() && cli.inspect.is_none() && profile.is_none();
+    let start = app::StartView { page, inspect: cli.inspect, profile, language: lang, mica, guided };
     let info = match sysinfo::query() {
         Ok(info) => info,
         Err(error) => return report_fatal(lang, &error.to_string()),

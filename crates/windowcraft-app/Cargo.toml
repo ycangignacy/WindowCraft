@@ -32,6 +32,8 @@ wgpu.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# Writes the review renders of the onboarding screens, see `render_guide_screens`.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

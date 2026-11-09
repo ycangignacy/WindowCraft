@@ -1,8 +1,8 @@
 # Release Checklist
 
-Status as of 2026-11-08: 1.2.0 is the current stable release. 1.2.1 is built locally and not
-published yet; it fixes what the full VM test of 1.2.0 found, see `docs/RELEASE-NOTES-1.2.1.md`.
-1.2.0 added the Extensions page (metadata stripper, file converter, ffmpeg, YouTube downloader),
+Status as of 2026-11-09: 1.2.1 is the current stable release. 1.3.0 is built locally and not
+published yet; it adds the introduction on the first start and the page tips, see
+`docs/RELEASE-NOTES-1.3.0.md`. 1.2.1 fixed what the full VM test of 1.2.0 found. 1.2.0 added the Extensions page (metadata stripper, file converter, ffmpeg, YouTube downloader),
 see `docs/RELEASE-NOTES-1.2.0.md`. 1.0.3 fixed the Control Panel applet buttons, KB-9
 and KB-10. 1.0.2 moved drawing to the GPU through wgpu (Direct3D 12) with tiny-skia as the
 fallback. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer alone. 0.1.0 and
@@ -129,7 +129,10 @@ The workflows have never run. Expect fixes on the first run.
 - [ ] 100%, 150% and 200% scaling, plus a small window at the 980 by 600 minimum.
 - [ ] Light mode, dark mode, high contrast, and transparency turned off.
 - [ ] An English Windows. All development happened on a Polish one.
-- [ ] Keyboard-only use and Narrator.
+- [ ] Keyboard-only use and Narrator. The introduction answers to the keys 1 to 4, Enter and
+      Escape; Tab does not move through its answers.
+- [x] Introduction and page tips in the VM, 2026-11-09: first start, answers, Start, eight mouse
+      clicks on the tips and a second start in all eight languages, 153 of 153 checks.
 
 ### Trust
 
@@ -144,8 +147,9 @@ The workflows have never run. Expect fixes on the first run.
       `WindowCraft-1.0.0-x64-portable.exe`, SHA-256 `02360d8f...f81`). `!ml` is a machine
       learning verdict, and Defender ships with every Windows, so a user's copy could be
       quarantined. Needs the owner's Microsoft account.
-- [ ] Decide on code signing. Without it, SmartScreen warns every user, and signed binaries
-      draw fewer machine learning verdicts like the one above.
+- [x] Decide on code signing. Decided on 2026-11-09: no code signing for now. SmartScreen warns
+      every user and the README says so; signed binaries would draw fewer machine learning
+      verdicts like the one above.
 
 ## 5. Known bugs
 
@@ -219,7 +223,7 @@ These do not need repeating unless the code changes.
 
 | Area | Result |
 | :--- | :--- |
-| Unit and integration tests | 511 pass in 1.2.1 (504 in 1.2.0, 449 in 1.1.0, 432 in 1.0.3, 407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
+| Unit and integration tests | 538 pass in 1.3.0 (511 in 1.2.1, 504 in 1.2.0, 449 in 1.1.0, 432 in 1.0.3, 407 in 1.0.0), 4 network tests are opt-in and pass (pinned downloads, TLS, DNS benchmark), clippy clean with `-D warnings` |
 | GitHub CI | Passes on an elevated Windows Server 2025 runner, including the ARM64 compile |
 | Lockfile | `cargo check --locked` passes |
 | Console program | `windowcraft-cli` waits, passes output through, returns exit codes, and reports a missing `windowcraft.exe` |

@@ -10,9 +10,9 @@ use crate::icons::Icon;
 use crate::press::press;
 use crate::theme::*;
 use crate::ui::*;
-use iced::widget::{Column, Row, column, container, mouse_area, opaque, row, space, stack, text_input};
+use iced::widget::{Column, Row, column, container, mouse_area, opaque, row, scrollable, space, stack, text_input};
 use iced::{Alignment, Border, Color, Length, Padding, mouse};
-use windowcraft_config::{FeatureKind, Tweak, TweakGroup, TweakKind};
+use windowcraft_config::{Area, CleanScope, Depth, FeatureKind, Goal, Tweak, TweakGroup, TweakKind};
 use windowcraft_engine::Detection;
 use windowcraft_engine::autoruns::EntrySource;
 use windowcraft_engine::gaming::InterruptPriority;
@@ -25,6 +25,18 @@ const DRAWER_GRIP: f32 = 14.0;
 const LOG_LINES_SHOWN: usize = 40;
 /// Marks the extensions whose code is WindowCraft's own.
 const OWN_CODE_BLUE: Color = Color::from_rgb8(0x15, 0x77, 0xA8);
+
+/// Sidebar icons, in the order of `Page::ALL`.
+const PAGE_ICONS: [Icon; 8] = [
+    Icon::Apps,
+    Icon::Tweaks,
+    Icon::Wrench,
+    Icon::Refresh,
+    Icon::Disc,
+    Icon::Clock,
+    Icon::Gauge,
+    Icon::Layers,
+];
 
 pub fn view(app: &App) -> El<'_> {
     let p = app.palette();
@@ -47,25 +59,274 @@ pub fn view(app: &App) -> El<'_> {
         );
     }
 
+    // Layers come after the workspace, so the workspace keeps its place in
+    // the tree and its scroll offset whether a tip or a dialog is up or not.
     let mut layers = stack![container(columns).width(Length::Fill).height(Length::Fill)];
+    if let Some(area) = app.tip.filter(|_| app.wizard.is_none() && app.confirm.is_none()) {
+        // Under the card: a press anywhere else closes the tip and still
+        // reaches the page.
+        layers = layers.push(crate::outside::outside(Message::TipDismiss));
+        layers = layers.push(tip_card(app, p, area, drawer_width));
+    }
+    if let Some(wizard) = app.wizard {
+        layers = layers.push(wizard_view(app, p, wizard));
+    }
     if app.confirm.is_some() {
         layers = layers.push(confirm_dialog(app, p));
     }
     layers.into()
 }
 
-fn sidebar(app: &App, p: Palette) -> El<'_> {
-    const ICONS: [Icon; 8] = [
-        Icon::Apps,
-        Icon::Tweaks,
-        Icon::Wrench,
-        Icon::Refresh,
-        Icon::Disc,
-        Icon::Clock,
-        Icon::Gauge,
-        Icon::Layers,
-    ];
+fn tip_text(lang: Language, area: Area) -> &'static str {
+    t(
+        lang,
+        match area {
+            Area::Applications => Msg::TipApplications,
+            Area::Tweaks => Msg::TipTweaks,
+            Area::System => Msg::TipSystem,
+            Area::Updates => Msg::TipUpdates,
+            Area::Iso => Msg::TipIso,
+            Area::TimeMachine => Msg::TipTimeMachine,
+            Area::Inspector => Msg::TipInspector,
+            Area::Extensions => Msg::TipExtensions,
+        },
+    )
+}
 
+/// The width a tip card takes when there is room for it.
+pub const TIP_WIDTH: f32 = 340.0;
+
+/// A card in the lower right corner of the page column. It moves up while the
+/// dock is out and left while the drawer is open, so it covers neither.
+fn tip_card(app: &App, p: Palette, area: Area, drawer_width: f32) -> El<'_> {
+    let lang = app.language;
+    // "Next" opens the next page with a tip; on the last one the button only closes.
+    let next_label = if app.next_tip(area).is_some() { Msg::TipNext } else { Msg::TipDone };
+    let card = container(
+        column![
+            row![PAGE_ICONS[Page::of_area(area).index()].view(13.0, p.accent), caption(t(lang, Msg::TipLabel), p.accent)].spacing(6).align_y(Alignment::Center),
+            strong(Page::of_area(area).title_in(lang), p.ink),
+            body(tip_text(lang, area), p.ink_secondary),
+            row![
+                space().width(Length::Fill),
+                button(p, t(lang, Msg::TipNever), None, Tone::Secondary, Some(Message::TipNever)),
+                button(p, t(lang, next_label), None, Tone::Primary, Some(Message::TipNext)),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(6),
+    )
+    .max_width(TIP_WIDTH)
+    .padding(14)
+    .style(move |_| container::Style {
+        background: Some(p.elevated.into()),
+        border: Border { color: p.specular, width: 1.0, radius: GROUP_RADIUS.into() },
+        shadow: floating_shadow(),
+        ..container::Style::default()
+    });
+    let dock = app.timeline.channels[DOCK].value().clamp(0.0, 1.0) as f32;
+    container(opaque(card))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Alignment::End)
+        .align_y(Alignment::End)
+        .padding(Padding {
+            top: 16.0,
+            right: drawer_width + 22.0,
+            bottom: 22.0 + dock * 84.0,
+            left: SIDEBAR_WIDTH + 16.0,
+        })
+        .into()
+}
+
+/// One large answer on a question screen, with the number key that picks it.
+fn choice<'a>(p: Palette, number: usize, title: &'a str, detail: String, selected: bool, on_press: Message) -> El<'a> {
+    let (fill, edge, width) = if selected { (p.selected, p.accent, 2.0) } else { (p.surface, p.border, 1.0) };
+    let key = container(mono(number.to_string(), if selected { p.accent } else { p.ink_tertiary }))
+        .center_x(22)
+        .padding([2.0, 0.0])
+        .style(move |_| container::Style {
+            border: Border { color: if selected { p.accent } else { p.border }, width: 1.0, radius: 5.0.into() },
+            ..container::Style::default()
+        });
+    press(
+        container(
+            row![key, column![strong(title, p.ink), caption(detail, p.ink_secondary)].spacing(2).width(Length::Fill)]
+                .spacing(12)
+                .align_y(Alignment::Center),
+        )
+            .width(Length::Fill)
+            .padding([11.0, 16.0])
+            .style(move |_| container::Style {
+                background: Some(fill.into()),
+                border: Border { color: edge, width, radius: GROUP_RADIUS.into() },
+                ..container::Style::default()
+            }),
+    )
+    .colors(Color { a: 0.05, ..p.ink }, p.selected)
+    .radius(GROUP_RADIUS)
+    .on_press(on_press)
+    .into()
+}
+
+/// The rows of the summary screen: where each part of the plan is, and what it holds.
+fn plan_rows(app: &App, answers: windowcraft_config::Answers) -> Vec<(String, String)> {
+    let lang = app.language;
+    let plan = answers.plan();
+    let inspector = |tab: InspectorTab| format!("{} · {}", Page::Inspector.title_in(lang), tab.title_in(lang));
+    let mut rows = vec![(
+        Page::Tweaks.title_in(lang).to_owned(),
+        format_1(t(lang, Msg::OnbPlanTweaks), &app.catalog.preset(plan.preset).len().to_string()),
+    )];
+    if plan.appx_defaults {
+        rows.push((
+            format!("{} · {}", Page::Tweaks.title_in(lang), TweakTab::Appx.title_in(lang)),
+            format_1(t(lang, Msg::OnbPlanAppx), &app.catalog.presets.appx_default.len().to_string()),
+        ));
+    }
+    if plan.interrupts {
+        rows.push((inspector(InspectorTab::Interrupts), t(lang, Msg::OnbPlanInterrupts).to_owned()));
+    }
+    let clean = match plan.clean {
+        CleanScope::TempOnly => Msg::OnbPlanCleanTemp,
+        CleanScope::Caches => Msg::OnbPlanCleanCaches,
+    };
+    rows.push((inspector(InspectorTab::Cleaner), t(lang, clean).to_owned()));
+    if plan.iso {
+        rows.push((Page::Iso.title_in(lang).to_owned(), t(lang, Msg::OnbPlanIso).to_owned()));
+    }
+    rows.push((Page::TimeMachine.title_in(lang).to_owned(), t(lang, Msg::OnbPlanTimeMachine).to_owned()));
+    rows
+}
+
+/// Height of everything on the question card except its body: the padding,
+/// the gaps, the header row and the footer row.
+const WIZARD_CHROME: f32 = 22.0 * 2.0 + 16.0 * 2.0 + 34.0 * 2.0;
+
+/// The first-start questions. Every screen has Skip, and every screen after
+/// the first has Back. The body scrolls when the window is too low for it,
+/// while the header and the footer stay in view.
+fn wizard_view(app: &App, p: Palette, wizard: Wizard) -> El<'_> {
+    opaque(
+        container(iced::widget::responsive(move |size| {
+            let body = (size.height - WIZARD_CHROME).max(48.0);
+            container(wizard_card(app, p, wizard, body)).center_x(Length::Fill).center_y(Length::Fill).into()
+        }))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(16)
+        .style(|_| container::background(Color { a: 0.5, ..Color::BLACK })),
+    )
+}
+
+fn wizard_card(app: &App, p: Palette, wizard: Wizard, body_height: f32) -> El<'_> {
+    let lang = app.language;
+    let answers = wizard.answers;
+    let step_label = format_2(t(lang, Msg::OnbStep), &(wizard.step + 1).to_string(), &WIZARD_STEPS.to_string());
+    let header = row![
+        container(progress(p, (wizard.step + 1) as f32 / WIZARD_STEPS as f32)).width(Length::Fill),
+        mono(step_label, p.ink_tertiary),
+        button(p, t(lang, Msg::OnbSkip), None, Tone::Secondary, Some(Message::Onboarding(Onboard::Skip))),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center);
+
+    let preset_size = |depth: Depth| app.catalog.preset(depth.preset()).len().to_string();
+    let mut content = Column::new().spacing(10);
+    // Answers are numbered; keys 1 to 4 pick them, see `App::on_keyboard`.
+    let mut number = 0;
+    match wizard.step {
+        0 => {
+            content = content.push(heading(t(lang, Msg::OnbGoalQuestion), p.ink)).push(caption(t(lang, Msg::OnbIntro), p.ink_secondary));
+            for (goal, title, detail) in [
+                (Goal::CleanInstall, Msg::OnbGoalClean, Msg::OnbGoalCleanDetail),
+                (Goal::Privacy, Msg::OnbGoalPrivacy, Msg::OnbGoalPrivacyDetail),
+                (Goal::Gaming, Msg::OnbGoalGaming, Msg::OnbGoalGamingDetail),
+                (Goal::Tidy, Msg::OnbGoalTidy, Msg::OnbGoalTidyDetail),
+            ] {
+                let selected = answers.goal == Some(goal);
+                content = content.push(choice(p, { number += 1; number }, t(lang, title), t(lang, detail).to_owned(), selected, Message::Onboarding(Onboard::Goal(goal))));
+            }
+        }
+        1 => {
+            content = content.push(heading(t(lang, Msg::OnbFilesQuestion), p.ink)).push(caption(t(lang, Msg::OnbFilesHint), p.ink_secondary));
+            for (keep, title, detail) in [(true, Msg::OnbFilesYes, Msg::OnbFilesYesDetail), (false, Msg::OnbFilesNo, Msg::OnbFilesNoDetail)] {
+                let selected = answers.keep_files == Some(keep);
+                content = content.push(choice(p, { number += 1; number }, t(lang, title), t(lang, detail).to_owned(), selected, Message::Onboarding(Onboard::KeepFiles(keep))));
+            }
+        }
+        2 => {
+            content = content.push(heading(t(lang, Msg::OnbIsoQuestion), p.ink));
+            let yes = format_1(t(lang, Msg::OnbIsoYesDetail), Page::Iso.title_in(lang));
+            for (build, title, detail) in [(true, Msg::OnbIsoYes, yes), (false, Msg::OnbIsoNo, t(lang, Msg::OnbIsoNoDetail).to_owned())] {
+                let selected = answers.build_iso == Some(build);
+                content = content.push(choice(p, { number += 1; number }, t(lang, title), detail, selected, Message::Onboarding(Onboard::BuildIso(build))));
+            }
+        }
+        3 => {
+            content = content.push(heading(t(lang, Msg::OnbDepthQuestion), p.ink));
+            for (depth, title, detail) in [
+                (Depth::Careful, Msg::OnbDepthCareful, Msg::OnbDepthCarefulDetail),
+                (Depth::Standard, Msg::OnbDepthStandard, Msg::OnbDepthStandardDetail),
+                (Depth::Everything, Msg::OnbDepthEverything, Msg::OnbDepthEverythingDetail),
+            ] {
+                let selected = answers.depth == Some(depth);
+                let detail = format_1(t(lang, detail), &preset_size(depth));
+                content = content.push(choice(p, { number += 1; number }, t(lang, title), detail, selected, Message::Onboarding(Onboard::Depth(depth))));
+            }
+        }
+        _ => {
+            let rows: Vec<El<'_>> = plan_rows(app, answers)
+                .into_iter()
+                .map(|(title, detail)| {
+                    container(column![strong(title, p.ink), caption(detail, p.ink_secondary)].spacing(1))
+                        .width(Length::Fill)
+                        .padding([9.0, ROW_INSET])
+                        .into()
+                })
+                .collect();
+            content = content
+                .push(heading(t(lang, Msg::OnbSummaryTitle), p.ink))
+                .push(group(p, rows, ROW_INSET))
+                .push(caption(t(lang, Msg::OnbSummaryNote), p.ink_secondary));
+        }
+    }
+
+    let mut footer = Row::new().spacing(8).align_y(Alignment::Center);
+    if wizard.step > 0 {
+        footer = footer.push(button(p, t(lang, Msg::OnbBack), None, Tone::Secondary, Some(Message::Onboarding(Onboard::Back))));
+    }
+    footer = footer.push(space().width(Length::Fill));
+    if wizard.step == SUMMARY_STEP {
+        footer = footer.push(button(p, t(lang, Msg::OnbStart), Some(Icon::Play), Tone::Primary, Some(Message::Onboarding(Onboard::Start))));
+    }
+
+    let card = container(
+        column![
+            header,
+            container(crate::smooth::smooth(
+                scrollable(container(content).padding(Padding { right: 12.0, ..Padding::ZERO }))
+                    .height(Length::Shrink)
+                    .style(scroll_style(p)),
+            ))
+            .max_height(body_height),
+            footer
+        ]
+        .spacing(16),
+    )
+    .max_width(560)
+    .padding(22)
+    .style(move |_| container::Style {
+        background: Some(p.elevated.into()),
+        border: Border { color: p.specular, width: 1.0, radius: GROUP_RADIUS.into() },
+        shadow: floating_shadow(),
+        ..container::Style::default()
+    });
+    card.into()
+}
+
+fn sidebar(app: &App, p: Palette) -> El<'_> {
     let elevation: El<'_> = if app.info.elevated {
         badge(p, t(app.language, Msg::Administrator), p.green)
     } else {
@@ -92,7 +353,7 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
     .padding(Padding { top: indicator_y + 1.0, ..Padding::ZERO });
 
     let mut items = Column::new();
-    for (page, icon) in Page::ALL.into_iter().zip(ICONS) {
+    for (page, icon) in Page::ALL.into_iter().zip(PAGE_ICONS) {
         let active = app.page == page;
         let ink = if active { p.ink } else { p.ink_secondary };
         items = items.push(
@@ -1399,11 +1660,27 @@ fn settings_page(app: &App, p: Palette) -> El<'_> {
         .into(),
     ];
 
+    let guide = vec![
+        setting_row(
+            p,
+            t(lang, Msg::SettingsOnboardingAgain),
+            t(lang, Msg::SettingsOnboardingAgainDetail),
+            button(p, t(lang, Msg::SettingsOnboardingAgainButton), None, Tone::Secondary, Some(Message::ShowOnboardingAgain)),
+        ),
+        setting_row(
+            p,
+            t(lang, Msg::SettingsTipsAgain),
+            t(lang, Msg::SettingsTipsAgainDetail),
+            button(p, t(lang, Msg::SettingsTipsAgainButton), None, Tone::Secondary, Some(Message::ShowTipsAgain)),
+        ),
+    ];
+
     scroll_area(
         p,
         column![
             group_titled(p, t(lang, Msg::SettingsGeneral), general, ROW_INSET),
             group_titled(p, t(lang, Msg::SettingsDriftGroup), checks, ROW_INSET),
+            group_titled(p, t(lang, Msg::SettingsGuideGroup), guide, ROW_INSET),
         ]
         .spacing(16),
     )

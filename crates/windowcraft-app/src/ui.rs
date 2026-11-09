@@ -327,34 +327,39 @@ fn fade<'a>(p: Palette, top: bool) -> El<'a> {
     bands.into()
 }
 
+/// The thin scrollbar every scrolling list uses.
+pub fn scroll_style(p: Palette) -> impl Fn(&iced::Theme, scrollable::Status) -> scrollable::Style {
+    move |_, status| {
+        let active = !matches!(status, scrollable::Status::Active { .. });
+        let thumb = Color { a: if active { 0.4 } else { 0.2 }, ..p.ink_tertiary };
+        let rail = scrollable::Rail {
+            background: None,
+            border: Border::default(),
+            scroller: scrollable::Scroller {
+                background: thumb.into(),
+                border: Border { radius: 3.0.into(), ..Border::default() },
+            },
+        };
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            auto_scroll: scrollable::AutoScroll {
+                background: p.elevated.into(),
+                border: Border::default(),
+                shadow: Shadow::default(),
+                icon: p.ink,
+            },
+        }
+    }
+}
+
 pub fn scroll_area<'a>(p: Palette, content: impl Into<El<'a>>) -> El<'a> {
     let body = scrollable(container(content).padding(Padding { top: 8.0, right: 22.0, bottom: 96.0, left: 22.0 }).width(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_, status| {
-            let active = !matches!(status, scrollable::Status::Active { .. });
-            let thumb = Color { a: if active { 0.4 } else { 0.2 }, ..p.ink_tertiary };
-            let rail = scrollable::Rail {
-                background: None,
-                border: Border::default(),
-                scroller: scrollable::Scroller {
-                    background: thumb.into(),
-                    border: Border { radius: 3.0.into(), ..Border::default() },
-                },
-            };
-            scrollable::Style {
-                container: container::Style::default(),
-                vertical_rail: rail,
-                horizontal_rail: rail,
-                gap: None,
-                auto_scroll: scrollable::AutoScroll {
-                    background: p.elevated.into(),
-                    border: Border::default(),
-                    shadow: Shadow::default(),
-                    icon: p.ink,
-                },
-            }
-        });
+        .style(scroll_style(p));
     stack![
         smooth(body),
         column![fade(p, true), space().height(Length::Fill), fade(p, false)].width(Length::Fill).height(Length::Fill)

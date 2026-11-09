@@ -13,7 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use windowcraft_config::{Catalog, Feature, NativeOp, PresetName, Profile, SearchHit, SearchKind, Tweak, TweakKind};
+use windowcraft_config::{
+    Answers, Area, Catalog, CleanScope, Depth, Feature, Goal, NativeOp, PresetName, Profile, SearchHit, SearchKind, StartPlan, Tweak,
+    TweakKind,
+};
 use windowcraft_engine::autoruns::{self, AutorunEntry};
 use windowcraft_engine::cleaner::{self, CleanTarget, OrphanCandidate, ScanResult};
 use windowcraft_engine::dns_bench::{self, BenchResult, Target};
@@ -97,6 +100,34 @@ impl Page {
     pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|page| *page == self).unwrap_or(Self::ALL.len())
     }
+
+    /// The tip this page shows on its first visit. Settings has none.
+    pub fn area(self) -> Option<Area> {
+        Some(match self {
+            Self::Applications => Area::Applications,
+            Self::Tweaks => Area::Tweaks,
+            Self::System => Area::System,
+            Self::Updates => Area::Updates,
+            Self::Iso => Area::Iso,
+            Self::TimeMachine => Area::TimeMachine,
+            Self::Inspector => Area::Inspector,
+            Self::Extensions => Area::Extensions,
+            Self::Settings => return None,
+        })
+    }
+
+    pub fn of_area(area: Area) -> Self {
+        match area {
+            Area::Applications => Self::Applications,
+            Area::Tweaks => Self::Tweaks,
+            Area::System => Self::System,
+            Area::Updates => Self::Updates,
+            Area::Iso => Self::Iso,
+            Area::TimeMachine => Self::TimeMachine,
+            Area::Inspector => Self::Inspector,
+            Area::Extensions => Self::Extensions,
+        }
+    }
 }
 
 impl std::str::FromStr for Page {
@@ -131,12 +162,39 @@ pub struct StartView {
     pub language: Language,
     /// The window is transparent and shows Mica, which only tiny-skia can do.
     pub mica: bool,
+    /// Started without `--open`, `--inspect`, `--config` or `--preset`, so
+    /// the first-start questions and page tips may show. A deep link drives
+    /// screenshots and tests, and nothing should cover what it opens.
+    pub guided: bool,
 }
 
 impl Default for StartView {
     fn default() -> Self {
-        Self { page: Page::Applications, inspect: None, profile: None, language: Language::En, mica: false }
+        Self { page: Page::Applications, inspect: None, profile: None, language: Language::En, mica: false, guided: false }
     }
+}
+
+/// Screens of the first-start questions: four questions and the summary.
+pub const WIZARD_STEPS: usize = 5;
+pub const SUMMARY_STEP: usize = WIZARD_STEPS - 1;
+
+/// The open question screens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wizard {
+    pub step: usize,
+    pub answers: Answers,
+}
+
+/// What a press on a question screen means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Onboard {
+    Goal(Goal),
+    KeepFiles(bool),
+    BuildIso(bool),
+    Depth(Depth),
+    Back,
+    Skip,
+    Start,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -371,6 +429,17 @@ pub enum Message {
     ScheduleApplied(Result<(), String>),
     CheckDriftNow,
     DriftChecked(Vec<Drift>, String),
+    // Onboarding and page tips
+    Onboarding(Onboard),
+    /// "Next" on a tip: this page's tip is seen, and the next page with an
+    /// unseen tip opens. On the last one the button reads "Done" and only closes.
+    TipNext,
+    /// "Don't show again" on a tip: no more tips.
+    TipNever,
+    /// A press outside the tip, Escape or a page change: closed, nothing saved.
+    TipDismiss,
+    ShowOnboardingAgain,
+    ShowTipsAgain,
 }
 
 /// A selection that a job consumes when it succeeds.
@@ -508,6 +577,12 @@ pub struct App {
     pub needs_elevation: bool,
     pub last_log_label: String,
     pub last_log: Vec<String>,
+    // Onboarding
+    guided: bool,
+    pub wizard: Option<Wizard>,
+    pub tip: Option<Area>,
+    /// What the cleaner ticks when its next scan arrives, set by "Start".
+    clean_plan: Option<CleanScope>,
 }
 
 fn file_name(path: &std::path::Path) -> String {
@@ -649,7 +724,7 @@ fn work_dir() -> PathBuf {
 
 impl App {
     pub fn new(catalog: Arc<Catalog>, engine: Arc<Engine>, info: SystemInfo, start: StartView) -> (Self, Task<Message>) {
-        let StartView { page, inspect, profile, language, mica } = start;
+        let StartView { page, inspect, profile, language, mica, guided } = start;
         let accessibility = platform::accessibility();
         apply_motion_settings(accessibility);
         let mut timeline = Timeline::new([0.0, 0.0, 0.0, 0.0, 0.0]);
@@ -748,7 +823,14 @@ impl App {
             needs_elevation: false,
             last_log_label: String::new(),
             last_log: Vec::new(),
+            guided,
+            wizard: None,
+            tip: None,
+            clean_plan: None,
         };
+        if guided && app.settings.onboarding.wants_questions() {
+            app.wizard = Some(Wizard { step: 0, answers: app.settings.onboarding.answers });
+        }
         if let Some(profile) = profile {
             app.apply_loaded_profile(profile);
         }
@@ -936,10 +1018,93 @@ impl App {
             _ => {}
         }
         self.update_dock();
+        // Opening a page closes the tip of the last one without saving it.
+        self.tip = page.area().filter(|area| self.tip_allowed() && self.settings.onboarding.tip_due(*area));
         match page {
             Page::TimeMachine => self.refresh_time_machine(),
             Page::Inspector => self.load_inspector_tab(),
             _ => Task::none(),
+        }
+    }
+
+    /// The next page after `from`, in sidebar order and around to the start,
+    /// whose tip has not been seen.
+    pub fn next_tip(&self, from: Area) -> Option<Area> {
+        let count = Area::ALL.len();
+        let start = Area::ALL.iter().position(|area| *area == from)?;
+        (1..count)
+            .map(|offset| Area::ALL[(start + offset) % count])
+            .find(|area| *area != from && self.settings.onboarding.tip_due(*area))
+    }
+
+    fn tip_allowed(&self) -> bool {
+        self.guided && self.wizard.is_none()
+    }
+
+    fn on_onboarding(&mut self, step: Onboard) -> Task<Message> {
+        let Some(wizard) = &mut self.wizard else { return Task::none() };
+        match step {
+            Onboard::Goal(goal) => {
+                wizard.answers.goal = Some(goal);
+                wizard.step = 1;
+            }
+            Onboard::KeepFiles(keep) => {
+                wizard.answers.keep_files = Some(keep);
+                wizard.step = 2;
+            }
+            Onboard::BuildIso(build) => {
+                wizard.answers.build_iso = Some(build);
+                wizard.step = 3;
+            }
+            Onboard::Depth(depth) => {
+                wizard.answers.depth = Some(depth);
+                wizard.step = SUMMARY_STEP;
+            }
+            Onboard::Back => wizard.step = wizard.step.saturating_sub(1),
+            Onboard::Skip => {
+                let answers = wizard.answers;
+                self.wizard = None;
+                self.settings.onboarding.skip(answers);
+                self.save_settings();
+            }
+            Onboard::Start => {
+                let answers = wizard.answers;
+                self.wizard = None;
+                self.settings.onboarding.finish(answers);
+                self.save_settings();
+                return self.start_plan(answers.plan());
+            }
+        }
+        Task::none()
+    }
+
+    /// Ticks what the plan names and opens its first page. It adds to what
+    /// is already ticked and runs nothing.
+    fn start_plan(&mut self, plan: StartPlan) -> Task<Message> {
+        self.selected_tweaks.extend(self.catalog.preset(plan.preset).iter().cloned());
+        if plan.appx_defaults {
+            self.selected_appx.extend(self.catalog.presets.appx_default.iter().cloned());
+        }
+        self.clean_plan = Some(plan.clean);
+        self.apply_clean_plan();
+        if plan.first == Area::Inspector {
+            self.inspector_tab = InspectorTab::Cleaner;
+        } else {
+            self.tab = TweakTab::Essential;
+        }
+        self.navigate(Page::of_area(plan.first))
+    }
+
+    /// Ticks the planned cleaner targets once a scan has found something.
+    fn apply_clean_plan(&mut self) {
+        if self.clean_results.is_empty() {
+            return;
+        }
+        let Some(scope) = self.clean_plan.take() else { return };
+        for (target, result) in &self.clean_results {
+            if result.files > 0 && clean_scope_has(scope, target) {
+                self.clean_selected.insert(target.id);
+            }
         }
     }
 
@@ -1728,6 +1893,7 @@ impl App {
                 self.clean_results = results;
                 self.orphans = orphans;
                 self.selected_orphans.clear();
+                self.apply_clean_plan();
             }
             Message::CleanToggled(id) => toggle(&mut self.clean_selected, id),
             Message::OrphanToggled(path) => toggle(&mut self.selected_orphans, path),
@@ -1802,6 +1968,39 @@ impl App {
                 }
             }
             Message::Notice(text) => self.notice = Some(text),
+            Message::Onboarding(step) => return self.on_onboarding(step),
+            Message::TipNext => {
+                if let Some(area) = self.tip.take() {
+                    self.settings.onboarding.tip_seen(area);
+                    self.save_settings();
+                    if let Some(next) = self.next_tip(area) {
+                        return self.navigate(Page::of_area(next));
+                    }
+                }
+            }
+            Message::TipNever => {
+                if self.tip.take().is_some() {
+                    self.settings.onboarding.tips_never();
+                    self.save_settings();
+                }
+            }
+            Message::TipDismiss => self.tip = None,
+            // Both buttons are an explicit request, so they also turn guidance
+            // on in a window that a deep link opened.
+            Message::ShowOnboardingAgain => {
+                self.settings.onboarding.ask_again();
+                self.save_settings();
+                self.tip = None;
+                self.guided = true;
+                self.wizard = Some(Wizard { step: 0, answers: self.settings.onboarding.answers });
+            }
+            Message::ShowTipsAgain => {
+                self.guided = true;
+                self.settings.onboarding.reset_tips();
+                if self.save_settings() {
+                    self.notice = Some(t(self.language, Msg::NoticeTipsReset).to_owned());
+                }
+            }
             Message::SetLanguage(lang) => {
                 self.language = lang;
                 if let Err(error) = i18n::save_settings_language(lang) {
@@ -1828,9 +2027,16 @@ impl App {
         self.save_settings();
     }
 
-    fn save_settings(&mut self) {
-        if let Err(error) = settings::save(&self.settings) {
-            self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
+    /// Saves the settings file. A failure shows a notice, and the choice
+    /// still holds until the app closes, so nothing waits on a file that
+    /// cannot be written.
+    fn save_settings(&mut self) -> bool {
+        match settings::save(&self.settings) {
+            Ok(()) => true,
+            Err(error) => {
+                self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
+                false
+            }
         }
     }
 
@@ -1891,15 +2097,32 @@ impl App {
         match event {
             keyboard::Event::ModifiersChanged(modifiers) => self.modifiers = modifiers,
             keyboard::Event::KeyPressed { key, modifiers, .. } => match key.as_ref() {
-                Key::Character("k" | "f") if modifiers.control() => {
+                Key::Character("k" | "f") if modifiers.control() && self.wizard.is_none() => {
                     return Task::batch([
                         widget::operation::focus(search_id()),
                         widget::operation::select_all(search_id()),
                     ]);
                 }
+                // On a question screen 1 to 4 pick the answer with that number, and
+                // Enter on the summary starts. Nothing else listens while it is open.
+                Key::Character(digit) if self.wizard.is_some() && self.confirm.is_none() => {
+                    let step = self.wizard.map_or(0, |wizard| wizard.step);
+                    if let Some(answer) = digit.parse::<usize>().ok().and_then(|number| wizard_answer(step, number)) {
+                        return self.on_onboarding(answer);
+                    }
+                }
+                Key::Named(key::Named::Enter)
+                    if self.confirm.is_none() && self.wizard.is_some_and(|wizard| wizard.step == SUMMARY_STEP) =>
+                {
+                    return self.on_onboarding(Onboard::Start);
+                }
                 Key::Named(key::Named::Escape) => {
                     if self.confirm.is_some() {
                         self.confirm = None;
+                    } else if self.wizard.is_some() {
+                        return self.on_onboarding(Onboard::Skip);
+                    } else if self.tip.is_some() {
+                        self.tip = None;
                     } else if !self.query.is_empty() {
                         self.query.clear();
                         self.hits.clear();
@@ -2099,6 +2322,29 @@ impl App {
     }
 }
 
+/// TempOnly is the System group: temporary files, CBS and DISM logs and
+/// minidumps. Caches adds every other group except ISO Studio's own work
+/// files, which hold a build that can be resumed.
+fn clean_scope_has(scope: CleanScope, target: &CleanTarget) -> bool {
+    match scope {
+        CleanScope::TempOnly => target.group == "System",
+        CleanScope::Caches => target.id != cleaner::ISO_TARGET,
+    }
+}
+
+/// The answer with `number` (from 1) on question screen `step`, in the order
+/// the screen lists them.
+fn wizard_answer(step: usize, number: usize) -> Option<Onboard> {
+    let index = number.checked_sub(1)?;
+    match step {
+        0 => Goal::ALL.get(index).copied().map(Onboard::Goal),
+        1 => [true, false].get(index).copied().map(Onboard::KeepFiles),
+        2 => [true, false].get(index).copied().map(Onboard::BuildIso),
+        3 => Depth::ALL.get(index).copied().map(Onboard::Depth),
+        _ => None,
+    }
+}
+
 fn manager_index(manager: PackageManager) -> f64 {
     if manager == PackageManager::Winget { 0.0 } else { 1.0 }
 }
@@ -2192,8 +2438,19 @@ mod tests {
     }
 
     fn rig(name: &str) -> Rig {
+        rig_with(name, StartView::default())
+    }
+
+    /// A plain start with no deep link, as from the Start menu.
+    fn guided() -> StartView {
+        StartView { guided: true, ..StartView::default() }
+    }
+
+    fn rig_with(name: &str, start: StartView) -> Rig {
         let sandbox = Sandbox::new(name);
         let dir = tempfile::tempdir().unwrap();
+        // Each test thread reads and writes a settings file of its own.
+        settings::use_test_file(Some(dir.path().join("settings.json")));
         let catalog = Arc::new(Catalog::load().unwrap());
         let engine = Arc::new(Engine {
             scope: sandbox.scope.clone(),
@@ -2214,9 +2471,22 @@ mod tests {
             logical_processors: 8,
             elevated: false,
         };
-        let (mut app, _) = App::new(catalog, engine, info, StartView::default());
+        let (mut app, _) = App::new(catalog, engine, info, start);
         app.timeline.mode = MotionMode::Spring;
         Rig { app, _sandbox: sandbox, _dir: dir }
+    }
+
+    /// A second start of the app on the same settings file.
+    fn restart(app: &App, start: StartView) -> App {
+        App::new(app.catalog.clone(), app.engine.clone(), app.info.clone(), start).0
+    }
+
+    /// A guided start whose questions were already answered.
+    fn toured(name: &str) -> Rig {
+        let mut rig = rig_with(name, guided());
+        send(&mut rig.app, Message::Onboarding(Onboard::Skip));
+        assert!(rig.app.wizard.is_none());
+        rig
     }
 
     /// Runs the animation clock until every spring rests.
@@ -2709,5 +2979,507 @@ mod tests {
         }
         send(&mut rig.app, Message::Query("telemetry".to_owned()));
         drop(crate::views::view(&rig.app));
+    }
+
+    #[test]
+    fn the_questions_open_on_a_plain_first_start_and_never_over_a_deep_link() {
+        let rig = rig_with("onbfirst", guided());
+        assert_eq!(rig.app.wizard, Some(Wizard { step: 0, answers: Answers::default() }));
+        assert_eq!(rig.app.tip, None, "no tip under the questions");
+
+        let linked = rig_with("onblinked", StartView::default());
+        assert_eq!(linked.app.wizard, None);
+        assert_eq!(linked.app.tip, None);
+    }
+
+    #[test]
+    fn every_screen_can_be_skipped_and_a_skip_is_kept_after_a_restart() {
+        let steps = [
+            Message::Onboarding(Onboard::Goal(Goal::Privacy)),
+            Message::Onboarding(Onboard::KeepFiles(true)),
+            Message::Onboarding(Onboard::BuildIso(false)),
+            Message::Onboarding(Onboard::Depth(Depth::Careful)),
+        ];
+        for screen in 0..WIZARD_STEPS {
+            let mut rig = rig_with("onbskip", guided());
+            for message in steps.iter().take(screen).cloned() {
+                send(&mut rig.app, message);
+            }
+            assert_eq!(rig.app.wizard.map(|wizard| wizard.step), Some(screen));
+            send(&mut rig.app, Message::Onboarding(Onboard::Skip));
+            assert_eq!(rig.app.wizard, None, "screen {screen}");
+            assert!(rig.app.selected_tweaks.is_empty(), "a skip ticks nothing");
+            assert_eq!(settings::load().onboarding.status, windowcraft_config::onboarding::Status::Skipped);
+            assert_eq!(restart(&rig.app, guided()).wizard, None, "screen {screen}: not shown a second time");
+        }
+    }
+
+    #[test]
+    fn escape_skips_the_questions_and_closes_a_tip_without_saving() {
+        let mut rig = rig_with("onbescape", guided());
+        let escape = keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Named(key::Named::Escape),
+            physical_key: keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::default(),
+            text: None,
+            repeat: false,
+        };
+        send(&mut rig.app, Message::Keyboard(escape.clone()));
+        assert_eq!(rig.app.wizard, None);
+        assert!(!settings::load().onboarding.wants_questions());
+
+        send(&mut rig.app, Message::Navigate(Page::System));
+        assert_eq!(rig.app.tip, Some(Area::System));
+        send(&mut rig.app, Message::Keyboard(escape));
+        assert_eq!(rig.app.tip, None);
+        assert!(settings::load().onboarding.tip_due(Area::System), "Escape saves nothing");
+    }
+
+    #[test]
+    fn answers_move_forward_back_keeps_them_and_start_only_ticks_the_plan() {
+        let mut rig = rig_with("onbstart", guided());
+        send(&mut rig.app, Message::Onboarding(Onboard::Goal(Goal::Gaming)));
+        send(&mut rig.app, Message::Onboarding(Onboard::KeepFiles(false)));
+        send(&mut rig.app, Message::Onboarding(Onboard::BuildIso(true)));
+        send(&mut rig.app, Message::Onboarding(Onboard::Back));
+        send(&mut rig.app, Message::Onboarding(Onboard::Back));
+        let wizard = rig.app.wizard.unwrap();
+        assert_eq!(wizard.step, 1);
+        assert_eq!(wizard.answers.build_iso, Some(true), "Back keeps later answers");
+        send(&mut rig.app, Message::Onboarding(Onboard::KeepFiles(false)));
+        send(&mut rig.app, Message::Onboarding(Onboard::BuildIso(true)));
+        send(&mut rig.app, Message::Onboarding(Onboard::Depth(Depth::Everything)));
+        assert_eq!(rig.app.wizard.unwrap().step, SUMMARY_STEP);
+        drop(crate::views::view(&rig.app));
+
+        send(&mut rig.app, Message::Onboarding(Onboard::Start));
+        assert_eq!(rig.app.wizard, None);
+        assert_eq!(rig.app.selected_tweaks.len(), rig.app.catalog.preset(PresetName::Advanced).len());
+        assert_eq!(rig.app.selected_appx.len(), rig.app.catalog.presets.appx_default.len());
+        assert_eq!(rig.app.page, Page::Tweaks);
+        assert!(rig.app.job.is_none() && rig.app.confirm.is_none(), "Start runs nothing");
+        assert_eq!(rig.app.tip, Some(Area::Tweaks), "the first page shows its tip");
+
+        let saved = settings::load().onboarding;
+        assert_eq!(saved.status, windowcraft_config::onboarding::Status::Finished);
+        assert_eq!(saved.answers.goal, Some(Goal::Gaming));
+        assert_eq!(restart(&rig.app, guided()).wizard, None);
+    }
+
+    fn scan() -> Vec<(CleanTarget, ScanResult)> {
+
+        cleaner::targets().into_iter().map(|target| (target, ScanResult { bytes: 4096, files: 2 })).collect()
+    }
+
+    #[test]
+    fn the_cleaner_ticks_only_what_the_answer_about_files_allows() {
+        let mut rig = rig_with("onbtidy", guided());
+        send(&mut rig.app, Message::Onboarding(Onboard::Goal(Goal::Tidy)));
+        send(&mut rig.app, Message::Onboarding(Onboard::KeepFiles(true)));
+        send(&mut rig.app, Message::Onboarding(Onboard::BuildIso(false)));
+        send(&mut rig.app, Message::Onboarding(Onboard::Depth(Depth::Careful)));
+        send(&mut rig.app, Message::Onboarding(Onboard::Start));
+        assert_eq!(rig.app.page, Page::Inspector);
+        assert_eq!(rig.app.inspector_tab, InspectorTab::Cleaner);
+        assert!(rig.app.clean_selected.is_empty(), "nothing before a scan");
+        let results = scan();
+        send(&mut rig.app, Message::CleanResults(results, Vec::new()));
+        let expected: BTreeSet<&str> = ["temp-user", "temp-system", "cbs-logs", "minidump"].into_iter().collect();
+        assert_eq!(rig.app.clean_selected, expected);
+        assert!(rig.app.selected_orphans.is_empty());
+
+        // The plan applies to the first scan only; later scans keep the user's ticks.
+        send(&mut rig.app, Message::CleanToggled("temp-user"));
+        let results = scan();
+        send(&mut rig.app, Message::CleanResults(results, Vec::new()));
+        assert!(!rig.app.clean_selected.contains("temp-user"));
+
+        let mut new = rig_with("onbnew", guided());
+        for message in [Onboard::Goal(Goal::Tidy), Onboard::KeepFiles(false), Onboard::BuildIso(false), Onboard::Depth(Depth::Careful), Onboard::Start] {
+            send(&mut new.app, Message::Onboarding(message));
+        }
+        let results = scan();
+        send(&mut new.app, Message::CleanResults(results, Vec::new()));
+        assert!(new.app.clean_selected.contains("npm") && new.app.clean_selected.contains("shader-d3d"));
+        assert!(!new.app.clean_selected.contains(cleaner::ISO_TARGET), "ISO Studio work files stay");
+    }
+
+    #[test]
+    fn each_tip_shows_once_a_press_outside_saves_nothing_and_never_turns_all_off() {
+        let mut rig = toured("tiponce");
+        send(&mut rig.app, Message::Navigate(Page::Updates));
+        assert_eq!(rig.app.tip, Some(Area::Updates));
+        send(&mut rig.app, Message::TipNext);
+        assert_eq!(rig.app.page, Page::Iso, "Next opens the next page");
+        assert_eq!(rig.app.tip, Some(Area::Iso));
+        send(&mut rig.app, Message::TipDismiss);
+        send(&mut rig.app, Message::Navigate(Page::Updates));
+        assert_eq!(rig.app.tip, None, "seen with Next");
+        send(&mut rig.app, Message::Navigate(Page::Iso));
+        assert_eq!(rig.app.tip, Some(Area::Iso), "a dismissed tip comes back");
+        send(&mut rig.app, Message::Navigate(Page::Settings));
+        assert_eq!(rig.app.tip, None, "a page change closes it, Settings has none");
+
+        let saved = settings::load().onboarding;
+        assert!(saved.tips_seen.contains(&Area::Updates) && !saved.tips_seen.contains(&Area::Iso));
+
+        send(&mut rig.app, Message::Navigate(Page::System));
+        send(&mut rig.app, Message::TipNever);
+        for page in Page::ALL {
+            send(&mut rig.app, Message::Navigate(page));
+            assert_eq!(rig.app.tip, None, "{page:?}");
+        }
+        assert!(settings::load().onboarding.tips_off);
+        let again = restart(&rig.app, guided());
+        assert_eq!((again.wizard, again.tip), (None, None));
+    }
+
+    #[test]
+    fn next_walks_through_every_page_in_sidebar_order_and_skips_seen_tips() {
+        let mut rig = toured("tiptour");
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        send(&mut rig.app, Message::Navigate(Page::Iso));
+        assert_eq!(rig.app.tip, Some(Area::Iso));
+        send(&mut rig.app, Message::TipNext);
+        // Tweaks was only opened, not closed with Next, so its tip is still due.
+        let order = [Page::TimeMachine, Page::Inspector, Page::Extensions, Page::Applications, Page::Tweaks, Page::System, Page::Updates];
+        for (index, page) in order.into_iter().enumerate() {
+            assert_eq!(rig.app.page, page, "step {index}");
+            assert_eq!(rig.app.tip, page.area());
+            let last = index + 1 == order.len();
+            assert_eq!(rig.app.next_tip(page.area().unwrap()).is_none(), last);
+            let label = texts(&rig.app, headless::BOUNDS);
+            let expected = if last { Msg::TipDone } else { Msg::TipNext };
+            assert!(label.iter().any(|(text, _)| text == t(Language::En, expected)), "step {index}: {expected:?}");
+            send(&mut rig.app, Message::TipNext);
+        }
+        assert_eq!(rig.app.page, Page::Updates, "Done stays on the page");
+        assert_eq!(rig.app.tip, None);
+        assert!(Area::ALL.iter().all(|area| !settings::load().onboarding.tip_due(*area)));
+
+        // A tip seen earlier is skipped.
+        let mut rig = toured("tipskip");
+        send(&mut rig.app, Message::Navigate(Page::System));
+        send(&mut rig.app, Message::TipNext);
+        assert_eq!(rig.app.page, Page::Updates);
+        send(&mut rig.app, Message::TipNext);
+        assert_eq!(rig.app.page, Page::Iso);
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        send(&mut rig.app, Message::TipNext);
+        assert_eq!(rig.app.page, Page::Iso, "System and Updates were seen, ISO was only opened");
+    }
+
+    #[test]
+    fn settings_bring_the_questions_and_the_tips_back() {
+        let mut rig = toured("tipreset");
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        send(&mut rig.app, Message::TipNever);
+        send(&mut rig.app, Message::Navigate(Page::Settings));
+        send(&mut rig.app, Message::ShowTipsAgain);
+        assert!(rig.app.notice.is_some());
+        assert!(settings::load().onboarding.tip_due(Area::Tweaks));
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        assert_eq!(rig.app.tip, Some(Area::Tweaks));
+
+        send(&mut rig.app, Message::Navigate(Page::Settings));
+        send(&mut rig.app, Message::ShowOnboardingAgain);
+        assert_eq!(rig.app.wizard.map(|wizard| wizard.step), Some(0));
+        send(&mut rig.app, Message::Navigate(Page::Applications));
+        assert_eq!(rig.app.tip, None, "no tip while the questions are open");
+        assert!(settings::load().onboarding.wants_questions(), "reopened until answered");
+    }
+
+    #[test]
+    fn a_settings_file_that_cannot_be_written_still_lets_the_questions_close() {
+        let mut rig = rig_with("onbreadonly", guided());
+        let blocked = rig._dir.path().join("blocked");
+        std::fs::write(&blocked, "").unwrap();
+        settings::use_test_file(Some(blocked.join("settings.json")));
+        send(&mut rig.app, Message::Onboarding(Onboard::Goal(Goal::Privacy)));
+        send(&mut rig.app, Message::Onboarding(Onboard::Skip));
+        assert_eq!(rig.app.wizard, None);
+        assert!(rig.app.notice.as_deref().is_some_and(|notice| notice.starts_with("Failed to save settings")));
+        send(&mut rig.app, Message::DismissNotice);
+
+        send(&mut rig.app, Message::Navigate(Page::Updates));
+        send(&mut rig.app, Message::TipNext);
+        assert!(rig.app.notice.is_some(), "the failed save is reported");
+        send(&mut rig.app, Message::Navigate(Page::Updates));
+        assert_eq!(rig.app.tip, None, "the choice holds until the app closes");
+    }
+
+    /// Every text in the view and where it was laid out, at `size`.
+    fn texts(app: &App, size: iced::Size) -> Vec<(String, iced::Rectangle)> {
+        use iced::advanced::widget::{Operation, Tree};
+        use iced::advanced::{Layout, layout};
+        struct Texts(Vec<(String, iced::Rectangle)>);
+        impl Operation for Texts {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn text(&mut self, _id: Option<&iced::advanced::widget::Id>, bounds: iced::Rectangle, text: &str) {
+                self.0.push((text.to_owned(), bounds));
+            }
+        }
+        let renderer = headless::renderer();
+        let mut root = crate::views::view(app);
+        let mut tree = Tree::new(root.as_widget());
+        let node = root.as_widget_mut().layout(&mut tree, &renderer, &layout::Limits::new(iced::Size::ZERO, size));
+        let mut found = Texts(Vec::new());
+        root.as_widget_mut().operate(&mut tree, Layout::new(&node), &renderer, &mut found);
+        found.0
+    }
+
+    /// The last text equal to `label`, which is the one on the top layer.
+    fn find(texts: &[(String, iced::Rectangle)], label: &str) -> iced::Rectangle {
+        texts.iter().rev().find(|(text, _)| text == label).map(|(_, bounds)| *bounds).unwrap_or_else(|| panic!("no '{label}'"))
+    }
+
+/// Laid out whole inside the window. A squeezed row gets a height of 0,
+    /// so the height has to be a full line.
+    fn inside(bounds: iced::Rectangle, size: iced::Size) -> bool {
+        bounds.height >= 14.0
+            && bounds.x >= 0.0
+            && bounds.y >= 0.0
+            && bounds.x + bounds.width <= size.width + 0.5
+            && bounds.y + bounds.height <= size.height + 0.5
+    }
+
+    /// 878x425 is what a 1366x768 screen at 150 % leaves, see `window_layout`.
+    const SIZES: [iced::Size; 3] = [iced::Size::new(878.0, 425.0), iced::Size::new(980.0, 600.0), iced::Size::new(1280.0, 800.0)];
+
+    #[test]
+    fn every_question_screen_keeps_its_buttons_in_a_small_window_in_every_language() {
+        for &lang in Language::ALL {
+            let mut rig = rig_with("onbsmall", guided());
+            rig.app.language = lang;
+            let answers = [
+                Onboard::Goal(Goal::CleanInstall),
+                Onboard::KeepFiles(false),
+                Onboard::BuildIso(true),
+                Onboard::Depth(Depth::Everything),
+            ];
+            for step in 0..WIZARD_STEPS {
+                for size in SIZES {
+                    let texts = texts(&rig.app, size);
+                    let mut labels = vec![t(lang, Msg::OnbSkip)];
+                    if step > 0 {
+                        labels.push(t(lang, Msg::OnbBack));
+                    }
+                    if step == SUMMARY_STEP {
+                        labels.push(t(lang, Msg::OnbStart));
+                    }
+                    for label in labels {
+                        let bounds = find(&texts, label);
+                        assert!(inside(bounds, size), "{lang:?} step {step} at {size:?}: '{label}' at {bounds:?}");
+                    }
+                }
+                if let Some(answer) = answers.get(step) {
+                    send(&mut rig.app, Message::Onboarding(*answer));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_tip_fits_beside_an_open_drawer_in_a_small_window_in_every_language() {
+        for &lang in Language::ALL {
+            let mut rig = toured("tipsmall");
+            rig.app.language = lang;
+            for page in Page::ALL {
+                send(&mut rig.app, Message::Navigate(page));
+                send(&mut rig.app, Message::Inspect(Inspected::Tweak("telemetry".to_owned())));
+                settle(&mut rig.app);
+                assert_eq!(rig.app.tip, page.area());
+                let drawer = crate::theme::INSPECTOR_WIDTH;
+                for size in SIZES {
+                    let texts = texts(&rig.app, size);
+                    for label in [t(lang, Msg::TipNext), t(lang, Msg::TipNever)] {
+                        let bounds = find(&texts, label);
+                        assert!(inside(bounds, size), "{lang:?} {page:?} at {size:?}: '{label}' at {bounds:?}");
+                        assert!(bounds.x + bounds.width <= size.width - drawer, "{lang:?} {page:?}: '{label}' under the drawer");
+                        assert!(bounds.x >= crate::theme::SIDEBAR_WIDTH, "{lang:?} {page:?}: '{label}' over the sidebar");
+                    }
+                }
+                send(&mut rig.app, Message::TipDismiss);
+                send(&mut rig.app, Message::CloseInspector);
+                settle(&mut rig.app);
+            }
+        }
+    }
+
+    #[test]
+    fn a_press_outside_the_tip_closes_it_and_still_reaches_the_page() {
+        use iced::mouse;
+        let mut rig = toured("tipoutside");
+        send(&mut rig.app, Message::Navigate(Page::Applications));
+        settle(&mut rig.app);
+        assert_eq!(rig.app.tip, Some(Area::Applications));
+        let renderer = headless::renderer();
+        let mut tree = headless::tree(&rig.app);
+        let found = texts(&rig.app, headless::BOUNDS);
+        let press = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        let release = iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+
+        // On the tip's own text: nothing happens.
+        let body = find(&found, crate::i18n::t(Language::En, Msg::TipApplications)).center();
+        let (_, messages) = headless::pass(&rig.app, &mut tree, &renderer, Some((press.clone(), body)));
+        assert!(messages.is_empty(), "{messages:?}");
+
+        // On the sidebar row of another page: the tip closes and the row still works.
+        let row = texts(&rig.app, headless::BOUNDS)
+            .into_iter()
+            .find(|(text, _)| text == Page::Updates.title_in(Language::En))
+            .map(|(_, bounds)| bounds.center())
+            .unwrap();
+        let (_, messages) = headless::pass(&rig.app, &mut tree, &renderer, Some((press, row)));
+        assert!(matches!(messages.as_slice(), [Message::TipDismiss]), "{messages:?}");
+        for message in messages {
+            send(&mut rig.app, message);
+        }
+        assert_eq!(rig.app.tip, None);
+        let (_, messages) = headless::pass(&rig.app, &mut tree, &renderer, Some((release, row)));
+        assert!(matches!(messages.as_slice(), [Message::Navigate(Page::Updates)]), "{messages:?}");
+        assert!(settings::load().onboarding.tip_due(Area::Applications), "closing from outside saves nothing");
+    }
+
+    #[test]
+    fn the_tip_and_the_questions_never_show_with_a_dialog() {
+        let mut rig = toured("tipdialog");
+        send(&mut rig.app, Message::Navigate(Page::Updates));
+        assert!(rig.app.tip.is_some());
+        rig.app.confirm = Some(Confirm::DisableUpdates);
+        let found = texts(&rig.app, headless::BOUNDS);
+        assert!(!found.iter().any(|(text, _)| text == t(Language::En, Msg::TipNext)), "the dialog hides the tip");
+        rig.app.confirm = None;
+
+        send(&mut rig.app, Message::ShowOnboardingAgain);
+        let found = texts(&rig.app, headless::BOUNDS);
+        assert!(!found.iter().any(|(text, _)| text == t(Language::En, Msg::TipNext)));
+        assert!(found.iter().any(|(text, _)| text == t(Language::En, Msg::OnbSkip)));
+    }
+
+    #[test]
+    fn the_settings_buttons_work_in_a_window_a_deep_link_opened() {
+        let mut rig = rig_with("onblinkedsettings", StartView::default());
+        send(&mut rig.app, Message::Navigate(Page::Settings));
+        send(&mut rig.app, Message::ShowOnboardingAgain);
+        assert_eq!(rig.app.wizard.map(|wizard| wizard.step), Some(0));
+        send(&mut rig.app, Message::Onboarding(Onboard::Skip));
+        send(&mut rig.app, Message::Navigate(Page::System));
+        assert_eq!(rig.app.tip, Some(Area::System), "tips follow once the user asked for the introduction");
+    }
+
+    fn key(app: &mut App, key: Key) {
+        let event = keyboard::Event::KeyPressed {
+            modified_key: key.clone(),
+            key,
+            physical_key: keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::default(),
+            text: None,
+            repeat: false,
+        };
+        send(app, Message::Keyboard(event));
+    }
+
+    #[test]
+    fn number_keys_pick_answers_and_enter_starts_on_the_summary() {
+        let mut rig = rig_with("onbkeys", guided());
+        key(&mut rig.app, Key::Named(key::Named::Enter));
+        assert_eq!(rig.app.wizard.unwrap().step, 0, "Enter does nothing before the summary");
+        key(&mut rig.app, Key::Character("9".into()));
+        key(&mut rig.app, Key::Character("0".into()));
+        key(&mut rig.app, Key::Character("x".into()));
+        assert_eq!(rig.app.wizard.unwrap().step, 0, "keys without an answer do nothing");
+        for digit in ["3", "2", "1", "2"] {
+            key(&mut rig.app, Key::Character(digit.into()));
+        }
+        let wizard = rig.app.wizard.unwrap();
+        assert_eq!(wizard.step, SUMMARY_STEP);
+        assert_eq!(
+            wizard.answers,
+            Answers { goal: Some(Goal::Gaming), keep_files: Some(false), build_iso: Some(true), depth: Some(Depth::Standard) }
+        );
+        key(&mut rig.app, Key::Character("1".into()));
+        assert_eq!(rig.app.wizard.unwrap().step, SUMMARY_STEP, "numbers do nothing on the summary");
+        key(&mut rig.app, Key::Named(key::Named::Enter));
+        assert_eq!(rig.app.wizard, None);
+        assert_eq!(rig.app.page, Page::Tweaks);
+        assert_eq!(settings::load().onboarding.status, windowcraft_config::onboarding::Status::Finished);
+
+        // Without the questions the same keys change nothing.
+        let selected = rig.app.selected_tweaks.len();
+        key(&mut rig.app, Key::Character("2".into()));
+        key(&mut rig.app, Key::Named(key::Named::Enter));
+        assert_eq!((rig.app.page, rig.app.selected_tweaks.len()), (Page::Tweaks, selected));
+    }
+
+    /// Draws the view the way the window would with tiny-skia and saves it as a PNG.
+    fn render(app: &App, size: iced::Size, path: &std::path::Path) {
+        use iced::advanced::renderer::{Headless as _, Style};
+        use iced::advanced::widget::Tree;
+        use iced::advanced::{Layout, layout};
+        let mut renderer = headless::renderer();
+        let mut root = crate::views::view(app);
+        let mut tree = Tree::new(root.as_widget());
+        let node = root.as_widget_mut().layout(&mut tree, &renderer, &layout::Limits::new(iced::Size::ZERO, size));
+        // Past the page entrance, so the body is drawn where it rests.
+        std::thread::sleep(std::time::Duration::from_millis(260));
+        let palette = app.palette();
+        let theme = if palette.dark { iced::Theme::Dark } else { iced::Theme::Light };
+        root.as_widget().draw(
+            &tree,
+            &mut renderer,
+            &theme,
+            &Style { text_color: palette.ink },
+            Layout::new(&node),
+            iced::mouse::Cursor::Unavailable,
+            &iced::Rectangle::with_size(size),
+        );
+        let (width, height) = (size.width as u32, size.height as u32);
+        let pixels = renderer.screenshot(iced::Size::new(width, height), 1.0, palette.base);
+        image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8).unwrap();
+    }
+
+    /// Writes the review images in docs/screenshots/onboarding. Not part of
+    /// the normal run: `cargo test -p windowcraft-app render_guide_screens -- --ignored`.
+    #[test]
+    #[ignore = "writes PNG files into docs/screenshots/onboarding"]
+    fn render_guide_screens() {
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/screenshots/onboarding");
+        std::fs::create_dir_all(&out).unwrap();
+        let large = iced::Size::new(1280.0, 800.0);
+        let small = iced::Size::new(878.0, 425.0);
+        let answers = [Onboard::Goal(Goal::Gaming), Onboard::KeepFiles(false), Onboard::BuildIso(true), Onboard::Depth(Depth::Standard)];
+        let names = ["1-goal", "2-files", "3-iso", "4-depth", "5-summary"];
+        for (lang, suffix) in [(Language::En, "en"), (Language::Pl, "pl")] {
+            let mut rig = rig_with("render", guided());
+            rig.app.language = lang;
+            rig.app.appearance = Appearance::Dark;
+            for (step, name) in names.iter().enumerate() {
+                render(&rig.app, large, &out.join(format!("wizard-{name}-{suffix}.png")));
+                if let Some(answer) = answers.get(step) {
+                    send(&mut rig.app, Message::Onboarding(*answer));
+                }
+            }
+            render(&rig.app, small, &out.join(format!("wizard-5-summary-878x425-{suffix}.png")));
+            send(&mut rig.app, Message::Onboarding(Onboard::Start));
+            settle(&mut rig.app);
+            render(&rig.app, large, &out.join(format!("after-start-tweaks-tip-{suffix}.png")));
+            send(&mut rig.app, Message::TipDismiss);
+            for (page, name) in Page::ALL.iter().zip(["applications", "tweaks", "system", "updates", "iso", "time-machine", "inspector", "extensions"]) {
+                send(&mut rig.app, Message::Navigate(*page));
+                settle(&mut rig.app);
+                assert!(rig.app.tip.is_some());
+                render(&rig.app, large, &out.join(format!("tip-{name}-{suffix}.png")));
+                send(&mut rig.app, Message::TipDismiss);
+            }
+            send(&mut rig.app, Message::Navigate(Page::Settings));
+            settle(&mut rig.app);
+            render(&rig.app, large, &out.join(format!("settings-guide-{suffix}.png")));
+        }
     }
 }
