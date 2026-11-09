@@ -1,8 +1,8 @@
 # Release Checklist
 
-Status as of 2026-11-09: 1.2.1 is the current stable release. 1.3.0 is built locally and not
-published yet; it adds the introduction on the first start and the page tips, see
-`docs/RELEASE-NOTES-1.3.0.md`. 1.2.1 fixed what the full VM test of 1.2.0 found. 1.2.0 added the Extensions page (metadata stripper, file converter, ffmpeg, YouTube downloader),
+Status as of 2026-11-09: 1.3.0 is the current stable release, published with x64 and ARM64
+files; it adds the introduction on the first start and the page tips, see
+`docs/RELEASE-NOTES-1.3.0.md`. The published files match `SHA256SUMS.txt`. 1.2.1 fixed what the full VM test of 1.2.0 found. 1.2.0 added the Extensions page (metadata stripper, file converter, ffmpeg, YouTube downloader),
 see `docs/RELEASE-NOTES-1.2.0.md`. 1.0.3 fixed the Control Panel applet buttons, KB-9
 and KB-10. 1.0.2 moved drawing to the GPU through wgpu (Direct3D 12) with tiny-skia as the
 fallback. 1.0.2-rc1 was a pre-release of the same version on the CPU renderer alone. 0.1.0 and
