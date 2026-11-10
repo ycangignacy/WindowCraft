@@ -4,7 +4,7 @@
 
 WindowCraft is a Windows 11 tool for installing apps, removing bloat, applying privacy and performance tweaks, and building custom installation media. It is a native program written in Rust for x64 and ARM64, with no PowerShell scripts behind it. Before every change it records the previous value, so changes can be rolled back later, one at a time or a whole session at once.
 
-The current release is 1.3.0. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.3.0.md](docs/RELEASE-NOTES-1.3.0.md) says what changed and what was tested.
+The current release is 1.3.1. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.3.1.md](docs/RELEASE-NOTES-1.3.1.md) says what changed and what was tested.
 
 ![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
 
@@ -55,8 +55,8 @@ The interface is in English, Polish, German, French, Spanish, Italian, Brazilian
 An administrator can preset the language for every user. A user's own choice in the app wins.
 
 ```powershell
-msiexec /i WindowCraft-1.3.0-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.3.0-x64-setup.exe WCLANGUAGE=de
+msiexec /i WindowCraft-1.3.1-x64.msi WCLANGUAGE=pl /qn
+.\WindowCraft-1.3.1-x64-setup.exe WCLANGUAGE=de
 ```
 
 The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`.
