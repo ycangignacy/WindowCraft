@@ -226,13 +226,13 @@ impl ImageInfo {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     type CaptureImage = unsafe extern "system" fn(HANDLE, PCWSTR, u32) -> HANDLE;
 
     /// Captures a folder so the real wimgapi calls can be exercised.
-    fn capture(wim: &WimFile, source: &Path) -> bool {
+    pub(crate) fn capture(wim: &WimFile, source: &Path) -> bool {
         // SAFETY: The signature matches wimgapi.h.
         let capture = unsafe { wim.api.library.symbol::<CaptureImage>(c"WIMCaptureImage") }.unwrap();
         let path = wide(source);

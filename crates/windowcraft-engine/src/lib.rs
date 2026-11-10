@@ -44,7 +44,7 @@ pub mod youtube;
 
 pub use error::{EngineError, Result};
 pub use executor::{Detection, Drift, Engine, InspectRow, NativeRunner, RecordingRunner, RunReport, TweakAction};
-pub use jobs::{CancelToken, JobContext, JobEvent, JobHandle, LogRing};
+pub use jobs::{CancelToken, JobContext, JobEvent, JobFailure, JobHandle, LogRing};
 pub use native::SystemRunner;
 pub use registry::{RegPath, RegValue, RegistryScope};
 pub use snapshot::{SessionState, SnapshotStore};

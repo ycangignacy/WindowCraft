@@ -39,10 +39,13 @@ fn atoms(file: &mut File, from: u64, to: u64) -> std::io::Result<Vec<Atom>> {
             }
             size => (8, size),
         };
-        if size < header || at + size > to {
+        let Some(end) = at.checked_add(size) else {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "damaged MP4 box size"));
+        };
+        if size < header || end > to {
             break;
         }
-        found.push(Atom { kind, from: at + header, to: at + size });
+        found.push(Atom { kind, from: at + header, to: end });
         at += size;
     }
     Ok(found)
@@ -68,7 +71,8 @@ fn children(data: &[u8]) -> Vec<([u8; 4], &[u8])> {
             1 if at + 16 <= data.len() => (16, u64::from_be_bytes(data[at + 8..at + 16].try_into().unwrap_or_default()) as usize),
             size => (8, size),
         };
-        if size < header || at + size > data.len() {
+        // Compared with what is left, so a 64-bit size cannot overflow.
+        if size < header || size > data.len() - at {
             break;
         }
         found.push((kind, &data[at + header..at + size]));
@@ -792,4 +796,33 @@ pub(super) fn write(movie: &Movie, reader: &mut SampleReader, out: &mut impl Wri
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn huge_box() -> Vec<u8> {
+        let mut data = 1u32.to_be_bytes().to_vec();
+        data.extend_from_slice(b"moov");
+        data.extend_from_slice(&u64::MAX.to_be_bytes());
+        data.extend_from_slice(&[0u8; 16]);
+        data
+    }
+
+    #[test]
+    fn a_64_bit_box_size_past_the_buffer_ends_the_walk() {
+        assert!(children(&huge_box()).is_empty());
+    }
+
+    #[test]
+    fn a_64_bit_box_size_past_the_file_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("huge.mp4");
+        let mut data = 16u32.to_be_bytes().to_vec();
+        data.extend_from_slice(b"ftypisom\0\0\0\0");
+        data.extend_from_slice(&huge_box());
+        std::fs::write(&path, &data).unwrap();
+        assert!(read(&path).is_err());
+    }
 }

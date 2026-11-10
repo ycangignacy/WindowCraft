@@ -353,6 +353,12 @@ pub(super) fn read(source: &Path) -> Result<Option<Movie>> {
                                 at = child_payload + child_size;
                                 continue;
                             };
+                            // Track number, a 16-bit time and the flags byte.
+                            let Some(body_len) = block_size.checked_sub(number_len as u64 + 3).filter(|_| peek.len() >= number_len + 3)
+                            else {
+                                return Err(EngineError::Invalid(format!("{name}: damaged Matroska block")));
+                            };
+                            let body_len = body_len as usize;
                             let relative = i16::from_be_bytes([peek[number_len], peek[number_len + 1]]);
                             let flags = peek[number_len + 2];
                             let header = number_len + 3;
@@ -362,7 +368,6 @@ pub(super) fn read(source: &Path) -> Result<Option<Movie>> {
                             }
                             let lacing = flags >> 1 & 3;
                             let body_at = block_at + header as u64;
-                            let body_len = (block_size - header as u64) as usize;
                             if lacing == 0 {
                                 frames[index].push(Sample { data: Data::File { offset: body_at, size: body_len as u32 }, pts: timestamp, duration: 0, key: key.unwrap_or(true) });
                             } else {
@@ -719,6 +724,21 @@ mod tests {
         let used = body.len();
         let (sizes, _) = lace_sizes(3, &body, used + 500 + 502 + 9).unwrap();
         assert_eq!(sizes, vec![500, 502, 9]);
+    }
+
+    #[test]
+    fn a_cut_simple_block_is_an_error() {
+        let entry = [uint_element(TRACK_NUMBER, 1), uint_element(TRACK_TYPE, 1), element(CODEC_ID, b"V_VP8")].concat();
+        let tracks = element(TRACKS, &element(TRACK_ENTRY, &entry));
+        // Track 1, then one byte of the 16-bit time and no flags.
+        let cluster = element(CLUSTER, &[uint_element(TIMESTAMP, 0), element(SIMPLE_BLOCK, &[0x81, 0x00])].concat());
+        let mut data = element(EBML, &element(DOC_TYPE, b"matroska"));
+        data.extend_from_slice(&element(SEGMENT, &[tracks, cluster].concat()));
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cut.mkv");
+        std::fs::write(&path, &data).unwrap();
+        assert!(matches!(read(&path), Err(EngineError::Invalid(_))));
     }
 
     #[test]

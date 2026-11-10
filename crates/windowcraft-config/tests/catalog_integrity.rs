@@ -213,6 +213,34 @@ fn profile_rejects_unknown_references() {
 }
 
 #[test]
+fn profile_with_two_tweaks_of_one_exclusive_group_is_rejected() {
+    let catalog = catalog();
+    let peers: Vec<&str> = catalog.exclusive_peers("teredo").collect();
+    assert_eq!(peers, ["ipv46", "disable-ipv6"]);
+    let error = import_any(r#"{"version":1,"tweaks":["teredo","activity","disable-ipv6"]}"#, &catalog).unwrap_err();
+    assert!(matches!(&error, ProfileError::Exclusive(a, b) if a == "teredo" && b == "disable-ipv6"), "{error}");
+    assert!(import_any(r#"{"version":1,"tweaks":["teredo","activity"]}"#, &catalog).is_ok());
+    assert_eq!(catalog.exclusive_peers("activity").count(), 0);
+}
+
+#[test]
+fn profile_without_a_version_is_named_as_such_not_as_winutil() {
+    let catalog = catalog();
+    let error = import_any(r#"{"tweaks":["no-such-tweak"]}"#, &catalog).unwrap_err();
+    assert!(matches!(error, ProfileError::MissingVersion), "{error}");
+    // A real WinUtil config still imports.
+    assert!(import_any(r#"{"WPFTweaks":[]}"#, &catalog).is_ok());
+}
+
+#[test]
+fn profile_saved_with_a_byte_order_mark_is_read() {
+    let catalog = catalog();
+    let resolved = import_any("\u{FEFF}{\"version\":1,\"tweaks\":[\"activity\"]}", &catalog).unwrap();
+    assert_eq!(resolved.profile.tweaks, ["activity"]);
+    assert_eq!(Profile::parse("\u{FEFF}{\"version\":1}").unwrap(), Profile::new());
+}
+
+#[test]
 fn profile_rejects_corrupted_json_gracefully() {
     let catalog = catalog();
     for case in ["", "{", "[1,2,3]", "null", r#"{"version":"one"}"#, "\u{0}\u{1}"] {

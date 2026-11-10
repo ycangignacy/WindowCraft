@@ -5,6 +5,7 @@
 <WixLocalization Culture="fr-fr" Language="1036" xmlns="http://schemas.microsoft.com/wix/2006/localization">
   <String Id="Caption">Installation de [WixBundleName]</String>
   <String Id="Title">[WixBundleName]</String>
+  <String Id="ConditionWindows11">WindowCraft nécessite Windows 11 ou une version ultérieure.</String>
   <String Id="InstallVersion">Version [WixBundleVersion]</String>
   <String Id="ConfirmCancelMessage">Voulez-vous vraiment annuler ?</String>
   <String Id="ExecuteUpgradeRelatedBundleMessage">Version précédente</String>

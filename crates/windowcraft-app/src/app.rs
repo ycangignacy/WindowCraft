@@ -23,7 +23,7 @@ use windowcraft_engine::dns_bench::{self, BenchResult, Target};
 use windowcraft_engine::error::Result as EngineResult;
 use windowcraft_engine::fixes;
 use windowcraft_engine::gaming::{self, InterruptPriority, PciDevice, TimerResolution};
-use windowcraft_engine::jobs::{self, CancelToken, JobContext, JobEvent, LogRing};
+use windowcraft_engine::jobs::{self, CancelToken, JobContext, JobEvent, JobFailure, LogRing};
 use windowcraft_engine::metadata;
 use windowcraft_engine::convert;
 use windowcraft_engine::tools::{self, Extension};
@@ -302,6 +302,8 @@ pub struct ChangeView {
 pub enum Message {
     Frame(Instant),
     WindowOpened(window::Id),
+    /// A second launch handed over its command line, see `remote`.
+    Remote(crate::remote::Request),
     WindowHandle(u64),
     Navigate(Page),
     Keyboard(keyboard::Event),
@@ -392,7 +394,8 @@ pub enum Message {
     ConvertPick,
     ConvertPicked(Vec<PathBuf>),
     // Time Machine
-    Refreshed(Vec<Session>, Vec<Drift>),
+    /// None keeps what is shown, because the read failed.
+    Refreshed(Option<Vec<Session>>, Option<Vec<Drift>>),
     SelectSession(u64),
     Changes(u64, Vec<ChangeView>),
     RollbackChange(u64, u32),
@@ -413,7 +416,8 @@ pub enum Message {
     BenchResults(Result<Vec<BenchResult>, String>),
     // Drawer
     Inspect(Inspected),
-    InspectRows(Vec<InspectRow>),
+    /// Rows for the item they were read for; a late answer for another one is dropped.
+    InspectRows(Inspected, Vec<InspectRow>),
     CloseInspector,
     // Jobs
     Job(JobEvent),
@@ -426,9 +430,10 @@ pub enum Message {
     SetAppearance(Appearance),
     SetInterval(CheckInterval),
     SetAfterUpdates(bool),
-    ScheduleApplied(Result<(), String>),
+    /// The outcome and whether the task was made to exist.
+    ScheduleApplied(Result<(), String>, bool),
     CheckDriftNow,
-    DriftChecked(Vec<Drift>, String),
+    DriftChecked(Result<Vec<Drift>, String>, String),
     // Onboarding and page tips
     Onboarding(Onboard),
     /// "Next" on a tip: this page's tip is seen, and the next page with an
@@ -451,6 +456,15 @@ pub enum Queue {
     Features,
 }
 
+/// What a job does, for the follow-up work when it ends. The label is only
+/// for display and changes with the language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JobKind {
+    #[default]
+    Other,
+    OpenIso,
+}
+
 pub struct ActiveJob {
     pub label: String,
     pub fraction: f32,
@@ -458,6 +472,13 @@ pub struct ActiveJob {
     pub cancel: CancelToken,
     pub log: LogRing,
     pub queue: Option<Queue>,
+    /// Ids of the queue the job was started with. Items ticked while it runs
+    /// are not in it and stay ticked.
+    pub sent: Vec<String>,
+    /// Ids the job finished, when it reports them one by one. Without it a
+    /// successful job counts as having finished everything it was sent.
+    pub done: Option<Arc<std::sync::Mutex<Vec<String>>>>,
+    pub kind: JobKind,
     /// Keeps the job out of windowcraft.log, because its steps and summary
     /// name the user's files or the video.
     pub private: bool,
@@ -510,6 +531,8 @@ pub struct App {
     pub appearance: Appearance,
     pub language: Language,
     pub settings: Settings,
+    /// A schedule change is running. The next one waits for it, see `save_schedule`.
+    pub schedule_busy: bool,
     pub window: Option<u64>,
     pub page: Page,
     pub query: String,
@@ -535,6 +558,10 @@ pub struct App {
     pub detections: BTreeMap<String, Detection>,
     pub options: BTreeMap<String, String>,
     pub dns_choice: String,
+    /// Parts of an imported profile that have no tick box: toggles and
+    /// segmented options wait in the Tweaks queue, the update mode and the
+    /// service rules are kept for export.
+    pub imported: Profile,
     pub selected_appx: BTreeSet<String>,
     // System
     pub selected_features: BTreeSet<String>,
@@ -751,6 +778,7 @@ impl App {
             appearance: saved.appearance,
             language,
             settings: saved,
+            schedule_busy: false,
             window: None,
             page: Page::Applications,
             query: String::new(),
@@ -771,6 +799,7 @@ impl App {
             detections: BTreeMap::new(),
             options: BTreeMap::new(),
             dns_choice: "Default".to_owned(),
+            imported: Profile::new(),
             selected_appx: BTreeSet::new(),
             selected_features: BTreeSet::new(),
             fix_modes: BTreeMap::new(),
@@ -832,12 +861,16 @@ impl App {
             app.wizard = Some(Wizard { step: 0, answers: app.settings.onboarding.answers });
         }
         if let Some(profile) = profile {
-            app.apply_loaded_profile(profile);
+            let _ = app.apply_loaded_profile(profile);
         }
         let navigation = app.navigate(page);
         let mut startup = vec![app.refresh_detection(), app.refresh_time_machine(), app.refresh_update_mode(), navigation];
         if let Some(id) = inspect {
-            startup.push(app.open_inspector(Inspected::Tweak(id)));
+            if app.find_tweak(&id).is_some() {
+                startup.push(app.open_inspector(Inspected::Tweak(id)));
+            } else {
+                app.notice = Some(format_1(t(app.language, Msg::NoticeUnknownInspect), &id));
+            }
         }
         let startup = Task::batch(startup);
         (app, startup)
@@ -868,6 +901,7 @@ impl App {
             // Raw, because a focused text field captures Escape otherwise.
             event::listen_raw(keyboard_event),
             iced::system::theme_changes().map(|_| Message::SystemThemeChanged),
+            Subscription::run(crate::remote::requests).map(Message::Remote),
         ];
         // No frame source exists unless something is moving, so an idle app
         // sleeps in the message loop at 0% CPU. While it runs, frames follow
@@ -904,7 +938,7 @@ impl App {
 
     fn refresh_time_machine(&self) -> Task<Message> {
         self.blocking(
-            |engine| (engine.store.sessions().unwrap_or_default(), engine.detect_drift().unwrap_or_default()),
+            |engine| (engine.store.sessions().ok(), engine.detect_drift().ok()),
             |(sessions, drift)| Message::Refreshed(sessions, drift),
         )
     }
@@ -928,6 +962,24 @@ impl App {
         self.start_queue_job(label, None, body)
     }
 
+    fn selection(&self, queue: Queue) -> &BTreeSet<String> {
+        match queue {
+            Queue::Apps => &self.selected_apps,
+            Queue::Tweaks => &self.selected_tweaks,
+            Queue::Appx => &self.selected_appx,
+            Queue::Features => &self.selected_features,
+        }
+    }
+
+    fn selection_mut(&mut self, queue: Queue) -> &mut BTreeSet<String> {
+        match queue {
+            Queue::Apps => &mut self.selected_apps,
+            Queue::Tweaks => &mut self.selected_tweaks,
+            Queue::Appx => &mut self.selected_appx,
+            Queue::Features => &mut self.selected_features,
+        }
+    }
+
     /// Starts a job that writes nothing to windowcraft.log.
     fn start_private_job(
         &mut self,
@@ -941,8 +993,9 @@ impl App {
         task
     }
 
-    /// Starts a job. `queue` is cleared only if this job succeeds, so a quick
-    /// toggle never wipes a selection the user is still building.
+    /// Starts a job. When it ends, only the items of `queue` it finished are
+    /// unticked, so a quick toggle never wipes a selection the user is still
+    /// building.
     fn start_queue_job(
         &mut self,
         label: &str,
@@ -954,6 +1007,7 @@ impl App {
             return Task::none();
         }
         let handle = jobs::spawn(label, body);
+        let sent = queue.map(|queue| self.selection(queue).iter().cloned().collect()).unwrap_or_default();
         self.job = Some(ActiveJob {
             label: label.to_owned(),
             fraction: 0.0,
@@ -961,6 +1015,9 @@ impl App {
             cancel: handle.cancel.clone(),
             log: handle.log.clone(),
             queue,
+            sent,
+            done: None,
+            kind: JobKind::Other,
             private: false,
         });
         self.update_dock();
@@ -977,7 +1034,7 @@ impl App {
         match self.page {
             Page::Applications => self.selected_apps.len(),
             Page::Tweaks if self.tab == TweakTab::Appx => self.selected_appx.len(),
-            Page::Tweaks => self.selected_tweaks.len(),
+            Page::Tweaks => self.selected_tweaks.len() + self.imported.toggles.len() + self.imported.segmented.len(),
             Page::System => self.selected_features.len(),
             _ => 0,
         }
@@ -1078,10 +1135,69 @@ impl App {
         Task::none()
     }
 
+    /// A second launch, read with the same rules as a fresh start: `--config`
+    /// or `--preset` loads a selection to review, `--open` picks the page and
+    /// `--inspect` opens a known tweak. Open questions close, as they would
+    /// never have opened over a deep link.
+    fn on_remote(&mut self, request: &crate::remote::Request) -> Task<Message> {
+        let arguments = std::iter::once("windowcraft".to_owned()).chain(request.args.iter().cloned());
+        let Ok(mut cli) = <crate::cli::Cli as clap::Parser>::try_parse_from(arguments) else { return Task::none() };
+        if cli.is_headless() {
+            return Task::none();
+        }
+        if let Some(config) = &mut cli.config
+            && config.is_relative()
+        {
+            *config = request.cwd.join(&*config);
+        }
+        let wants_selection = cli.config.is_some() || cli.preset.is_some();
+        let mut page = cli.open.map(|page| page.0);
+        if wants_selection {
+            if self.job.is_some() {
+                self.notice = Some(t(self.language, Msg::NoticeAnotherOperationRunning).to_owned());
+            } else {
+                match crate::cli::load_selection(&cli, &self.catalog) {
+                    Ok(Some(resolved)) => {
+                        let _ = self.apply_loaded_profile(resolved.profile);
+                        page = page.or(Some(Page::Tweaks));
+                    }
+                    Ok(None) => {}
+                    Err(error) => self.notice = Some(format_1(t(self.language, Msg::NoticeImportFailed), &error)),
+                }
+            }
+        }
+        if page.is_some() || cli.inspect.is_some() {
+            self.wizard = None;
+            self.tip = None;
+        }
+        let mut tasks = Vec::new();
+        if let Some(page) = page {
+            tasks.push(self.navigate(page));
+        }
+        if let Some(id) = cli.inspect {
+            if self.find_tweak(&id).is_some() {
+                tasks.push(self.open_inspector(Inspected::Tweak(id)));
+            } else {
+                self.notice = Some(format_1(t(self.language, Msg::NoticeUnknownInspect), &id));
+            }
+        }
+        Task::batch(tasks)
+    }
+
+    /// Ticks a tweak and unticks the others in its `exclusive` group.
+    fn select_tweak(&mut self, id: String) {
+        for peer in self.catalog.exclusive_peers(&id) {
+            self.selected_tweaks.remove(peer);
+        }
+        self.selected_tweaks.insert(id);
+    }
+
     /// Ticks what the plan names and opens its first page. It adds to what
     /// is already ticked and runs nothing.
     fn start_plan(&mut self, plan: StartPlan) -> Task<Message> {
-        self.selected_tweaks.extend(self.catalog.preset(plan.preset).iter().cloned());
+        for id in self.catalog.clone().preset(plan.preset) {
+            self.select_tweak(id.clone());
+        }
         if plan.appx_defaults {
             self.selected_appx.extend(self.catalog.presets.appx_default.iter().cloned());
         }
@@ -1132,22 +1248,22 @@ impl App {
     }
 
     fn load_inspect_rows(&self, inspected: Inspected) -> Task<Message> {
-        let Inspected::Tweak(id) = inspected else {
+        let Inspected::Tweak(id) = &inspected else {
             return Task::none();
         };
-        let tweak = self.find_tweak(&id);
-        let option = self.options.get(&id).cloned();
+        let tweak = self.find_tweak(id);
+        let option = self.options.get(id).cloned();
         self.blocking(
             move |engine| {
-                let Some(tweak) = tweak else { return Vec::new() };
+                let Some(tweak) = tweak else { return (inspected, Vec::new()) };
                 let action = match tweak.kind {
                     TweakKind::Toggle => TweakAction::Set(true),
                     TweakKind::Segmented => TweakAction::Select(option.unwrap_or_default()),
                     _ => TweakAction::Apply,
                 };
-                engine.inspect(&tweak, &action).unwrap_or_default()
+                (inspected, engine.inspect(&tweak, &action).unwrap_or_default())
             },
-            Message::InspectRows,
+            |(inspected, rows)| Message::InspectRows(inspected, rows),
         )
     }
 
@@ -1164,20 +1280,33 @@ impl App {
         let engine = self.engine.clone();
         let session_label = label.to_owned();
         let lang = self.language;
-        self.start_queue_job(label, queue, move |context| {
+        let done = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let finished = done.clone();
+        // A refused start leaves the running job in place, which must keep its own tracker.
+        let busy = self.job.is_some();
+        let task = self.start_queue_job(label, queue, move |context| {
             let total = items.len().max(1) as f32;
             let borrowed: Vec<(&Tweak, TweakAction)> = items.iter().map(|(tweak, action)| (tweak, action.clone())).collect();
             let report = engine.run(&session_label, &borrowed, &context.cancel, |index, name| {
                 context.progress(index as f32 / total, name);
             })?;
-            if report.failed.is_empty() {
+            if let Ok(mut finished) = finished.lock() {
+                finished.clone_from(&report.applied);
+            }
+            if report.cancelled {
+                Ok(format_2(t(lang, Msg::NoticeCancelledAfter), &report.applied.len().to_string(), &items.len().to_string()))
+            } else if report.failed.is_empty() {
                 Ok(format_1(t(lang, Msg::NoticeItemsApplied), &report.applied.len().to_string()))
             } else {
                 let (name, reason) = &report.failed[0];
                 let first = format!("{name}: {reason}");
                 Err(EngineError::Invalid(format_2(t(lang, Msg::NoticeFailures), &report.failed.len().to_string(), &first)))
             }
-        })
+        });
+        if !busy && let Some(job) = &mut self.job {
+            job.done = Some(done);
+        }
+        task
     }
 
     fn selected_profile(&self) -> Profile {
@@ -1187,13 +1316,20 @@ impl App {
         profile.features = self.selected_features.iter().cloned().collect();
         profile.appx_remove = self.selected_appx.iter().cloned().collect();
         profile.segmented = self.options.iter().filter(|(_, option)| option.as_str() != "Enabled").map(|(k, v)| (k.clone(), v.clone())).collect();
+        // What an import queued but nothing applied yet goes out unchanged.
+        profile.segmented.extend(self.imported.segmented.clone());
+        profile.toggles = self.imported.toggles.clone();
+        profile.update_mode.clone_from(&self.imported.update_mode);
+        profile.services.clone_from(&self.imported.services);
         if self.dns_choice != "Default" {
             profile.dns = Some(self.dns_choice.clone());
         }
         profile
     }
 
-    fn apply_loaded_profile(&mut self, profile: Profile) {
+    /// Takes over every section of a profile. Returns true when it holds an
+    /// update mode or service rules, which the GUI keeps without applying.
+    fn apply_loaded_profile(&mut self, profile: Profile) -> bool {
         self.selected_tweaks = profile.tweaks.into_iter().collect();
         self.selected_apps = profile.apps.into_iter().collect();
         self.selected_features = profile.features.into_iter().collect();
@@ -1201,7 +1337,15 @@ impl App {
         if let Some(dns) = profile.dns {
             self.dns_choice = dns;
         }
+        self.imported = Profile {
+            toggles: profile.toggles,
+            segmented: profile.segmented,
+            update_mode: profile.update_mode,
+            services: profile.services,
+            ..Profile::new()
+        };
         self.update_dock();
+        self.imported.update_mode.is_some() || !self.imported.services.is_empty()
     }
 
     fn studio_session(&self) -> StudioSession {
@@ -1225,7 +1369,9 @@ impl App {
             Message::WindowHandle(handle) => {
                 self.window = Some(handle);
                 platform::apply_backdrop(handle, self.palette().dark, self.translucent());
+                crate::remote::listen(handle);
             }
+            Message::Remote(request) => return self.on_remote(&request),
             Message::Navigate(page) => return self.navigate(page),
             Message::Keyboard(event) => return self.on_keyboard(event),
             Message::Query(query) => {
@@ -1267,21 +1413,34 @@ impl App {
                 self.settings.after_updates = on;
                 return self.save_schedule();
             }
-            Message::ScheduleApplied(result) => {
+            Message::ScheduleApplied(result, wanted) => {
+                self.schedule_busy = false;
                 if let Err(error) = result {
                     self.notice = Some(format_1(t(self.language, Msg::NoticeScheduleFailed), &error));
+                } else if wanted != self.settings.wants_schedule() {
+                    // The choice changed while the task was being written.
+                    return self.save_schedule();
                 }
             }
             Message::CheckDriftNow => {
                 return self.blocking(
                     |engine| {
                         let build = sysinfo::query().map(|info| info.full_build()).unwrap_or_default();
-                        (engine.detect_drift().unwrap_or_default(), build)
+                        (engine.detect_drift().map_err(|error| error.to_string()), build)
                     },
                     |(drift, build)| Message::DriftChecked(drift, build),
                 );
             }
             Message::DriftChecked(drift, build) => {
+                // A failed check is not a clean one: the list and the date stay.
+                let drift = match drift {
+                    Ok(drift) => drift,
+                    Err(error) => {
+                        self.notice = Some(format_1(t(self.language, Msg::NoticeDriftCheckFailed), &error));
+                        self.notice_failed.clone_from(&self.notice);
+                        return Task::none();
+                    }
+                };
                 if drift.is_empty() {
                     self.notice = Some(t(self.language, Msg::NoticeNoDrift).to_owned());
                 }
@@ -1407,15 +1566,24 @@ impl App {
                 self.update_dock();
             }
             Message::TweakChecked(id) => {
-                toggle(&mut self.selected_tweaks, id);
+                if self.selected_tweaks.contains(&id) {
+                    self.selected_tweaks.remove(&id);
+                } else {
+                    self.select_tweak(id);
+                }
                 self.update_dock();
             }
             Message::Preset(preset) => {
-                self.selected_tweaks = self.catalog.preset(preset).iter().cloned().collect();
+                self.selected_tweaks.clear();
+                for id in self.catalog.clone().preset(preset) {
+                    self.select_tweak(id.clone());
+                }
                 self.update_dock();
             }
             Message::ClearTweaks => {
                 self.selected_tweaks.clear();
+                self.imported.toggles.clear();
+                self.imported.segmented.clear();
                 self.update_dock();
             }
             Message::DetectApplied => {
@@ -1540,8 +1708,13 @@ impl App {
                         .and_then(|text| windowcraft_config::import_any(&text, &self.catalog).map_err(|e| e.to_string()))
                     {
                         Ok(resolved) => {
-                            self.apply_loaded_profile(resolved.profile);
-                            self.notice = Some(format_1(t(self.language, Msg::NoticeImported), &path.display().to_string()));
+                            let kept = self.apply_loaded_profile(resolved.profile);
+                            let mut notice = format_1(t(self.language, Msg::NoticeImported), &path.display().to_string());
+                            if kept {
+                                notice.push_str(". ");
+                                notice.push_str(t(self.language, Msg::NoticeImportedKept));
+                            }
+                            self.notice = Some(notice);
                         }
                         Err(error) => self.notice = Some(format_1(t(self.language, Msg::NoticeImportFailed), &error)),
                     }
@@ -1631,7 +1804,7 @@ impl App {
                 return self.start_job(t(lang, Msg::JobDownloadingWin11), move |context| {
                     let hash = (!hash.is_empty()).then_some(hash);
                     pipeline::download_iso(&url, &destination, hash.as_deref(), context)
-                        .map_err(|e| EngineError::Invalid(e.to_string()))?;
+                        .map_err(iso_error)?;
                     Ok(t(lang, Msg::NoticeDownloadVerified).to_owned())
                 });
             }
@@ -1643,12 +1816,17 @@ impl App {
                     session.step = saved.step;
                 }
                 let lang = self.language;
-                return self.start_job(t(lang, Msg::JobOpeningIso), move |context| {
-                    session.save(&work).map_err(|e| EngineError::Invalid(e.to_string()))?;
+                let busy = self.job.is_some();
+                let task = self.start_job(t(lang, Msg::JobOpeningIso), move |context| {
+                    session.save(&work).map_err(iso_error)?;
                     let images = pipeline::extract(&mut session, &work, context)
-                        .map_err(|e| EngineError::Invalid(e.to_string()))?;
+                        .map_err(iso_error)?;
                     Ok(format_1(t(lang, Msg::NoticeFoundEditions), &images.len().to_string()))
                 });
+                if !busy && let Some(job) = &mut self.job {
+                    job.kind = JobKind::OpenIso;
+                }
+                return task;
             }
             Message::IsoImages(result) => match result {
                 Ok(images) => {
@@ -1795,8 +1973,12 @@ impl App {
                 });
             }
             Message::Refreshed(sessions, drift) => {
-                self.sessions = sessions;
-                self.drift = drift;
+                if let Some(sessions) = sessions {
+                    self.sessions = sessions;
+                }
+                if let Some(drift) = drift {
+                    self.drift = drift;
+                }
             }
             Message::SelectSession(id) => {
                 if self.open_session == Some(id) {
@@ -1919,7 +2101,7 @@ impl App {
                             );
                             continue;
                         }
-                        context.progress(index as f32 / total, target.name);
+                        context.progress(index as f32 / total, i18n::clean_target(lang, target).0);
                         freed += cleaner::clean(target).removed_bytes;
                     }
                     for (index, path) in orphans.iter().enumerate() {
@@ -1952,7 +2134,11 @@ impl App {
                 }
                 return self.open_inspector(inspected);
             }
-            Message::InspectRows(rows) => self.inspect_rows = rows,
+            Message::InspectRows(inspected, rows) => {
+                if self.inspected.as_ref() == Some(&inspected) {
+                    self.inspect_rows = rows;
+                }
+            }
             Message::CloseInspector => self.close_inspector(),
             Message::Job(event) => return self.on_job_event(event),
             Message::CancelJob => {
@@ -1997,12 +2183,19 @@ impl App {
             Message::ShowTipsAgain => {
                 self.guided = true;
                 self.settings.onboarding.reset_tips();
+                // Tips wait for the questions. Questions that are not on screen
+                // count as skipped here, or the tips would never come back.
+                if self.settings.onboarding.wants_questions() && self.wizard.is_none() {
+                    let answers = self.settings.onboarding.answers;
+                    self.settings.onboarding.skip(answers);
+                }
                 if self.save_settings() {
                     self.notice = Some(t(self.language, Msg::NoticeTipsReset).to_owned());
                 }
             }
             Message::SetLanguage(lang) => {
                 self.language = lang;
+                i18n::set_current(lang);
                 if let Err(error) = i18n::save_settings_language(lang) {
                     self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
                 }
@@ -2041,11 +2234,19 @@ impl App {
     }
 
     /// Saves the check settings, then creates or removes the scheduled task.
+    /// Saves the choice and brings the scheduled task in line with it. Only
+    /// one change runs at a time, so an older delete can never land after a
+    /// newer create; the one that ends checks the choice again.
     fn save_schedule(&mut self) -> Task<Message> {
         self.save_settings();
+        if self.schedule_busy {
+            return Task::none();
+        }
+        self.schedule_busy = true;
         let chosen = self.settings.clone();
+        let wanted = chosen.wants_schedule();
         let description = t(self.language, Msg::SettingsTaskDescription).to_owned();
-        self.blocking(move |_| settings::apply_schedule(&chosen, &description), Message::ScheduleApplied)
+        self.blocking(move |_| settings::apply_schedule(&chosen, &description), move |result| Message::ScheduleApplied(result, wanted))
     }
 
     fn seconds(&self) -> f64 {
@@ -2058,8 +2259,19 @@ impl App {
             .iter()
             .filter_map(|id| self.catalog.tweak(id))
             .map(|tweak| (tweak.clone(), TweakAction::Apply))
+            .chain(self.imported_items())
             .collect();
         self.run_items_for(t(self.language, Msg::JobApplyingTweaks), Some(Queue::Tweaks), items)
+    }
+
+    /// Toggles and segmented options of an imported profile, as tweak actions.
+    fn imported_items(&self) -> Vec<(Tweak, TweakAction)> {
+        let toggles = self.imported.toggles.iter().map(|(id, on)| (id, TweakAction::Set(*on)));
+        let segmented = self.imported.segmented.iter().map(|(id, option)| (id, TweakAction::Select(option.clone())));
+        toggles
+            .chain(segmented)
+            .filter_map(|(id, action)| self.catalog.tweak(id).map(|tweak| (tweak.clone(), action)))
+            .collect()
     }
 
     fn begin_drag(&mut self, position: Point) {
@@ -2204,7 +2416,7 @@ impl App {
         let catalog = self.catalog.clone();
         let lang = self.language;
         self.start_job(t(lang, Msg::JobBuildingMedia), move |context| {
-            let wrap = |error: windowcraft_iso::IsoError| EngineError::Invalid(error.to_string());
+            let wrap = iso_error;
             pipeline::configure(&mut session, &work, &catalog, context).map_err(wrap)?;
             match disk {
                 Some((number, model)) => {
@@ -2266,14 +2478,25 @@ impl App {
                 Task::none()
             }
             JobEvent::Finished { outcome } => {
-                let job = self.job.take();
+                let mut job = self.job.take();
                 let label = job.as_ref().map(|job| job.label.clone()).unwrap_or_default();
                 let queue = job.as_ref().and_then(|job| job.queue);
+                let kind = job.as_ref().map_or(JobKind::Other, |job| job.kind);
                 let private = job.as_ref().is_some_and(|job| job.private);
+                // Reported items leave the queue whatever the outcome; without
+                // a report, a success means everything that was sent.
+                let finished: Vec<String> = match job.as_mut() {
+                    Some(job) => match &job.done {
+                        Some(done) => done.lock().map(|done| done.clone()).unwrap_or_default(),
+                        None if outcome.is_ok() => std::mem::take(&mut job.sent),
+                        None => Vec::new(),
+                    },
+                    None => Vec::new(),
+                };
                 let mut lines = job.map_or_else(Vec::new, |job| job.log.snapshot());
                 lines.push(match &outcome {
                     Ok(summary) => summary.clone(),
-                    Err(error) => format!("Failed: {error}"),
+                    Err(error) => format_1(t(self.language, Msg::NoticeFailedPrefix), &failure_text(self.language, error)),
                 });
                 if private {
                     self.misc.installed = tools::installed();
@@ -2287,20 +2510,23 @@ impl App {
                     return iced::exit();
                 }
 
-                match outcome {
-                    Ok(summary) => {
-                        match queue {
-                            Some(Queue::Apps) => self.selected_apps.clear(),
-                            Some(Queue::Tweaks) => self.selected_tweaks.clear(),
-                            Some(Queue::Appx) => self.selected_appx.clear(),
-                            Some(Queue::Features) => self.selected_features.clear(),
-                            None => {}
-                        }
-                        self.notice = Some(summary);
+                if let Some(queue) = queue {
+                    let selection = self.selection_mut(queue);
+                    for id in &finished {
+                        selection.remove(id);
                     }
+                    if queue == Queue::Tweaks {
+                        for id in &finished {
+                            self.imported.toggles.remove(id);
+                            self.imported.segmented.remove(id);
+                        }
+                    }
+                }
+                match outcome {
+                    Ok(summary) => self.notice = Some(summary),
                     Err(error) => {
-                        self.needs_elevation = error.contains("administrator rights");
-                        self.notice = Some(format!("{label}: {error}"));
+                        self.needs_elevation = error.needs_elevation;
+                        self.notice = Some(format!("{label}: {}", failure_text(self.language, &error)));
                         self.notice_failed.clone_from(&self.notice);
                     }
                 }
@@ -2309,7 +2535,7 @@ impl App {
                     platform::taskbar_progress(window, None);
                 }
                 let mut tasks = vec![self.refresh_all()];
-                if label == t(self.language, Msg::JobOpeningIso) || label == "Opening ISO" {
+                if kind == JobKind::OpenIso {
                     let media = work_dir().join("media");
                     tasks.push(self.blocking(
                         move |_| pipeline::validate_media(&media).map_err(|error| error.to_string()),
@@ -2320,6 +2546,22 @@ impl App {
             }
         }
     }
+}
+
+/// Keeps the engine error inside an ISO Studio error, so its kind still
+/// decides the wording and the elevation offer.
+fn iso_error(error: windowcraft_iso::IsoError) -> EngineError {
+    use windowcraft_iso::IsoError;
+    match error {
+        IsoError::Engine(inner) => inner,
+        IsoError::Io { target, source } => EngineError::Io { target, source },
+        other => EngineError::Message(other.to_string()),
+    }
+}
+
+/// What a failed job says. A panic has no message worth showing.
+fn failure_text(lang: Language, failure: &JobFailure) -> String {
+    if failure.panicked { t(lang, Msg::ErrJobPanicked).to_owned() } else { failure.message.clone() }
 }
 
 /// TempOnly is the System group: temporary files, CBS and DISM logs and
@@ -2731,6 +2973,19 @@ mod tests {
     }
 
     #[test]
+    fn ticking_a_tweak_unticks_the_rest_of_its_exclusive_group() {
+        let mut rig = rig("uiexclusive");
+        for id in ["ipv46", "activity", "teredo"] {
+            send(&mut rig.app, Message::TweakChecked(id.to_owned()));
+        }
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["activity", "teredo"]);
+        send(&mut rig.app, Message::TweakChecked("disable-ipv6".to_owned()));
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["activity", "disable-ipv6"]);
+        send(&mut rig.app, Message::TweakChecked("disable-ipv6".to_owned()));
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["activity"]);
+    }
+
+    #[test]
     fn presets_and_clear_drive_the_queue() {
         let mut rig = rig("uipreset");
         send(&mut rig.app, Message::Navigate(Page::Tweaks));
@@ -2778,6 +3033,9 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: None,
+            sent: Vec::new(),
+            done: None,
+            kind: JobKind::Other,
             private: false,
         }
     }
@@ -2825,6 +3083,9 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: Some(Queue::Apps),
+            sent: vec!["7zip".to_owned()],
+            done: None,
+            kind: JobKind::Other,
             private: false,
         });
         send(&mut rig.app, Message::Job(JobEvent::Progress { fraction: 0.5, step: "Step".to_owned() }));
@@ -2850,6 +3111,9 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: None,
+            sent: Vec::new(),
+            done: None,
+            kind: JobKind::Other,
             private: false,
         });
         send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok("Done".to_owned()) }));
@@ -2867,9 +3131,12 @@ mod tests {
             cancel: CancelToken::new(),
             log: LogRing::new(8),
             queue: Some(Queue::Apps),
+            sent: vec!["7zip".to_owned()],
+            done: None,
+            kind: JobKind::Other,
             private: false,
         });
-        let error = "administrator rights are required for RegSetValueExW".to_owned();
+        let error = JobFailure::from_error(&EngineError::NeedsElevation("RegSetValueExW".to_owned()));
         send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Err(error) }));
         assert_eq!(rig.app.selected_apps.len(), 1);
         assert!(rig.app.needs_elevation);
@@ -2877,6 +3144,200 @@ mod tests {
         assert!(rig.app.last_log.last().unwrap().starts_with("Failed:"));
         send(&mut rig.app, Message::DismissNotice);
         assert!(!rig.app.needs_elevation);
+
+        // Elevation comes from the error variant, not from its English text.
+        rig.app.job = Some(ActiveJob { queue: None, sent: Vec::new(), ..job("Installing") });
+        let other = JobFailure::from_error(&EngineError::Invalid("administrator rights".to_owned()));
+        send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Err(other) }));
+        assert!(!rig.app.needs_elevation);
+    }
+
+    fn job(label: &str) -> ActiveJob {
+        ActiveJob {
+            label: label.to_owned(),
+            fraction: 0.0,
+            step: String::new(),
+            cancel: CancelToken::new(),
+            log: LogRing::new(8),
+            queue: Some(Queue::Tweaks),
+            sent: vec!["activity".to_owned(), "teredo".to_owned()],
+            done: None,
+            kind: JobKind::Other,
+            private: false,
+        }
+    }
+
+    fn remote(cwd: &std::path::Path, args: &[&str]) -> Message {
+        Message::Remote(crate::remote::Request { cwd: cwd.to_path_buf(), args: args.iter().map(|arg| (*arg).to_owned()).collect() })
+    }
+
+    #[test]
+    fn a_second_launch_opens_its_page_and_closes_the_questions() {
+        let mut rig = rig_with("uiremotepage", guided());
+        assert!(rig.app.wizard.is_some());
+        let cwd = rig._dir.path().to_path_buf();
+        send(&mut rig.app, remote(&cwd, &["--open", "iso"]));
+        assert_eq!(rig.app.page, Page::Iso);
+        assert_eq!(rig.app.wizard, None);
+        assert!(rig.app.settings.onboarding.wants_questions(), "closing them is not an answer");
+
+        send(&mut rig.app, remote(&cwd, &["--inspect", "no-such-tweak"]));
+        assert_eq!(rig.app.inspected, None);
+        assert!(rig.app.notice.as_deref().is_some_and(|notice| notice.contains("no-such-tweak")));
+
+        // Headless flags and garbage change nothing.
+        send(&mut rig.app, remote(&cwd, &["--check-drift"]));
+        send(&mut rig.app, remote(&cwd, &["--no-such-flag"]));
+        assert_eq!(rig.app.page, Page::Iso);
+    }
+
+    #[test]
+    fn a_second_launch_with_a_relative_config_loads_it_unless_a_job_runs() {
+        let mut rig = rig("uiremoteconfig");
+        let cwd = rig._dir.path().to_path_buf();
+        std::fs::write(cwd.join("mine.json"), "\u{FEFF}{\"version\":1,\"tweaks\":[\"activity\"]}").unwrap();
+
+        rig.app.job = Some(job("Busy"));
+        send(&mut rig.app, remote(&cwd, &["--config", "mine.json"]));
+        assert!(rig.app.selected_tweaks.is_empty(), "a running job keeps its queue");
+        rig.app.job = None;
+
+        send(&mut rig.app, remote(&cwd, &["--config", "mine.json"]));
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["activity"]);
+        assert_eq!(rig.app.page, Page::Tweaks);
+    }
+
+    #[test]
+    fn late_inspector_rows_for_another_tweak_are_dropped() {
+        let mut rig = rig("uiinspectrace");
+        drop(rig.app.update(Message::Inspect(Inspected::Tweak("activity".to_owned()))));
+        drop(rig.app.update(Message::Inspect(Inspected::Tweak("telemetry".to_owned()))));
+        let row = InspectRow {
+            target: "A".to_owned(),
+            kind: "DWord".to_owned(),
+            current: String::new(),
+            desired: String::new(),
+            undo: String::new(),
+            matches: false,
+        };
+        send(&mut rig.app, Message::InspectRows(Inspected::Tweak("activity".to_owned()), vec![row.clone()]));
+        assert!(rig.app.inspect_rows.is_empty(), "rows of the first tweak must not show under the second");
+        send(&mut rig.app, Message::InspectRows(Inspected::Tweak("telemetry".to_owned()), vec![row]));
+        assert_eq!(rig.app.inspect_rows.len(), 1);
+    }
+
+    #[test]
+    fn a_schedule_change_waits_for_the_one_running_and_then_catches_up() {
+        let mut rig = rig("uischedule");
+        rig.app.schedule_busy = true;
+        send(&mut rig.app, Message::SetInterval(CheckInterval::Daily));
+        assert!(rig.app.schedule_busy, "the second change waits");
+        // The running change removed the task; the choice now wants one.
+        send(&mut rig.app, Message::ScheduleApplied(Ok(()), false));
+        assert!(rig.app.schedule_busy, "a new change starts to match the choice");
+        send(&mut rig.app, Message::ScheduleApplied(Ok(()), true));
+        assert!(!rig.app.schedule_busy);
+    }
+
+    #[test]
+    fn tips_come_back_after_a_deep_link_start_that_never_showed_the_questions() {
+        let mut rig = rig("uitipsdeep");
+        assert!(rig.app.settings.onboarding.wants_questions());
+        send(&mut rig.app, Message::ShowTipsAgain);
+        assert!(rig.app.settings.onboarding.tip_due(Area::Tweaks));
+    }
+
+    #[test]
+    fn inspect_with_an_unknown_id_says_so_and_opens_nothing() {
+        let rig = rig_with("uiinspectbogus", StartView { inspect: Some("no-such-tweak".to_owned()), ..StartView::default() });
+        assert_eq!(rig.app.inspected, None);
+        assert!(rig.app.notice.as_deref().is_some_and(|notice| notice.contains("no-such-tweak")));
+    }
+
+    #[test]
+    fn an_imported_profile_comes_back_whole_on_export() {
+        let mut rig = rig("uiprofile");
+        let text = r#"{
+            "version": 1,
+            "tweaks": ["activity"],
+            "toggles": {"taskbar-alignment": false},
+            "segmented": {"multiplane-overlay": "Fully Disabled"},
+            "features": ["dotnet"],
+            "apps": ["7zip"],
+            "appx_remove": ["microsoft-get-help"],
+            "dns": "Cloudflare",
+            "update_mode": "security",
+            "services": [{"name": "DiagTrack", "startup": "Disabled", "original": "Automatic"}]
+        }"#;
+        let profile = windowcraft_config::import_any(text, &rig.app.catalog).unwrap().profile;
+        assert!(rig.app.apply_loaded_profile(profile.clone()), "the update mode and services are only kept");
+        assert_eq!(rig.app.selected_profile(), profile);
+
+        // Toggles and options wait in the Tweaks queue next to the ticked tweak.
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        assert_eq!(rig.app.queued_count(), 3);
+        let actions: Vec<(String, TweakAction)> =
+            rig.app.imported_items().into_iter().map(|(tweak, action)| (tweak.id, action)).collect();
+        assert_eq!(
+            actions,
+            [
+                ("taskbar-alignment".to_owned(), TweakAction::Set(false)),
+                ("multiplane-overlay".to_owned(), TweakAction::Select("Fully Disabled".to_owned())),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failed_drift_check_keeps_the_list_and_the_date() {
+        let mut rig = rig("uidriftfail");
+        let drift = Drift { tweak_id: "activity".to_owned(), tweak_name: "Activity".to_owned(), entries: Vec::new(), after_update: false };
+        rig.app.drift = vec![drift.clone()];
+        rig.app.settings.last_check = 42;
+        send(&mut rig.app, Message::DriftChecked(Err("store busy".to_owned()), "26300.1".to_owned()));
+        assert_eq!(rig.app.drift, vec![drift.clone()]);
+        assert_eq!(rig.app.settings.last_check, 42);
+        assert!(rig.app.notice.as_deref().is_some_and(|notice| notice.contains("store busy")));
+
+        send(&mut rig.app, Message::Refreshed(None, None));
+        assert_eq!(rig.app.drift, vec![drift]);
+
+        send(&mut rig.app, Message::DriftChecked(Ok(Vec::new()), String::new()));
+        assert!(rig.app.drift.is_empty());
+        assert_ne!(rig.app.settings.last_check, 42);
+    }
+
+    #[test]
+    fn a_cancelled_batch_unticks_only_what_it_applied() {
+        let mut rig = rig("uicancelled");
+        for id in ["activity", "teredo"] {
+            send(&mut rig.app, Message::TweakChecked(id.to_owned()));
+        }
+        let done = Arc::new(std::sync::Mutex::new(vec!["activity".to_owned()]));
+        rig.app.job = Some(ActiveJob { done: Some(done), ..job("Applying") });
+        let summary = format_2(t(Language::En, Msg::NoticeCancelledAfter), "1", "2");
+        send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok(summary.clone()) }));
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["teredo"]);
+        assert_eq!(rig.app.notice.as_deref(), Some(summary.as_str()));
+    }
+
+    #[test]
+    fn a_tweak_ticked_while_a_job_runs_stays_ticked() {
+        let mut rig = rig("uiticked");
+        for id in ["activity", "teredo"] {
+            send(&mut rig.app, Message::TweakChecked(id.to_owned()));
+        }
+        rig.app.job = Some(job("Applying"));
+        send(&mut rig.app, Message::TweakChecked("show-ext".to_owned()));
+        send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok("Done".to_owned()) }));
+        assert_eq!(rig.app.selected_tweaks.iter().map(String::as_str).collect::<Vec<_>>(), ["show-ext"]);
+    }
+
+    #[test]
+    fn opening_an_iso_is_known_by_its_kind_in_any_language() {
+        let mut rig = rig("uiisokind");
+        send(&mut rig.app, Message::IsoOpen);
+        assert_eq!(rig.app.job.as_ref().map(|job| job.kind), Some(JobKind::OpenIso));
+        rig.app.job.as_mut().unwrap().cancel.cancel();
     }
 
     #[test]
@@ -3245,6 +3706,49 @@ mod tests {
             && bounds.y >= 0.0
             && bounds.x + bounds.width <= size.width + 0.5
             && bounds.y + bounds.height <= size.height + 0.5
+    }
+
+    #[test]
+    fn cleaner_rows_fill_the_file_count_in_every_language() {
+        let mut rig = rig("cleanrows");
+        send(&mut rig.app, Message::Navigate(Page::Inspector));
+        send(&mut rig.app, Message::InspectorTab(InspectorTab::Cleaner));
+        let target = cleaner::targets().into_iter().next().unwrap();
+        for (files, noun) in [(1, Msg::FilesCountOne), (2, Msg::FilesCountFew), (5, Msg::FilesCountMany)] {
+            rig.app.clean_results = vec![(target.clone(), ScanResult { bytes: 4096, files })];
+            for &language in Language::ALL {
+                rig.app.language = language;
+                let group = i18n::clean_target(language, &target).1;
+                let expected = format_2(t(language, noun), group, &files.to_string());
+                let found = texts(&rig.app, headless::BOUNDS);
+                assert!(found.iter().any(|(text, _)| *text == expected), "{language:?} {files}: no '{expected}'");
+                let row = found.iter().find(|(text, _)| text.starts_with(group) && text.contains(&files.to_string()));
+                let row = row.unwrap_or_else(|| panic!("{language:?}: no cleaner row"));
+                assert!(!row.0.contains('{'), "{language:?}: {}", row.0);
+            }
+        }
+    }
+
+    #[test]
+    fn applications_toolbar_and_categories_fit_1024_with_the_inspector_open() {
+        let size = iced::Size::new(1024.0, 700.0);
+        for &language in Language::ALL {
+            let mut rig = rig("apptoolbar");
+            rig.app.language = language;
+            send(&mut rig.app, Message::Navigate(Page::Applications));
+            drop(rig.app.update(Message::Inspect(Inspected::App("7zip".to_owned()))));
+            settle(&mut rig.app);
+            let found = texts(&rig.app, size);
+            for msg in [Msg::ShowInstalled, Msg::UpgradeAll, Msg::ClearSelection] {
+                let label = t(language, msg);
+                let bounds = find(&found, label);
+                assert!(inside(bounds, size) && bounds.height < 28.0, "{language:?} '{label}': {bounds:?}");
+            }
+            let last = rig.app.catalog.app_categories().last().unwrap().to_owned();
+            // The first match is the chip; the list repeats the name as a group title.
+            let chip = found.iter().find(|(text, _)| *text == last).map(|(_, bounds)| *bounds).unwrap();
+            assert!(inside(chip, size), "{language:?}: category '{last}' is cut off: {chip:?}");
+        }
     }
 
     /// 878x425 is what a 1366x768 screen at 150 % leaves, see `window_layout`.

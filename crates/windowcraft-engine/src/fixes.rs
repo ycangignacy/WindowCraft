@@ -62,14 +62,61 @@ fn register_dll(name: &str) {
     }
 }
 
+/// Stops `services`, runs `body` and starts again every service it stopped,
+/// also when a stop, `body` or cancellation ends the work early. A failed
+/// start is added to the first error, or returned when there was none.
+fn with_services_stopped<T>(
+    services: &[&str],
+    cancel: &CancelToken,
+    stop: impl Fn(&str) -> Result<()>,
+    start: impl Fn(&str) -> Result<()>,
+    body: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let mut stopped = Vec::new();
+    let mut outcome = Ok(());
+    for service in services {
+        if let Err(error) = cancel.check() {
+            outcome = Err(error);
+            break;
+        }
+        // A failed stop can still leave the service stopping, so it is
+        // started again too.
+        stopped.push(*service);
+        if let Err(error) = stop(service) {
+            outcome = Err(error);
+            break;
+        }
+    }
+    let result = outcome.and_then(|()| body());
+    let mut failed = Vec::new();
+    for service in stopped {
+        if let Err(error) = start(service) {
+            failed.push(format!("{service}: {error}"));
+        }
+    }
+    if failed.is_empty() {
+        return result;
+    }
+    let restart = format!("Starting the update services failed ({})", failed.join("; "));
+    Err(match result {
+        Ok(_) => EngineError::Message(format!("{restart}.")),
+        Err(error) => EngineError::Message(format!("{error}. {restart}.")),
+    })
+}
+
 pub fn reset_windows_update(aggressive: bool, cancel: &CancelToken, mut log: impl FnMut(&str)) -> Result<()> {
     let backend = ScmBackend;
     log("Stopping update services");
-    for service in UPDATE_SERVICES {
-        cancel.check()?;
-        backend.stop(service)?;
-    }
+    with_services_stopped(&UPDATE_SERVICES, cancel, |name| backend.stop(name), start, || {
+        reset_with_services_stopped(aggressive, cancel, &mut log)
+    })?;
 
+    log("Triggering update detection");
+    let _ = run(&system32("usoclient.exe"), &["StartScan"], cancel, SHORT, |_| {})?;
+    Ok(())
+}
+
+fn reset_with_services_stopped(aggressive: bool, cancel: &CancelToken, log: &mut dyn FnMut(&str)) -> Result<()> {
     log("Removing BITS job queue");
     let downloader = PathBuf::from(std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_owned()))
         .join(r"Microsoft\Network\Downloader");
@@ -107,12 +154,6 @@ pub fn reset_windows_update(aggressive: bool, cancel: &CancelToken, mut log: imp
     run_ok(&system32("netsh.exe"), &["winsock", "reset"], cancel, SHORT)?;
 
     log("Starting update services");
-    for service in UPDATE_SERVICES {
-        start(service)?;
-    }
-
-    log("Triggering update detection");
-    let _ = run(&system32("usoclient.exe"), &["StartScan"], cancel, SHORT, |_| {})?;
     Ok(())
 }
 
@@ -218,6 +259,80 @@ pub fn configure_ntp(cancel: &CancelToken) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    const NAMES: [&str; 3] = ["a", "b", "c"];
+
+    fn recorded(log: &RefCell<Vec<String>>, prefix: &str, name: &str) -> Result<()> {
+        log.borrow_mut().push(format!("{prefix} {name}"));
+        Ok(())
+    }
+
+    #[test]
+    fn services_come_back_after_success() {
+        let log = RefCell::new(Vec::new());
+        let result = with_services_stopped(
+            &NAMES,
+            &CancelToken::new(),
+            |name| recorded(&log, "stop", name),
+            |name| recorded(&log, "start", name),
+            || Ok(5),
+        );
+        assert_eq!(result.unwrap(), 5);
+        assert_eq!(log.into_inner(), ["stop a", "stop b", "stop c", "start a", "start b", "start c"]);
+    }
+
+    #[test]
+    fn services_come_back_when_the_work_fails() {
+        let started = RefCell::new(Vec::new());
+        let result: Result<()> = with_services_stopped(
+            &NAMES,
+            &CancelToken::new(),
+            |_| Ok(()),
+            |name| recorded(&started, "start", name),
+            || Err(EngineError::Invalid("rename".into())),
+        );
+        assert!(matches!(result, Err(EngineError::Invalid(_))));
+        assert_eq!(started.into_inner(), ["start a", "start b", "start c"]);
+    }
+
+    #[test]
+    fn cancelling_while_stopping_starts_what_was_stopped() {
+        let cancel = CancelToken::new();
+        let started = RefCell::new(Vec::new());
+        let ran = RefCell::new(false);
+        let result: Result<()> = with_services_stopped(
+            &NAMES,
+            &cancel,
+            |name| {
+                if name == "b" {
+                    cancel.cancel();
+                }
+                Ok(())
+            },
+            |name| recorded(&started, "start", name),
+            || {
+                *ran.borrow_mut() = true;
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(EngineError::Cancelled)));
+        assert!(!ran.into_inner());
+        assert_eq!(started.into_inner(), ["start a", "start b"]);
+    }
+
+    #[test]
+    fn a_failed_start_is_added_to_the_first_error() {
+        let result: Result<()> = with_services_stopped(
+            &NAMES,
+            &CancelToken::new(),
+            |_| Ok(()),
+            |name| if name == "b" { Err(EngineError::NotFound("b".into())) } else { Ok(()) },
+            || Err(EngineError::Invalid("rename".into())),
+        );
+        let text = result.unwrap_err().to_string();
+        assert!(text.contains("rename") && text.contains("b: not found"), "{text}");
+    }
 
     #[test]
     fn exit_codes_are_interpreted_explicitly() {

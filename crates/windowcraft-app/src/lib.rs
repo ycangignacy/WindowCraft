@@ -10,6 +10,7 @@ pub mod icons;
 pub mod outside;
 pub mod platform;
 pub mod press;
+pub mod remote;
 pub mod reveal;
 pub mod settings;
 pub mod smooth;
@@ -93,6 +94,8 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
     let gpu = choose_renderer();
     vsync::set_presenter_waits(gpu);
     let lang = i18n::detect_language();
+    i18n::set_current(lang);
+    i18n::install_job_texts();
 
     // First, so a second launch never waits on the database lock.
     let Some(_instance) = platform::claim_single_instance() else {

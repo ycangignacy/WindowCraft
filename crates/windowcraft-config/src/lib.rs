@@ -15,6 +15,6 @@ pub mod validate;
 
 pub use catalog::Catalog;
 pub use onboarding::{Answers, Area, CleanScope, Depth, Goal, Onboarding, OnboardingError, StartPlan};
-pub use profile::{Profile, ProfileError, ResolvedProfile, import_any};
+pub use profile::{Profile, ProfileError, ResolvedProfile, import_any, parse_json};
 pub use schema::*;
 pub use search::{SearchHit, SearchKind, search};

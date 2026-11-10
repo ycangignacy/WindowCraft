@@ -529,24 +529,23 @@ fn page_toolbar(app: &App, p: Palette) -> El<'_> {
                     button(p, t(app.language, Msg::ClearSelection), None, Tone::Secondary, Some(Message::ClearApps)),
                 ]
                 .spacing(8)
-                .align_y(Alignment::Center),
-                iced::widget::scrollable(chips)
-                    .direction(iced::widget::scrollable::Direction::Horizontal(
-                        iced::widget::scrollable::Scrollbar::new().width(0).scroller_width(0),
-                    ))
-                    .width(Length::Fill),
+                .align_y(Alignment::Center)
+                // A narrow window with the inspector open moves buttons to a
+                // second line instead of breaking their labels.
+                .wrap()
+                .vertical_spacing(8),
+                // Every category stays reachable: the chips wrap instead of
+                // running off the right edge.
+                chips.wrap().vertical_spacing(6),
             ]
             .spacing(8)
             .into()
         }
         Page::Tweaks => {
-            let bar = tabs(
-                p,
-                TweakTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect(),
-                app.timeline.channels[TAB].value(),
-                104.0,
-                |index| Message::Tab(TweakTab::ALL[index]),
-            );
+            // Sized from the labels, as in the Inspector, so a long translation fits.
+            let labels: Vec<&str> = TweakTab::ALL.iter().map(|tab| tab.title_in(app.language)).collect();
+            let width = tab_width(&labels, 104.0);
+            let bar = tabs(p, labels, app.timeline.channels[TAB].value(), width, |index| Message::Tab(TweakTab::ALL[index]));
             let mut controls = row![bar].spacing(8).align_y(Alignment::Center);
             if app.tab != TweakTab::Appx {
                 controls = controls
@@ -1414,14 +1413,15 @@ fn display(app: &App, p: Palette) -> El<'_> {
         .map(|tweak| {
             let on = app.detections.get(&tweak.id) == Some(&Detection::Applied);
             let id = tweak.id.clone();
-            list_row(p, None, tweak.name.as_str(), tweak.description.as_str(), switch(p, on, move |value| Message::Toggle(id.clone(), value)), None)
+            let (name, detail) = i18n::display_toggle(app.language, &tweak.id).unwrap_or((tweak.name.as_str(), tweak.description.as_str()));
+            list_row(p, None, name, detail, switch(p, on, move |value| Message::Toggle(id.clone(), value)), None)
         })
         .collect();
     let timer: Vec<El<'_>> = app.timer.map_or_else(Vec::new, |timer| {
         vec![
             list_row(p, None, t(app.language, Msg::CurrentTimer), "NtQueryTimerResolution", mono(format!("{:>7.3} ms", timer.current_ms), p.ink).into(), None),
-            list_row(p, None, t(app.language, Msg::FinestTimer), "Maximum resolution", mono(format!("{:>7.3} ms", timer.finest_ms), p.ink).into(), None),
-            list_row(p, None, t(app.language, Msg::CoarsestTimer), "Minimum resolution", mono(format!("{:>7.3} ms", timer.coarsest_ms), p.ink).into(), None),
+            list_row(p, None, t(app.language, Msg::FinestTimer), t(app.language, Msg::TimerMaxResolution), mono(format!("{:>7.3} ms", timer.finest_ms), p.ink).into(), None),
+            list_row(p, None, t(app.language, Msg::CoarsestTimer), t(app.language, Msg::TimerMinResolution), mono(format!("{:>7.3} ms", timer.coarsest_ms), p.ink).into(), None),
         ]
     });
     column![
@@ -1498,8 +1498,8 @@ fn cleaner_view(app: &App, p: Palette) -> El<'_> {
             list_row(
                 p,
                 Some(check(p, app.clean_selected.contains(target.id), Message::CleanToggled(target.id))),
-                target.name,
-                format!("{}  {} {}", target.group, result.files, files_noun),
+                i18n::clean_target(app.language, target).0,
+                format_2(files_noun, i18n::clean_target(app.language, target).1, &result.files.to_string()),
                 mono(format_bytes(result.bytes), p.ink).into(),
                 Some(Message::CleanToggled(target.id)),
             )
@@ -1702,8 +1702,9 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
     match &app.inspected {
         Some(Inspected::Tweak(id)) => {
             if let Some(tweak) = app.find_tweak(id) {
-                content = content.push(strong(tweak.name.clone(), p.ink));
-                content = content.push(caption(tweak.description.clone(), p.ink_secondary));
+                let (name, detail) = i18n::display_toggle(app.language, id).unwrap_or((tweak.name.as_str(), tweak.description.as_str()));
+                content = content.push(strong(name.to_owned(), p.ink));
+                content = content.push(caption(detail.to_owned(), p.ink_secondary));
                 if let Some(notice) = tweak.notice.clone() {
                     content = content.push(banner(p, Icon::Alert, p.amber, notice, Vec::new()));
                 }
@@ -1816,7 +1817,9 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
 }
 
 fn compare<'a>(p: Palette, label: &'a str, value: &'a str, color: Color) -> El<'a> {
-    row![caption(label, p.ink_tertiary).width(72), mono(value, color).wrapping(iced::widget::text::Wrapping::Glyph)].spacing(6).into()
+    // Wider than the 72 it was, for labels such as "Valeur actuelle" or
+    // "Identyfikator ze sklepu" in the translations.
+    row![caption(label, p.ink_tertiary).width(110), mono(value, color).wrapping(iced::widget::text::Wrapping::Glyph)].spacing(6).into()
 }
 
 fn confirm_dialog(app: &App, p: Palette) -> El<'_> {

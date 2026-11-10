@@ -21,6 +21,55 @@ use windowcraft_engine::download::{block_on, download};
 use windowcraft_engine::jobs::JobContext;
 use windowcraft_engine::process::run_ok;
 
+/// A progress step of ISO Studio. The app names it in the user's language
+/// through `set_step_names`; without that, for example in tests, it is English.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsoStep {
+    Mounting,
+    CopyingMedia,
+    WritingAnswerFile,
+    ExportingDrivers,
+    InjectingBoot(usize),
+    ConvertingEsd,
+    InjectingInstall(usize),
+    InstallingOscdimg,
+    BuildingIso,
+    SplittingWim,
+    CopyingToUsb,
+    Partitioning,
+}
+
+impl IsoStep {
+    pub fn english(self) -> String {
+        match self {
+            Self::Mounting => "Mounting ISO".to_owned(),
+            Self::CopyingMedia => "Copying installation media".to_owned(),
+            Self::WritingAnswerFile => "Writing answer file and first-boot scripts".to_owned(),
+            Self::ExportingDrivers => "Exporting system drivers".to_owned(),
+            Self::InjectingBoot(count) => format!("Injecting {count} storage drivers into boot.wim"),
+            Self::ConvertingEsd => "Converting install.esd to install.wim".to_owned(),
+            Self::InjectingInstall(count) => format!("Injecting {count} drivers into install.wim"),
+            Self::InstallingOscdimg => "Installing oscdimg".to_owned(),
+            Self::BuildingIso => "Building ISO".to_owned(),
+            Self::SplittingWim => "Splitting install.wim".to_owned(),
+            Self::CopyingToUsb => "Copying files to USB".to_owned(),
+            Self::Partitioning => "Partitioning USB drive".to_owned(),
+        }
+    }
+}
+
+static STEP_NAMES: std::sync::OnceLock<fn(IsoStep) -> String> = std::sync::OnceLock::new();
+
+/// Sets how steps are named in progress and in the job log. The first call wins.
+pub fn set_step_names(names: fn(IsoStep) -> String) {
+    let _ = STEP_NAMES.set(names);
+}
+
+fn step(context: &JobContext, fraction: f32, step: IsoStep) {
+    let name = STEP_NAMES.get().map_or_else(|| step.english(), |names| names(step));
+    context.progress(fraction, name);
+}
+
 const BOOT_IMAGE_INDEX: u32 = 2;
 const OSCDIMG_ID: &str = "Microsoft.OSCDIMG";
 
@@ -97,6 +146,26 @@ pub fn select_edition(options: &mut AnswerOptions, image: &ImageInfo) {
     .to_owned();
 }
 
+/// Points the session at the chosen edition in the current install image. An
+/// earlier build may have turned install.esd into a one-image install.wim,
+/// which moves the edition to index 1.
+fn align_edition(session: &mut StudioSession, images: &[ImageInfo]) -> Result<()> {
+    let wanted = &session.options.edition_id;
+    let at_index = images.iter().find(|image| image.index == session.options.image_index);
+    if at_index.is_some_and(|image| wanted.is_empty() || image.edition == *wanted) {
+        return Ok(());
+    }
+    match images.iter().find(|image| image.edition == *wanted) {
+        Some(image) => {
+            select_edition(&mut session.options, image);
+            Ok(())
+        }
+        None => Err(IsoError::Invalid(format!(
+            "the work media no longer holds the {wanted} edition; open the ISO again to choose another one"
+        ))),
+    }
+}
+
 /// Copies a directory tree in parallel, reporting bytes as they land.
 pub fn copy_tree(source: &Path, destination: &Path, context: Option<&JobContext>) -> Result<()> {
     fs::create_dir_all(destination).map_err(|e| IsoError::io(destination.display().to_string(), e))?;
@@ -126,14 +195,44 @@ fn clear_read_only(path: &Path) -> Result<()> {
     fs::set_permissions(path, permissions).map_err(|e| IsoError::io(path.display().to_string(), e))
 }
 
+/// Deletes a media tree left by an earlier ISO. Read-only flags are cleared
+/// first, and links are removed without entering them.
+fn remove_media(media: &Path) -> Result<()> {
+    fn clear(path: &Path) -> Result<()> {
+        let metadata = fs::symlink_metadata(path).map_err(|e| IsoError::io(path.display().to_string(), e))?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            for entry in fs::read_dir(path).map_err(|e| IsoError::io(path.display().to_string(), e))?.flatten() {
+                clear(&entry.path())?;
+            }
+        } else if metadata.permissions().readonly() {
+            clear_read_only(path)?;
+        }
+        Ok(())
+    }
+    match fs::symlink_metadata(media) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(IsoError::io(media.display().to_string(), error)),
+        Ok(_) => {}
+    }
+    clear(media)?;
+    fs::remove_dir_all(media).map_err(|e| IsoError::io(media.display().to_string(), e))
+}
+
+/// Replaces the media tree with a full copy of `source`, so no file of an
+/// earlier ISO stays behind.
+fn copy_media(source: &Path, media: &Path, context: Option<&JobContext>) -> Result<()> {
+    remove_media(media)?;
+    copy_tree(source, media, context)
+}
+
 /// Step one: extract the ISO into the work directory.
 pub fn extract(session: &mut StudioSession, work: &Path, context: &JobContext) -> Result<Vec<ImageInfo>> {
     let media = work.join("media");
     if session.step < Step::Extracted {
-        context.progress(0.05, "Mounting ISO");
+        step(context, 0.05, IsoStep::Mounting);
         let mounted = MountedIso::attach(&session.source_iso)?;
-        context.progress(0.1, "Copying installation media");
-        copy_tree(mounted.root(), &media, Some(context))?;
+        step(context, 0.1, IsoStep::CopyingMedia);
+        copy_media(mounted.root(), &media, Some(context))?;
         drop(mounted);
         session.step = Step::Extracted;
         session.save(work)?;
@@ -196,25 +295,34 @@ fn inject_into(wim: &Path, index: u32, packages: &[drivers::DriverPackage], moun
 /// Step two: stage configuration and optionally inject drivers.
 pub fn configure(session: &mut StudioSession, work: &Path, catalog: &Catalog, context: &JobContext) -> Result<()> {
     let media = work.join("media");
-    context.progress(0.3, "Writing answer file and first-boot scripts");
+    if let Some(image) = install_image(&media) {
+        align_edition(session, &WimFile::open(&image)?.images()?)?;
+    }
+    step(context, 0.3, IsoStep::WritingAnswerFile);
     stage_files(&media, session, catalog)?;
 
     if session.inject_drivers {
         // Clears mounts left by any earlier crash.
         cleanup_mountpoints()?;
-        context.progress(0.4, "Exporting system drivers");
+        step(context, 0.4, IsoStep::ExportingDrivers);
         let export = work.join("drivers");
         let packages = drivers::export_system_drivers(&export)?;
         let (boot, install) = drivers::partition_by_target(packages);
         let mount = work.join("mount");
 
-        context.progress(0.5, format!("Injecting {} storage drivers into boot.wim", boot.len()));
+        step(context, 0.5, IsoStep::InjectingBoot(boot.len()));
         inject_into(&media.join(r"sources\boot.wim"), BOOT_IMAGE_INDEX, &boot, &mount)?;
 
-        if let Some(image) = install_image(&media).filter(|path| path.extension().is_some_and(|e| e == "wim")) {
-            context.progress(0.6, format!("Injecting {} drivers into install.wim", install.len()));
-            inject_into(&image, session.options.image_index, &install, &mount)?;
+        // DISM cannot service an ESD, so the chosen edition becomes a WIM first.
+        if media.join(r"sources\install.esd").exists() && !media.join(r"sources\install.wim").exists() {
+            step(context, 0.55, IsoStep::ConvertingEsd);
+            convert_esd(session, &media, catalog)?;
         }
+        let image = install_image(&media)
+            .filter(|path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("wim")))
+            .ok_or_else(|| IsoError::Invalid("no sources\\install.wim to add drivers to".to_owned()))?;
+        step(context, 0.6, IsoStep::InjectingInstall(install.len()));
+        inject_into(&image, session.options.image_index, &install, &mount)?;
     }
     session.step = Step::Configured;
     session.save(work)
@@ -263,7 +371,7 @@ pub fn export_iso(session: &mut StudioSession, work: &Path, output: &Path, conte
     let mut tool = find_oscdimg();
     let mut borrowed = None;
     if tool.is_none() {
-        context.progress(0.7, "Installing oscdimg");
+        step(context, 0.7, IsoStep::InstallingOscdimg);
         let winget =
             windowcraft_engine::packages::winget_path().ok_or_else(|| IsoError::Invalid("winget.exe is required".to_owned()))?;
         let args = ["install", "--id", OSCDIMG_ID, "--exact", "--silent", "--accept-package-agreements", "--accept-source-agreements"];
@@ -273,7 +381,7 @@ pub fn export_iso(session: &mut StudioSession, work: &Path, output: &Path, conte
     }
     let tool = tool.ok_or_else(|| IsoError::Invalid("oscdimg.exe was not found after installation".to_owned()))?;
 
-    context.progress(0.75, "Building ISO");
+    step(context, 0.75, IsoStep::BuildingIso);
     let arguments = oscdimg_arguments(&work.join("media"), output);
     let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
     let built = run_ok(&tool, &references, &context.cancel, Duration::from_secs(60 * 60));
@@ -297,12 +405,19 @@ fn convert_oversized_esd(session: &mut StudioSession, work: &Path, catalog: &Cat
     if !fs::metadata(&esd).is_ok_and(|metadata| metadata.len() > SWM_PART_BYTES) {
         return Ok(());
     }
-    context.progress(0.72, "Converting install.esd to install.wim");
+    step(context, 0.72, IsoStep::ConvertingEsd);
+    convert_esd(session, &media, catalog)
+}
+
+/// Exports the chosen edition of install.esd into install.wim and removes the
+/// ESD. The WIM holds that one image, so the answer file moves to index 1.
+fn convert_esd(session: &mut StudioSession, media: &Path, catalog: &Catalog) -> Result<()> {
+    let esd = media.join(r"sources\install.esd");
     let wim = media.join(r"sources\install.wim");
     WimFile::open(&esd)?.export_image(session.options.image_index, &WimFile::create(&wim)?)?;
     fs::remove_file(&esd).map_err(|e| IsoError::io(esd.display().to_string(), e))?;
     session.options.image_index = 1;
-    stage_files(&media, session, catalog)
+    stage_files(media, session, catalog)
 }
 
 /// Copies the media tree to a prepared stick, splitting a large install image
@@ -315,13 +430,13 @@ pub fn copy_to_usb(media: &Path, root: &Path, context: &JobContext) -> Result<()
     let parked = media.with_file_name("install.wim.parked");
 
     if oversized {
-        context.progress(0.75, "Splitting install.wim");
+        step(context, 0.75, IsoStep::SplittingWim);
         let split_target = media.join(r"sources\install.swm");
         WimFile::open(&image)?.split(&split_target, SWM_PART_BYTES)?;
         fs::rename(&image, &parked).map_err(|e| IsoError::io(image.display().to_string(), e))?;
     }
 
-    context.progress(0.8, "Copying files to USB");
+    step(context, 0.8, IsoStep::CopyingToUsb);
     let copied = copy_tree(media, root, Some(context));
 
     if oversized {
@@ -341,7 +456,7 @@ pub fn export_usb(
     context: &JobContext,
 ) -> Result<()> {
     convert_oversized_esd(session, work, catalog, context)?;
-    context.progress(0.74, "Partitioning USB drive");
+    step(context, 0.74, IsoStep::Partitioning);
     let root = prepare_disk(disk, model, "WIN11")?;
     copy_to_usb(&work.join("media"), &root, context)?;
     session.step = Step::Exported;
@@ -508,5 +623,80 @@ mod tests {
 
         copy_tree(source.path(), target.path(), None).unwrap();
         assert!(!fs::metadata(target.path().join("f")).unwrap().permissions().readonly());
+    }
+
+    fn image(index: u32, edition: &str) -> ImageInfo {
+        ImageInfo {
+            index,
+            name: format!("Windows 11 {edition}"),
+            edition: edition.to_owned(),
+            architecture: "x64".to_owned(),
+            build: "26100".to_owned(),
+        }
+    }
+
+    #[test]
+    fn the_chosen_edition_is_found_again_after_an_esd_became_a_one_image_wim() {
+        let full = [image(1, "Core"), image(6, "Professional")];
+        let mut chosen = session();
+        align_edition(&mut chosen, &full).unwrap();
+        assert_eq!(chosen.options.image_index, 6, "the index stays when it matches");
+
+        align_edition(&mut chosen, &[image(1, "Professional")]).unwrap();
+        assert_eq!(chosen.options.image_index, 1);
+
+        let mut other = session();
+        other.options.edition_id = "Education".to_owned();
+        assert!(align_edition(&mut other, &[image(1, "Professional")]).is_err());
+    }
+
+    #[test]
+    fn an_esd_becomes_a_wim_with_the_chosen_image_at_index_1() {
+        let dir = media();
+        let content = tempfile::tempdir().unwrap();
+        fs::write(content.path().join("setup.exe"), b"x").unwrap();
+        let esd = dir.path().join(r"sources\install.esd");
+        {
+            let file = WimFile::create(&esd).unwrap();
+            for _ in 0..2 {
+                if !crate::wim::tests::capture(&file, content.path()) {
+                    eprintln!("skipped: capture needs backup privileges here");
+                    return;
+                }
+            }
+        }
+        let mut chosen = session();
+        chosen.options.image_index = 2;
+        convert_esd(&mut chosen, dir.path(), &catalog()).unwrap();
+
+        assert!(!esd.exists());
+        let wim = dir.path().join(r"sources\install.wim");
+        assert_eq!(WimFile::open(&wim).unwrap().image_count().unwrap(), 1);
+        assert_eq!(chosen.options.image_index, 1);
+        let answer = fs::read_to_string(dir.path().join("autounattend.xml")).unwrap();
+        assert!(answer.contains("<Value>1</Value>"), "{answer}");
+    }
+
+    #[test]
+    fn a_second_iso_leaves_no_file_of_the_first() {
+        let first = media();
+        fs::write(first.path().join(r"sources\install.wim"), b"old wim").unwrap();
+        fs::write(first.path().join("only-in-first.txt"), b"x").unwrap();
+        let second = media();
+        fs::write(second.path().join(r"sources\install.esd"), b"new esd").unwrap();
+
+        let work = tempfile::tempdir().unwrap();
+        let target = work.path().join("media");
+        copy_media(first.path(), &target, None).unwrap();
+        // Media from an ISO keeps its read-only flag in older work folders.
+        let old = target.join(r"sources\install.wim");
+        let mut permissions = fs::metadata(&old).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&old, permissions).unwrap();
+
+        copy_media(second.path(), &target, None).unwrap();
+        assert!(!old.exists());
+        assert!(!target.join("only-in-first.txt").exists());
+        assert_eq!(install_image(&target), Some(target.join(r"sources\install.esd")));
     }
 }

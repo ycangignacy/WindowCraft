@@ -22,6 +22,16 @@ pub enum ProfileError {
     UnknownId { kind: &'static str, id: String },
     #[error("profile version {0} is newer than this build supports")]
     Version(u32),
+    #[error("tweaks '{0}' and '{1}' exclude each other; keep one of them")]
+    Exclusive(String, String),
+    #[error("the profile has no \"version\" field; add \"version\": 1 at the top")]
+    MissingVersion,
+}
+
+/// Parses JSON written by any editor. PowerShell 5.1 and older Notepad start
+/// UTF-8 files with a byte order mark, which serde_json does not accept.
+pub fn parse_json(text: &str) -> serde_json::Result<Value> {
+    serde_json::from_str(text.strip_prefix('\u{FEFF}').unwrap_or(text))
 }
 
 /// Extended WindowCraft configuration. Every field is optional except the
@@ -63,7 +73,7 @@ impl Profile {
     }
 
     pub fn parse(source: &str) -> Result<Self, ProfileError> {
-        let value: Value = serde_json::from_str(source).map_err(|e| ProfileError::Malformed(e.to_string()))?;
+        let value = parse_json(source).map_err(|e| ProfileError::Malformed(e.to_string()))?;
         Self::from_value(value)
     }
 
@@ -86,6 +96,11 @@ impl Profile {
         };
         for id in self.tweaks.iter().chain(self.toggles.keys()).chain(self.segmented.keys()) {
             check(catalog.tweak(id).is_some(), "tweak", id)?;
+        }
+        for (position, id) in self.tweaks.iter().enumerate() {
+            if let Some(other) = self.tweaks[position + 1..].iter().find(|other| catalog.exclusive_peers(id).any(|peer| peer == *other)) {
+                return Err(ProfileError::Exclusive(id.clone(), other.clone()));
+            }
         }
         for (id, option) in &self.segmented {
             let known = catalog.tweak(id).is_some_and(|tweak| tweak.options.iter().any(|o| &o.label == option));
@@ -188,12 +203,21 @@ fn from_winutil(map: &serde_json::Map<String, Value>, catalog: &Catalog) -> Resu
 
 /// Accepts either a WindowCraft profile or a legacy WinUtil config.
 pub fn import_any(source: &str, catalog: &Catalog) -> Result<ResolvedProfile, ProfileError> {
-    let value: Value = serde_json::from_str(source).map_err(|e| ProfileError::Malformed(e.to_string()))?;
+    let value = parse_json(source).map_err(|e| ProfileError::Malformed(e.to_string()))?;
     let Value::Object(map) = &value else {
         return Err(ProfileError::Shape("the top level must be an object".to_owned()));
     };
-    let profile =
-        if map.contains_key("version") { Profile::from_value(value)? } else { from_winutil(map, catalog)? };
+    // Keys of a WindowCraft profile, so one that only lacks its version is not
+    // read as a WinUtil config.
+    const PROFILE_KEYS: [&str; 9] =
+        ["tweaks", "toggles", "segmented", "features", "apps", "appx_remove", "dns", "update_mode", "services"];
+    let profile = if map.contains_key("version") {
+        Profile::from_value(value)?
+    } else if map.keys().any(|key| PROFILE_KEYS.contains(&key.as_str())) {
+        return Err(ProfileError::MissingVersion);
+    } else {
+        from_winutil(map, catalog)?
+    };
     profile.resolve(catalog)
 }
 

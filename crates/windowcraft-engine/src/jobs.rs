@@ -71,7 +71,47 @@ impl LogRing {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobEvent {
     Progress { fraction: f32, step: String },
-    Finished { outcome: std::result::Result<String, String> },
+    Finished { outcome: std::result::Result<String, JobFailure> },
+}
+
+/// Why a job ended without a summary. The flags come from the error variant,
+/// so the app never has to read them out of translated text.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct JobFailure {
+    pub message: String,
+    pub needs_elevation: bool,
+    pub cancelled: bool,
+    pub panicked: bool,
+}
+
+static ERROR_TEXT: std::sync::OnceLock<fn(&crate::error::EngineError) -> String> = std::sync::OnceLock::new();
+
+/// Sets how a failed job words its error, so the app can use the user's
+/// language. Without it the English `Display` text is used. The first call wins.
+pub fn set_error_text(text: fn(&crate::error::EngineError) -> String) {
+    let _ = ERROR_TEXT.set(text);
+}
+
+impl JobFailure {
+    pub fn from_error(error: &crate::error::EngineError) -> Self {
+        use crate::error::EngineError;
+        Self {
+            message: ERROR_TEXT.get().map_or_else(|| error.to_string(), |text| text(error)),
+            needs_elevation: matches!(error, EngineError::NeedsElevation(_)),
+            cancelled: matches!(error, EngineError::Cancelled),
+            panicked: false,
+        }
+    }
+
+    pub fn panicked() -> Self {
+        Self { message: "the job panicked".to_owned(), panicked: true, ..Self::default() }
+    }
+}
+
+impl std::fmt::Display for JobFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 
 /// Handed to job bodies for reporting and cancellation.
@@ -134,8 +174,8 @@ where
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(&context)));
         let outcome = match outcome {
             Ok(Ok(summary)) => Ok(summary),
-            Ok(Err(error)) => Err(error.to_string()),
-            Err(_) => Err("the job panicked".to_owned()),
+            Ok(Err(error)) => Err(JobFailure::from_error(&error)),
+            Err(_) => Err(JobFailure::panicked()),
         };
         // The final event must arrive even if the channel is momentarily full,
         // but a dropped receiver means nobody is listening any more.
@@ -179,7 +219,7 @@ mod tests {
         while let Some(event) = job.events.blocking_recv() {
             last = Some(event);
         }
-        assert_eq!(last, Some(JobEvent::Finished { outcome: Err("the job panicked".into()) }));
+        assert_eq!(last, Some(JobEvent::Finished { outcome: Err(JobFailure::panicked()) }));
     }
 
     #[test]

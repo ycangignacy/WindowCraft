@@ -100,7 +100,7 @@ impl Settings {
     }
 
     pub fn parse(content: &str) -> Self {
-        let Ok(value) = serde_json::from_str::<Value>(content) else { return Self::default() };
+        let Ok(value) = windowcraft_config::parse_json(content) else { return Self::default() };
         let check = &value["drift_check"];
         let state = &value["drift_check_state"];
         Self {
@@ -113,17 +113,12 @@ impl Settings {
         }
     }
 
-    /// Writes these values into `existing`, leaving other keys alone.
-    fn merge_into(&self, existing: &str) -> String {
-        let mut value = serde_json::from_str::<Value>(existing)
-            .ok()
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}));
+    /// Writes these values into `value`, leaving other keys alone.
+    fn merge_into(&self, value: &mut Value) {
         value["appearance"] = json!(appearance_tag(self.appearance));
         value["drift_check"] = json!({ "interval_days": self.interval.days(), "after_updates": self.after_updates });
         value["drift_check_state"] = json!({ "last_run": self.last_check, "build": self.last_build });
         value["onboarding"] = self.onboarding.to_value();
-        serde_json::to_string_pretty(&value).unwrap_or_default()
     }
 }
 
@@ -165,18 +160,29 @@ pub fn load() -> Settings {
 }
 
 pub fn save(settings: &Settings) -> Result<(), String> {
+    edit_file(|value| settings.merge_into(value))
+}
+
+/// The one way settings.json is written: read it, change it, and replace it
+/// in one step through `atomic_write`. A file that does not parse as a JSON
+/// object is kept as `settings.json.bad` before a new one is started.
+pub fn edit_file(edit: impl FnOnce(&mut Value)) -> Result<(), String> {
     let path = path();
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
-    // Write and rename, so a crash never leaves half a file.
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, settings.merge_into(&existing)).map_err(|e| e.to_string())?;
-    std::fs::rename(&temporary, &path).map_err(|e| {
-        let _ = std::fs::remove_file(&temporary);
-        e.to_string()
-    })
+    let mut value = match windowcraft_config::parse_json(&existing) {
+        Ok(value) if value.is_object() => value,
+        _ if existing.trim().is_empty() => json!({}),
+        _ => {
+            std::fs::copy(&path, path.with_extension("json.bad")).map_err(|e| e.to_string())?;
+            json!({})
+        }
+    };
+    edit(&mut value);
+    let content = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    windowcraft_engine::atomicfs::atomic_write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Arguments the scheduled task passes to `windowcraft.exe`.
@@ -221,12 +227,40 @@ mod tests {
             last_build: "26300.7171".into(),
             onboarding: Onboarding::quiet(),
         };
-        let text = settings.merge_into(r#"{"language":"pl","future":{"x":1}}"#);
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        use_test_file(Some(file.clone()));
+        // PowerShell 5.1 writes UTF-8 with a byte order mark.
+        std::fs::write(&file, "\u{FEFF}{\"language\":\"pl\",\"future\":{\"x\":1}}").unwrap();
+        save(&settings).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
         let value: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(value["language"], "pl");
         assert_eq!(value["future"]["x"], 1);
         assert_eq!(Settings::parse(&text), settings);
-        assert_eq!(crate::i18n::Language::from_tag(value["language"].as_str().unwrap()), Some(crate::i18n::Language::Pl));
+        assert_eq!(load(), settings);
+        assert!(!file.with_extension("json.bad").exists());
+        use_test_file(None);
+    }
+
+    #[test]
+    fn a_file_with_a_bom_is_read() {
+        let parsed = Settings::parse("\u{FEFF}{\"appearance\":\"dark\"}");
+        assert_eq!(parsed.appearance, Appearance::Dark);
+    }
+
+    #[test]
+    fn a_broken_file_is_kept_aside_before_a_save_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        use_test_file(Some(file.clone()));
+        for broken in ["{\"language\":\"de\", broken", "[1, 2]"] {
+            std::fs::write(&file, broken).unwrap();
+            save(&Settings::default()).unwrap();
+            assert_eq!(std::fs::read_to_string(file.with_extension("json.bad")).unwrap(), broken);
+            assert_eq!(load(), Settings::default());
+        }
+        use_test_file(None);
     }
 
     #[test]
@@ -237,7 +271,9 @@ mod tests {
         let mut settings = Settings::default();
         settings.onboarding.finish(Answers { goal: Some(Goal::Gaming), ..Answers::default() });
         settings.onboarding.tip_seen(Area::Iso);
-        let text = settings.merge_into(r#"{"language":"de"}"#);
+        let mut value: Value = serde_json::from_str(r#"{"language":"de"}"#).unwrap();
+        settings.merge_into(&mut value);
+        let text = value.to_string();
         assert_eq!(Settings::parse(&text), settings);
         let value: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(value["onboarding"]["status"], "finished");
@@ -266,12 +302,6 @@ mod tests {
         assert!(save(&settings).is_err());
         assert_eq!(load(), Settings::default(), "nothing could be read either");
         use_test_file(None);
-    }
-
-    #[test]
-    fn a_save_over_a_broken_file_starts_fresh() {
-        let text = Settings::default().merge_into("[1, 2]");
-        assert_eq!(Settings::parse(&text), Settings::default());
     }
 
     #[test]

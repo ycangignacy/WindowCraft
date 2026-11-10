@@ -143,7 +143,26 @@ fn desired_text<'a>(entry: &'a RegistryEntry, action: &TweakAction) -> Option<&'
     }
 }
 
+/// True when a live value, or its absence, equals the wanted value. A missing
+/// value stands for `absent`, the state `default_on` names, when there is one.
+fn same_value(live: Option<&RegValue>, want: Option<&RegValue>, absent: Option<Option<&RegValue>>) -> bool {
+    match (live, want) {
+        (Some(live), Some(want)) => live.matches(want),
+        (None, None) => true,
+        (None, Some(want)) => absent.flatten().is_some_and(|value| value.matches(want)),
+        (Some(_), None) => false,
+    }
+}
+
 impl Engine {
+    /// The value a missing entry stands for: the "on" value when `default_on`
+    /// is true, the "off" value when it is false, nothing when it is unset.
+    fn absent_value(&self, entry: &RegistryEntry) -> Result<Option<Option<RegValue>>> {
+        let Some(on) = entry.default_on else { return Ok(None) };
+        let text = if on { entry.value.as_deref() } else { entry.original.as_deref() };
+        Ok(Some(resolve_value(entry, text, self.ram_kb)?.value))
+    }
+
     fn registry_targets(&self, entries: &[RegistryEntry], action: &TweakAction) -> Result<Vec<RegTarget>> {
         entries.iter().map(|entry| resolve_value(entry, desired_text(entry, action), self.ram_kb)).collect()
     }
@@ -162,14 +181,11 @@ impl Engine {
         }
 
         let (mut matched, mut total) = (0, 0);
-        for target in self.registry_targets(&tweak.registry, &TweakAction::Apply)? {
+        for (entry, target) in tweak.registry.iter().zip(self.registry_targets(&tweak.registry, &TweakAction::Apply)?) {
             total += 1;
             let live = self.scope.read(&target.path, &target.name)?;
-            let same = match (&live, &target.value) {
-                (Some(live), Some(want)) => live.matches(want),
-                (None, None) => true,
-                _ => false,
-            };
+            let absent = self.absent_value(entry)?;
+            let same = same_value(live.as_ref(), target.value.as_ref(), absent.as_ref().map(Option::as_ref));
             matched += usize::from(same);
         }
         for rule in &tweak.services {
@@ -363,7 +379,7 @@ impl Engine {
         let prepare_count = Self::prepare_count(tweak, action);
         for op in &native_ops[..prepare_count] {
             cancel.check()?;
-            self.native.run(op, cancel)?;
+            self.run_op(op, cancel)?;
         }
         for target in targets {
             cancel.check()?;
@@ -375,7 +391,7 @@ impl Engine {
         }
         for op in &native_ops[prepare_count..] {
             cancel.check()?;
-            self.native.run(op, cancel)?;
+            self.run_op(op, cancel)?;
         }
         Ok(())
     }
@@ -532,11 +548,37 @@ impl Engine {
         first_error.map_or(Ok(()), Err)
     }
 
-    fn run_undo_ops(&self, owner: &str) -> Result<()> {
+    /// Runs one catalog operation. Registry trees go through `scope` like
+    /// every other registry write, so a sandbox keeps them inside it.
+    fn run_op(&self, op: &NativeOp, cancel: &CancelToken) -> Result<()> {
+        match op {
+            NativeOp::RegDeleteTree { path } => self.scope.delete_tree(&RegPath::parse(path)?),
+            other => self.native.run(other, cancel),
+        }
+    }
+
+    /// Runs the catalog `undo` steps after `records` were reverted. A tree
+    /// deletion is skipped when it holds a value those records just put back,
+    /// because the value existed before the tweak and has to stay.
+    fn run_undo_ops(&self, owner: &str, records: &[ChangeRecord]) -> Result<()> {
         let tweak = self.catalog.tweak(owner).map(|tweak| &tweak.undo);
         let undo = tweak.or_else(|| self.catalog.feature(owner).map(|feature| &feature.undo));
+        let restored: Vec<String> = records
+            .iter()
+            .filter(|record| record.owner == owner)
+            .filter_map(|record| match &record.change {
+                Change::Registry { path, before: Some(_), .. } => Some(format!("{}\\", path.to_lowercase())),
+                _ => None,
+            })
+            .collect();
         for op in undo.into_iter().flatten() {
-            self.native.run(op, &CancelToken::new())?;
+            if let NativeOp::RegDeleteTree { path } = op {
+                let tree = format!("{}\\", RegPath::parse(path)?.display().to_lowercase());
+                if restored.iter().any(|key| key.starts_with(&tree)) {
+                    continue;
+                }
+            }
+            self.run_op(op, &CancelToken::new())?;
         }
         Ok(())
     }
@@ -549,7 +591,7 @@ impl Engine {
         let mut owners: Vec<&str> = records.iter().map(|record| record.owner.as_str()).collect();
         owners.dedup();
         for owner in owners {
-            self.run_undo_ops(owner)?;
+            self.run_undo_ops(owner, &records)?;
             if let Some(mut state) = self.store.applied_state(owner)? {
                 if state.undo_session() == session {
                     self.store.clear_applied(owner)?;
@@ -614,7 +656,7 @@ impl Engine {
             let records: Vec<ChangeRecord> =
                 self.store.changes(session)?.into_iter().filter(|record| record.owner == tweak.id).collect();
             self.revert_records(session, &records)?;
-            self.run_undo_ops(&tweak.id)?;
+            self.run_undo_ops(&tweak.id, &records)?;
             return self.store.clear_applied(&tweak.id);
         }
 
@@ -630,14 +672,21 @@ impl Engine {
         let mut drifted = Vec::new();
         for state in self.store.applied()? {
             let mut entries = Vec::new();
+            let tweak = self.catalog.tweak(&state.tweak_id);
             for (path, name, expected) in &state.registry {
                 let parsed = crate::registry::RegPath::parse(path)?;
                 let live = self.scope.read(&parsed, name)?;
-                let same = match (&live, expected) {
-                    (Some(live), Some(want)) => live.matches(want),
-                    (None, None) => true,
-                    _ => false,
+                let entry = tweak.and_then(|tweak| {
+                    tweak.registry.iter().find(|entry| {
+                        entry.name.eq_ignore_ascii_case(name)
+                            && RegPath::parse(&entry.path).is_ok_and(|p| p.display().eq_ignore_ascii_case(path))
+                    })
+                });
+                let absent = match entry {
+                    Some(entry) => self.absent_value(entry)?,
+                    None => None,
                 };
+                let same = same_value(live.as_ref(), expected.as_ref(), absent.as_ref().map(Option::as_ref));
                 if !same {
                     entries.push((format!("{path}\\{name}"), value_text(expected.as_ref()), value_text(live.as_ref())));
                 }

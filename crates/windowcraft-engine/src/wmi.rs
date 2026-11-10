@@ -74,14 +74,41 @@ pub fn invoke_all(namespace: &str, query: &str, method: &str) -> Result<usize> {
         unsafe { object.Get(w!("__PATH"), 0, &mut path, None, None) }.map_err(fail)?;
         // SAFETY: `__PATH` is always a VT_BSTR, so this union member is active.
         let path = unsafe { BSTR::clone(&path.Anonymous.Anonymous.Anonymous.bstrVal) };
-        // SAFETY: The method takes no input parameters or output object here.
+        let mut output: Option<IWbemClassObject> = None;
+        // SAFETY: The method takes no input parameters, and `output` is a
+        // valid out pointer for the result object.
         unsafe {
-            services.ExecMethod(&path, &BSTR::from(method), WBEM_GENERIC_FLAG_TYPE(0), None, None, None, None)
+            services.ExecMethod(
+                &path,
+                &BSTR::from(method),
+                WBEM_GENERIC_FLAG_TYPE(0),
+                None,
+                None,
+                Some(&mut output),
+                None,
+            )
         }
         .map_err(fail)?;
+        // COM reports success even when the method refused, so its own
+        // ReturnValue decides.
+        if let Some(code) = output.as_ref().and_then(return_value).filter(|code| *code != 0) {
+            return Err(EngineError::win32("ExecMethod", format!("{method} on {path}"), code));
+        }
         count += 1;
     }
     Ok(count)
+}
+
+/// The `ReturnValue` of a method's output object. None for methods without one.
+fn return_value(output: &IWbemClassObject) -> Option<u32> {
+    let mut value = VARIANT::default();
+    // SAFETY: `output` is live and `value` is a valid out pointer that
+    // VARIANT's Drop clears.
+    unsafe { output.Get(w!("ReturnValue"), 0, &mut value, None, None) }.ok()?;
+    if value.is_empty() {
+        return None;
+    }
+    i32::try_from(&value).ok().map(i32::cast_unsigned)
 }
 
 /// Starts BitLocker decryption of the system drive.
@@ -111,6 +138,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn a_method_that_refuses_is_an_error() {
+        // RpcSs never accepts a pause, so PauseService returns a nonzero
+        // ReturnValue (not supported, or access denied without elevation)
+        // while the COM call itself succeeds. Nothing on the system changes.
+        let error = invoke_all(r"ROOT\CIMV2", "SELECT * FROM Win32_Service WHERE Name='RpcSs'", "PauseService").unwrap_err();
+        assert!(
+            matches!(&error, EngineError::Win32 { operation: "ExecMethod", .. } | EngineError::NeedsElevation(_)),
+            "{error:?}"
+        );
     }
 
     #[test]

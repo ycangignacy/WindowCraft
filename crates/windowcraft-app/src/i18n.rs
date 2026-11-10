@@ -102,10 +102,12 @@ impl Language {
 
     pub fn plural_form(self, count: usize) -> PluralForm {
         match self {
+            // Polish keeps the singular for 1 alone: "21 plików", "101 plików".
             Self::Pl | Self::Uk => {
                 let n10 = count % 10;
                 let n100 = count % 100;
-                if n10 == 1 && n100 != 11 {
+                let one = if self == Self::Pl { count == 1 } else { n10 == 1 && n100 != 11 };
+                if one {
                     PluralForm::One
                 } else if (2..=4).contains(&n10) && !(12..=14).contains(&n100) {
                     PluralForm::Few
@@ -374,6 +376,57 @@ pub enum Msg {
 
     NoticeAllPackagesUpgraded,
     NoticeImported,
+    NoticeImportedKept,
+    NoticeUnknownInspect,
+    StepIsoMounting,
+    StepIsoCopyingMedia,
+    StepIsoWritingAnswer,
+    StepIsoExportingDrivers,
+    StepIsoInjectingBoot,
+    StepIsoConvertingEsd,
+    StepIsoInjectingInstall,
+    StepIsoInstallingOscdimg,
+    StepIsoBuilding,
+    StepIsoSplitting,
+    StepIsoCopyingUsb,
+    StepIsoPartitioning,
+    ErrWin32,
+    ErrNeedsElevation,
+    ErrProtectedService,
+    ErrInvalid,
+    ErrNotFound,
+    ErrUnsupported,
+    ErrProcess,
+    ErrCancelled,
+    ErrStore,
+    ErrStoreBusy,
+    ErrNetwork,
+    ErrChecksum,
+    ErrJobPanicked,
+    TimerMaxResolution,
+    TimerMinResolution,
+    CleanTempUser,
+    CleanTempSystem,
+    CleanCbsLogs,
+    CleanMinidump,
+    CleanShaderNvidia,
+    CleanShaderAmd,
+    CleanShaderD3d,
+    CleanCargo,
+    CleanNpm,
+    CleanPip,
+    CleanNuget,
+    CleanIsoWork,
+    CleanGroupSystem,
+    CleanGroupShaders,
+    CleanGroupDeveloper,
+    CleanGroupWindowCraft,
+    DisplayHags,
+    DisplayHagsDetail,
+    DisplayVrr,
+    DisplayVrrDetail,
+    DisplayFso,
+    DisplayFsoDetail,
     NoticeImportFailed,
     NoticeProfileSavedCopied,
     NoticeExportFailed,
@@ -462,6 +515,7 @@ pub enum Msg {
     JobStarting,
     NoticeItemsApplied,
     NoticeFailures,
+    NoticeCancelledAfter,
     UnnamedJob,
     DnsReturnedToDhcp,
     DnsSetFastest,
@@ -495,6 +549,7 @@ pub enum Msg {
     NotifyDriftBody,
     NoticeScheduleFailed,
     NoticeNoDrift,
+    NoticeDriftCheckFailed,
     NotifyOpenQuestion,
 
     // Misc
@@ -816,6 +871,57 @@ impl Msg {
         Self::JobApplyingTweaks,
         Self::NoticeAllPackagesUpgraded,
         Self::NoticeImported,
+        Self::NoticeImportedKept,
+        Self::NoticeUnknownInspect,
+        Self::StepIsoMounting,
+        Self::StepIsoCopyingMedia,
+        Self::StepIsoWritingAnswer,
+        Self::StepIsoExportingDrivers,
+        Self::StepIsoInjectingBoot,
+        Self::StepIsoConvertingEsd,
+        Self::StepIsoInjectingInstall,
+        Self::StepIsoInstallingOscdimg,
+        Self::StepIsoBuilding,
+        Self::StepIsoSplitting,
+        Self::StepIsoCopyingUsb,
+        Self::StepIsoPartitioning,
+        Self::ErrWin32,
+        Self::ErrNeedsElevation,
+        Self::ErrProtectedService,
+        Self::ErrInvalid,
+        Self::ErrNotFound,
+        Self::ErrUnsupported,
+        Self::ErrProcess,
+        Self::ErrCancelled,
+        Self::ErrStore,
+        Self::ErrStoreBusy,
+        Self::ErrNetwork,
+        Self::ErrChecksum,
+        Self::ErrJobPanicked,
+        Self::TimerMaxResolution,
+        Self::TimerMinResolution,
+        Self::CleanTempUser,
+        Self::CleanTempSystem,
+        Self::CleanCbsLogs,
+        Self::CleanMinidump,
+        Self::CleanShaderNvidia,
+        Self::CleanShaderAmd,
+        Self::CleanShaderD3d,
+        Self::CleanCargo,
+        Self::CleanNpm,
+        Self::CleanPip,
+        Self::CleanNuget,
+        Self::CleanIsoWork,
+        Self::CleanGroupSystem,
+        Self::CleanGroupShaders,
+        Self::CleanGroupDeveloper,
+        Self::CleanGroupWindowCraft,
+        Self::DisplayHags,
+        Self::DisplayHagsDetail,
+        Self::DisplayVrr,
+        Self::DisplayVrrDetail,
+        Self::DisplayFso,
+        Self::DisplayFsoDetail,
         Self::NoticeImportFailed,
         Self::NoticeProfileSavedCopied,
         Self::NoticeExportFailed,
@@ -884,6 +990,7 @@ impl Msg {
         Self::JobStarting,
         Self::NoticeItemsApplied,
         Self::NoticeFailures,
+        Self::NoticeCancelledAfter,
         Self::UnnamedJob,
         Self::DnsReturnedToDhcp,
         Self::DnsSetFastest,
@@ -915,6 +1022,7 @@ impl Msg {
         Self::NotifyDriftBody,
         Self::NoticeScheduleFailed,
         Self::NoticeNoDrift,
+        Self::NoticeDriftCheckFailed,
         Self::NotifyOpenQuestion,
         Self::PageExtensions,
         Self::MiscStripperGroup,
@@ -1059,6 +1167,106 @@ pub fn t(lang: Language, msg: Msg) -> &'static str {
 
 /// Fills each `{}` in order. Inserted values are never scanned again, so a
 /// path that contains braces stays as it is.
+static CURRENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The language of the window, for text made on job threads.
+pub fn set_current(lang: Language) {
+    let index = Language::ALL.iter().position(|candidate| *candidate == lang).unwrap_or(0);
+    CURRENT.store(index, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn current() -> Language {
+    Language::ALL.get(CURRENT.load(std::sync::atomic::Ordering::Relaxed)).copied().unwrap_or(Language::En)
+}
+
+/// Lets ISO Studio steps and job errors speak the window's language.
+pub fn install_job_texts() {
+    windowcraft_iso::pipeline::set_step_names(|step| iso_step(current(), step));
+    windowcraft_engine::jobs::set_error_text(|error| error_text(current(), error));
+}
+
+pub fn iso_step(lang: Language, step: windowcraft_iso::IsoStep) -> String {
+    use windowcraft_iso::IsoStep;
+    let msg = match step {
+        IsoStep::InjectingBoot(count) => return format_1(t(lang, Msg::StepIsoInjectingBoot), &count.to_string()),
+        IsoStep::InjectingInstall(count) => return format_1(t(lang, Msg::StepIsoInjectingInstall), &count.to_string()),
+        IsoStep::Mounting => Msg::StepIsoMounting,
+        IsoStep::CopyingMedia => Msg::StepIsoCopyingMedia,
+        IsoStep::WritingAnswerFile => Msg::StepIsoWritingAnswer,
+        IsoStep::ExportingDrivers => Msg::StepIsoExportingDrivers,
+        IsoStep::ConvertingEsd => Msg::StepIsoConvertingEsd,
+        IsoStep::InstallingOscdimg => Msg::StepIsoInstallingOscdimg,
+        IsoStep::BuildingIso => Msg::StepIsoBuilding,
+        IsoStep::SplittingWim => Msg::StepIsoSplitting,
+        IsoStep::CopyingToUsb => Msg::StepIsoCopyingUsb,
+        IsoStep::Partitioning => Msg::StepIsoPartitioning,
+    };
+    t(lang, msg).to_owned()
+}
+
+/// Name and group of a cleaner target, by its id. Unknown ids keep the
+/// engine's English text.
+pub fn clean_target(lang: Language, target: &windowcraft_engine::cleaner::CleanTarget) -> (&'static str, &'static str) {
+    let name = match target.id {
+        "temp-user" => Msg::CleanTempUser,
+        "temp-system" => Msg::CleanTempSystem,
+        "cbs-logs" => Msg::CleanCbsLogs,
+        "minidump" => Msg::CleanMinidump,
+        "shader-nvidia" => Msg::CleanShaderNvidia,
+        "shader-amd" => Msg::CleanShaderAmd,
+        "shader-d3d" => Msg::CleanShaderD3d,
+        "cargo" => Msg::CleanCargo,
+        "npm" => Msg::CleanNpm,
+        "pip" => Msg::CleanPip,
+        "nuget" => Msg::CleanNuget,
+        windowcraft_engine::cleaner::ISO_TARGET => Msg::CleanIsoWork,
+        _ => return (target.name, target.group),
+    };
+    let group = match target.id {
+        "temp-user" | "temp-system" | "cbs-logs" | "minidump" => Msg::CleanGroupSystem,
+        "shader-nvidia" | "shader-amd" | "shader-d3d" => Msg::CleanGroupShaders,
+        "cargo" | "npm" | "pip" | "nuget" => Msg::CleanGroupDeveloper,
+        _ => Msg::CleanGroupWindowCraft,
+    };
+    (t(lang, name), t(lang, group))
+}
+
+/// Name and description of a display-pipeline toggle, by its id.
+pub fn display_toggle(lang: Language, id: &str) -> Option<(&'static str, &'static str)> {
+    let (name, detail) = match id {
+        "hags" => (Msg::DisplayHags, Msg::DisplayHagsDetail),
+        "vrr" => (Msg::DisplayVrr, Msg::DisplayVrrDetail),
+        "fullscreen-optimizations" => (Msg::DisplayFso, Msg::DisplayFsoDetail),
+        _ => return None,
+    };
+    Some((t(lang, name), t(lang, detail)))
+}
+
+/// An engine error in `lang`. Details that come from Windows, such as the
+/// system message of a Win32 error, are already in the system language.
+pub fn error_text(lang: Language, error: &windowcraft_engine::EngineError) -> String {
+    use windowcraft_engine::EngineError;
+    let text = |msg| t(lang, msg);
+    match error {
+        EngineError::Win32 { operation, target, code, message } => {
+            fill(text(Msg::ErrWin32), &[operation, target, message.trim(), &format!("{code:08X}")])
+        }
+        EngineError::NeedsElevation(what) => format_1(text(Msg::ErrNeedsElevation), what),
+        EngineError::ProtectedService(name) => format_1(text(Msg::ErrProtectedService), name),
+        EngineError::Invalid(what) => format_1(text(Msg::ErrInvalid), what),
+        EngineError::NotFound(what) => format_1(text(Msg::ErrNotFound), what),
+        EngineError::Unsupported(what) => format_1(text(Msg::ErrUnsupported), what),
+        EngineError::Process { program, code, detail } => format_3(text(Msg::ErrProcess), program, &code.to_string(), detail),
+        EngineError::Cancelled => text(Msg::ErrCancelled).to_owned(),
+        EngineError::Store(what) => format_1(text(Msg::ErrStore), what),
+        EngineError::StoreBusy => text(Msg::ErrStoreBusy).to_owned(),
+        EngineError::Network(what) => format_1(text(Msg::ErrNetwork), what),
+        EngineError::Checksum { file, expected, actual } => format_3(text(Msg::ErrChecksum), file, expected, actual),
+        EngineError::Message(sentence) => sentence.clone(),
+        EngineError::Io { target, source } => format!("{target}: {source}"),
+    }
+}
+
 fn fill(pattern: &str, values: &[&str]) -> String {
     let mut out = String::with_capacity(pattern.len() + values.iter().map(|value| value.len()).sum::<usize>());
     let mut rest = pattern;
@@ -1192,13 +1400,12 @@ pub fn detect_language() -> Language {
 }
 
 pub fn read_settings_language() -> Option<Language> {
-    let path = windowcraft_engine::win::local_app_dir().join("settings.json");
-    let content = std::fs::read_to_string(path).ok()?;
+    let content = std::fs::read_to_string(crate::settings::path()).ok()?;
     parse_settings_language(&content)
 }
 
 fn parse_settings_language(content: &str) -> Option<Language> {
-    let settings: serde_json::Value = serde_json::from_str(content).ok()?;
+    let settings = windowcraft_config::parse_json(content).ok()?;
     Language::from_tag(settings.get("language")?.as_str()?)
 }
 
@@ -1230,21 +1437,7 @@ pub fn system_language() -> Language {
 
 /// Stores the choice in settings.json, keeping any other keys in the file.
 pub fn save_settings_language(lang: Language) -> Result<(), String> {
-    let dir = windowcraft_engine::win::local_app_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("settings.json");
-    let mut settings = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .filter(serde_json::Value::is_object)
-        .unwrap_or_else(|| serde_json::json!({}));
-    settings["language"] = serde_json::Value::from(lang.tag());
-    let content = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    // Write and rename, so a crash never leaves half a file. std replaces
-    // the target on Windows.
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, content).map_err(|e| e.to_string())?;
-    std::fs::rename(&temporary, &path).map_err(|e| e.to_string())
+    crate::settings::edit_file(|settings| settings["language"] = serde_json::Value::from(lang.tag()))
 }
 
 // Translation functions
@@ -1453,6 +1646,57 @@ fn en(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "All packages upgraded",
         Msg::NoticeImported => "Imported {}",
+        Msg::NoticeImportedKept => "The Windows Update mode and the service rules in the file are not applied here. They stay in the export, and windowcraft.exe --config with --run applies them.",
+        Msg::NoticeUnknownInspect => "--inspect: there is no tweak with the id {}.",
+        Msg::StepIsoMounting => "Mounting the ISO",
+        Msg::StepIsoCopyingMedia => "Copying the installation files",
+        Msg::StepIsoWritingAnswer => "Writing the answer file and first-start scripts",
+        Msg::StepIsoExportingDrivers => "Exporting the drivers of this PC",
+        Msg::StepIsoInjectingBoot => "Adding storage drivers to boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Converting install.esd to install.wim",
+        Msg::StepIsoInjectingInstall => "Adding drivers to install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Installing oscdimg",
+        Msg::StepIsoBuilding => "Building the ISO",
+        Msg::StepIsoSplitting => "Splitting install.wim",
+        Msg::StepIsoCopyingUsb => "Copying files to the USB drive",
+        Msg::StepIsoPartitioning => "Partitioning the USB drive",
+        Msg::ErrWin32 => "{} failed for {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "Administrator rights are required: {}",
+        Msg::ErrProtectedService => "The service {} is protected and cannot be disabled",
+        Msg::ErrInvalid => "Invalid value: {}",
+        Msg::ErrNotFound => "Not found: {}",
+        Msg::ErrUnsupported => "Not supported on this system: {}",
+        Msg::ErrProcess => "{} exited with code {}: {}",
+        Msg::ErrCancelled => "The operation was cancelled",
+        Msg::ErrStore => "Snapshot database: {}",
+        Msg::ErrStoreBusy => "WindowCraft is already using the snapshot database. Close the other instance and try again.",
+        Msg::ErrNetwork => "Network: {}",
+        Msg::ErrChecksum => "The checksum of {} does not match: expected {}, got {}",
+        Msg::ErrJobPanicked => "The operation stopped because of an internal error",
+        Msg::TimerMaxResolution => "Maximum resolution",
+        Msg::TimerMinResolution => "Minimum resolution",
+        Msg::CleanTempUser => "User temporary files",
+        Msg::CleanTempSystem => "System temporary files",
+        Msg::CleanCbsLogs => "CBS and DISM logs",
+        Msg::CleanMinidump => "Minidump files",
+        Msg::CleanShaderNvidia => "NVIDIA shader cache",
+        Msg::CleanShaderAmd => "AMD shader cache",
+        Msg::CleanShaderD3d => "DirectX shader cache",
+        Msg::CleanCargo => "Cargo registry cache",
+        Msg::CleanNpm => "npm cache",
+        Msg::CleanPip => "pip cache",
+        Msg::CleanNuget => "NuGet package cache",
+        Msg::CleanIsoWork => "ISO Studio work files",
+        Msg::CleanGroupSystem => "System",
+        Msg::CleanGroupShaders => "GPU shader caches",
+        Msg::CleanGroupDeveloper => "Developer caches",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Hardware-accelerated GPU scheduling",
+        Msg::DisplayHagsDetail => "HwSchMode. Takes effect after a restart.",
+        Msg::DisplayVrr => "Variable refresh rate",
+        Msg::DisplayVrrDetail => "Per-user DirectX VRR optimization.",
+        Msg::DisplayFso => "Fullscreen optimizations",
+        Msg::DisplayFsoDetail => "GameConfigStore FSE behavior flags.",
         Msg::NoticeImportFailed => "Import failed: {}",
         Msg::NoticeProfileSavedCopied => "Profile saved. Copied: {}",
         Msg::NoticeExportFailed => "Export failed: {}",
@@ -1531,6 +1775,7 @@ fn en(msg: Msg) -> &'static str {
         Msg::JobStarting => "Starting",
         Msg::NoticeItemsApplied => "Items applied: {}",
         Msg::NoticeFailures => "Failed: {}. First error: {}",
+        Msg::NoticeCancelledAfter => "Cancelled after {} of {}.",
         Msg::UnnamedJob => "The current job",
         Msg::DnsReturnedToDhcp => "DNS returned to DHCP",
         Msg::DnsSetFastest => "DNS set to {}, the fastest resolver",
@@ -1563,6 +1808,7 @@ fn en(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Tweaks reverted: {}. Click to see them in WindowCraft Time Machine.",
         Msg::NoticeScheduleFailed => "Could not change the scheduled check: {}",
         Msg::NoticeNoDrift => "No applied tweaks were reverted.",
+        Msg::NoticeDriftCheckFailed => "Could not check for changes: {}",
         Msg::NotifyOpenQuestion => "Open Time Machine now?",
 
         Msg::PageExtensions => "Extensions",
@@ -1599,8 +1845,8 @@ fn en(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Installed. Uninstalling deletes the downloaded tools that no other extension uses.",
         Msg::ExtInstalledBuiltIn => "Installed. It downloaded nothing, so uninstalling only takes it off this page.",
         Msg::ExtStripperNeeds => "Built into WindowCraft. Nothing is downloaded, and it works offline.",
-        Msg::ExtFfmpegNeeds => "Installing downloads ffmpeg (about 90 MB) from its GitHub releases and checks its SHA-256.",
-        Msg::ExtYoutubeNeeds => "Installing downloads yt-dlp, ffmpeg and Deno (about 150 MB) from their GitHub releases and checks their SHA-256.",
+        Msg::ExtFfmpegNeeds => "Installing downloads ffmpeg (about 90 MB, more once unpacked) from its GitHub releases and checks its SHA-256.",
+        Msg::ExtYoutubeNeeds => "Installing downloads yt-dlp, ffmpeg and Deno (about 150 MB; about 300 MB on disk once unpacked) from their GitHub releases and checks their SHA-256.",
         Msg::JobInstallingExtension => "Installing {}",
         Msg::JobRemovingExtension => "Uninstalling {}",
         Msg::NoticeExtensionInstalled => "{} is installed.",
@@ -1719,7 +1965,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Oczyszczanie",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Szukaj aplikacji, usług, napraw i ustawień",
+        Msg::SearchPlaceholder => "Szukaj aplikacji, optymalizacji, kluczy rejestru, usług i napraw",
         Msg::Cancel => "Anuluj",
         Msg::Close => "Zamknij",
         Msg::Dismiss => "Odrzuć",
@@ -1897,6 +2143,57 @@ fn pl(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Zaktualizowano wszystkie pakiety",
         Msg::NoticeImported => "Zaimportowano {}",
+        Msg::NoticeImportedKept => "Tryb Windows Update i reguły usług z pliku nie są tu stosowane. Zostają w eksporcie, a windowcraft.exe --config z --run je stosuje.",
+        Msg::NoticeUnknownInspect => "--inspect: nie ma optymalizacji o identyfikatorze {}.",
+        Msg::StepIsoMounting => "Montowanie obrazu ISO",
+        Msg::StepIsoCopyingMedia => "Kopiowanie plików instalacyjnych",
+        Msg::StepIsoWritingAnswer => "Zapisywanie pliku odpowiedzi i skryptów pierwszego uruchomienia",
+        Msg::StepIsoExportingDrivers => "Eksportowanie sterowników tego komputera",
+        Msg::StepIsoInjectingBoot => "Dodawanie sterowników pamięci masowej do boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Konwersja install.esd na install.wim",
+        Msg::StepIsoInjectingInstall => "Dodawanie sterowników do install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Instalowanie oscdimg",
+        Msg::StepIsoBuilding => "Tworzenie obrazu ISO",
+        Msg::StepIsoSplitting => "Dzielenie install.wim",
+        Msg::StepIsoCopyingUsb => "Kopiowanie plików na dysk USB",
+        Msg::StepIsoPartitioning => "Partycjonowanie dysku USB",
+        Msg::ErrWin32 => "{} nie powiodło się dla {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "Potrzebne są uprawnienia administratora: {}",
+        Msg::ErrProtectedService => "Usługa {} jest chroniona i nie można jej wyłączyć",
+        Msg::ErrInvalid => "Nieprawidłowa wartość: {}",
+        Msg::ErrNotFound => "Nie znaleziono: {}",
+        Msg::ErrUnsupported => "Nieobsługiwane w tym systemie: {}",
+        Msg::ErrProcess => "{} zakończył się kodem {}: {}",
+        Msg::ErrCancelled => "Operacja została anulowana",
+        Msg::ErrStore => "Baza migawek: {}",
+        Msg::ErrStoreBusy => "WindowCraft już używa bazy migawek. Zamknij drugie okno programu i spróbuj ponownie.",
+        Msg::ErrNetwork => "Sieć: {}",
+        Msg::ErrChecksum => "Suma kontrolna {} się nie zgadza: oczekiwano {}, jest {}",
+        Msg::ErrJobPanicked => "Operacja przerwała się z powodu błędu wewnętrznego",
+        Msg::TimerMaxResolution => "Maksymalna rozdzielczość",
+        Msg::TimerMinResolution => "Minimalna rozdzielczość",
+        Msg::CleanTempUser => "Pliki tymczasowe użytkownika",
+        Msg::CleanTempSystem => "Systemowe pliki tymczasowe",
+        Msg::CleanCbsLogs => "Dzienniki CBS i DISM",
+        Msg::CleanMinidump => "Pliki minizrzutów",
+        Msg::CleanShaderNvidia => "Pamięć podręczna shaderów NVIDIA",
+        Msg::CleanShaderAmd => "Pamięć podręczna shaderów AMD",
+        Msg::CleanShaderD3d => "Pamięć podręczna shaderów DirectX",
+        Msg::CleanCargo => "Pamięć podręczna rejestru Cargo",
+        Msg::CleanNpm => "Pamięć podręczna npm",
+        Msg::CleanPip => "Pamięć podręczna pip",
+        Msg::CleanNuget => "Pamięć podręczna pakietów NuGet",
+        Msg::CleanIsoWork => "Pliki robocze ISO Studio",
+        Msg::CleanGroupSystem => "System",
+        Msg::CleanGroupShaders => "Pamięć podręczna shaderów GPU",
+        Msg::CleanGroupDeveloper => "Pamięć podręczna narzędzi programistycznych",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Planowanie procesora GPU z akceleracją sprzętową",
+        Msg::DisplayHagsDetail => "HwSchMode. Działa po ponownym uruchomieniu.",
+        Msg::DisplayVrr => "Zmienna częstotliwość odświeżania",
+        Msg::DisplayVrrDetail => "Optymalizacja VRR DirectX dla bieżącego użytkownika.",
+        Msg::DisplayFso => "Optymalizacje pełnoekranowe",
+        Msg::DisplayFsoDetail => "Flagi zachowania FSE w GameConfigStore.",
         Msg::NoticeImportFailed => "Błąd importu: {}",
         Msg::NoticeProfileSavedCopied => "Zapisano profil. Skopiowano: {}",
         Msg::NoticeExportFailed => "Błąd eksportu: {}",
@@ -1975,6 +2272,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::JobStarting => "Uruchamianie",
         Msg::NoticeItemsApplied => "Zastosowane elementy: {}",
         Msg::NoticeFailures => "Niepowodzenia: {}. Pierwszy błąd: {}",
+        Msg::NoticeCancelledAfter => "Anulowano po {} z {}.",
         Msg::UnnamedJob => "Bieżąca operacja",
         Msg::DnsReturnedToDhcp => "Przywrócono DNS z serwera DHCP",
         Msg::DnsSetFastest => "Ustawiono DNS: {} (najszybszy serwer)",
@@ -2007,6 +2305,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Cofnięte optymalizacje: {}. Kliknij, aby zobaczyć je w Time Machine WindowCraft.",
         Msg::NoticeScheduleFailed => "Nie udało się zmienić zaplanowanego sprawdzania: {}",
         Msg::NoticeNoDrift => "Żadna zastosowana optymalizacja nie została cofnięta.",
+        Msg::NoticeDriftCheckFailed => "Nie udało się sprawdzić zmian: {}",
         Msg::NotifyOpenQuestion => "Otworzyć teraz Time Machine?",
 
         Msg::PageExtensions => "Rozszerzenia",
@@ -2043,8 +2342,8 @@ fn pl(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Zainstalowane. Odinstalowanie usuwa pobrane narzędzia, których nie używa inne rozszerzenie.",
         Msg::ExtInstalledBuiltIn => "Zainstalowane. Nic nie zostało pobrane, więc odinstalowanie tylko zdejmuje je z tej strony.",
         Msg::ExtStripperNeeds => "Wbudowane w WindowCraft. Nic nie jest pobierane i działa bez internetu.",
-        Msg::ExtFfmpegNeeds => "Instalacja pobiera ffmpeg (około 90 MB) z jego wydań na GitHubie i sprawdza SHA-256.",
-        Msg::ExtYoutubeNeeds => "Instalacja pobiera yt-dlp, ffmpeg i Deno (około 150 MB) z ich wydań na GitHubie i sprawdza ich SHA-256.",
+        Msg::ExtFfmpegNeeds => "Instalacja pobiera ffmpeg (około 90 MB, po rozpakowaniu więcej) z jego wydań na GitHubie i sprawdza SHA-256.",
+        Msg::ExtYoutubeNeeds => "Instalacja pobiera yt-dlp, ffmpeg i Deno (około 150 MB, po rozpakowaniu około 300 MB na dysku) z ich wydań na GitHubie i sprawdza ich SHA-256.",
         Msg::JobInstallingExtension => "Instalowanie: {}",
         Msg::JobRemovingExtension => "Odinstalowywanie: {}",
         Msg::NoticeExtensionInstalled => "Zainstalowano: {}.",
@@ -2101,7 +2400,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::OnbDepthQuestion => "Jak dużo chcesz zmienić?",
         Msg::OnbDepthCareful => "Ostrożnie",
         Msg::OnbDepthCarefulDetail => "Zestaw minimalny. Optymalizacje: {}.",
-        Msg::OnbDepthStandard => "Standard",
+        Msg::OnbDepthStandard => "Standardowo",
         Msg::OnbDepthStandardDetail => "Zestaw standardowy. Optymalizacje: {}.",
         Msg::OnbDepthEverything => "Wszystko",
         Msg::OnbDepthEverythingDetail => "Zestaw zaawansowany. Optymalizacje: {}. Preinstalowane aplikacje też zostaną zaznaczone do usunięcia.",
@@ -2127,7 +2426,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::TipInspector => "Dokładniejszy wgląd w sprzęt i system: tryb MSI, ekran, autostart, oczyszczanie i test DNS. Skanowanie tylko odczytuje. Zmiany zachodzą dopiero po przełączeniu lub uruchomieniu czegoś.",
         Msg::TipExtensions => "Usuwanie metadanych i konwerter są wbudowane. Dodatkowe formaty (ffmpeg) i pobieranie z YouTube są ściągane dopiero, gdy je zainstalujesz.",
         Msg::SettingsGuideGroup => "Wprowadzenie i wskazówki",
-        Msg::SettingsOnboardingAgain => "Pokaż onboarding ponownie",
+        Msg::SettingsOnboardingAgain => "Pokaż wprowadzenie ponownie",
         Msg::SettingsOnboardingAgainDetail => "Otwiera pytania z pierwszego uruchomienia.",
         Msg::SettingsOnboardingAgainButton => "Pokaż",
         Msg::SettingsTipsAgain => "Pokaż wskazówki ponownie",
@@ -2163,7 +2462,7 @@ fn de(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Bereinigung",
         Msg::TabDns => "DNS-Test",
 
-        Msg::SearchPlaceholder => "Apps, Tweaks, Dienste, Reparaturen suchen",
+        Msg::SearchPlaceholder => "Apps, Tweaks, Registrierungsschlüssel, Dienste und Reparaturen suchen",
         Msg::Cancel => "Abbrechen",
         Msg::Close => "Schließen",
         Msg::Dismiss => "Verwerfen",
@@ -2341,6 +2640,57 @@ fn de(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Alle Pakete erfolgreich aktualisiert",
         Msg::NoticeImported => "{} importiert",
+        Msg::NoticeImportedKept => "Der Windows-Update-Modus und die Dienstregeln aus der Datei werden hier nicht angewendet. Sie bleiben im Export, und windowcraft.exe --config mit --run wendet sie an.",
+        Msg::NoticeUnknownInspect => "--inspect: Es gibt keinen Tweak mit der ID {}.",
+        Msg::StepIsoMounting => "ISO wird eingebunden",
+        Msg::StepIsoCopyingMedia => "Installationsdateien werden kopiert",
+        Msg::StepIsoWritingAnswer => "Antwortdatei und Skripte für den ersten Start werden geschrieben",
+        Msg::StepIsoExportingDrivers => "Treiber dieses PCs werden exportiert",
+        Msg::StepIsoInjectingBoot => "Speichertreiber werden zu boot.wim hinzugefügt: {}",
+        Msg::StepIsoConvertingEsd => "install.esd wird in install.wim umgewandelt",
+        Msg::StepIsoInjectingInstall => "Treiber werden zu install.wim hinzugefügt: {}",
+        Msg::StepIsoInstallingOscdimg => "oscdimg wird installiert",
+        Msg::StepIsoBuilding => "ISO wird erstellt",
+        Msg::StepIsoSplitting => "install.wim wird geteilt",
+        Msg::StepIsoCopyingUsb => "Dateien werden auf das USB-Laufwerk kopiert",
+        Msg::StepIsoPartitioning => "USB-Laufwerk wird partitioniert",
+        Msg::ErrWin32 => "{} ist für {} fehlgeschlagen: {} (0x{})",
+        Msg::ErrNeedsElevation => "Administratorrechte sind erforderlich: {}",
+        Msg::ErrProtectedService => "Der Dienst {} ist geschützt und kann nicht deaktiviert werden",
+        Msg::ErrInvalid => "Ungültiger Wert: {}",
+        Msg::ErrNotFound => "Nicht gefunden: {}",
+        Msg::ErrUnsupported => "Auf diesem System nicht unterstützt: {}",
+        Msg::ErrProcess => "{} wurde mit Code {} beendet: {}",
+        Msg::ErrCancelled => "Der Vorgang wurde abgebrochen",
+        Msg::ErrStore => "Snapshot-Datenbank: {}",
+        Msg::ErrStoreBusy => "WindowCraft verwendet die Snapshot-Datenbank bereits. Schließen Sie die andere Instanz und versuchen Sie es erneut.",
+        Msg::ErrNetwork => "Netzwerk: {}",
+        Msg::ErrChecksum => "Die Prüfsumme von {} stimmt nicht: erwartet {}, erhalten {}",
+        Msg::ErrJobPanicked => "Der Vorgang wurde wegen eines internen Fehlers beendet",
+        Msg::TimerMaxResolution => "Höchste Auflösung",
+        Msg::TimerMinResolution => "Niedrigste Auflösung",
+        Msg::CleanTempUser => "Temporäre Dateien des Benutzers",
+        Msg::CleanTempSystem => "Temporäre Systemdateien",
+        Msg::CleanCbsLogs => "CBS- und DISM-Protokolle",
+        Msg::CleanMinidump => "Minidump-Dateien",
+        Msg::CleanShaderNvidia => "NVIDIA-Shader-Cache",
+        Msg::CleanShaderAmd => "AMD-Shader-Cache",
+        Msg::CleanShaderD3d => "DirectX-Shader-Cache",
+        Msg::CleanCargo => "Cargo-Registry-Cache",
+        Msg::CleanNpm => "npm-Cache",
+        Msg::CleanPip => "pip-Cache",
+        Msg::CleanNuget => "NuGet-Paketcache",
+        Msg::CleanIsoWork => "Arbeitsdateien von ISO Studio",
+        Msg::CleanGroupSystem => "System",
+        Msg::CleanGroupShaders => "GPU-Shader-Caches",
+        Msg::CleanGroupDeveloper => "Entwickler-Caches",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Hardwarebeschleunigte GPU-Planung",
+        Msg::DisplayHagsDetail => "HwSchMode. Wirkt nach einem Neustart.",
+        Msg::DisplayVrr => "Variable Aktualisierungsrate",
+        Msg::DisplayVrrDetail => "DirectX-VRR-Optimierung für den aktuellen Benutzer.",
+        Msg::DisplayFso => "Vollbildoptimierungen",
+        Msg::DisplayFsoDetail => "FSE-Verhaltensflags in GameConfigStore.",
         Msg::NoticeImportFailed => "Import fehlgeschlagen: {}",
         Msg::NoticeProfileSavedCopied => "Profil gespeichert. Kopiert: {}",
         Msg::NoticeExportFailed => "Export fehlgeschlagen: {}",
@@ -2419,6 +2769,7 @@ fn de(msg: Msg) -> &'static str {
         Msg::JobStarting => "Wird gestartet",
         Msg::NoticeItemsApplied => "Angewendete Elemente: {}",
         Msg::NoticeFailures => "Fehlgeschlagen: {}. Erster Fehler: {}",
+        Msg::NoticeCancelledAfter => "Abgebrochen nach {} von {}.",
         Msg::UnnamedJob => "Der aktuelle Vorgang",
         Msg::DnsReturnedToDhcp => "DNS wieder über DHCP",
         Msg::DnsSetFastest => "DNS auf {} gesetzt, den schnellsten Resolver",
@@ -2451,6 +2802,7 @@ fn de(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Zurückgesetzte Tweaks: {}. Klicken, um sie in der WindowCraft Time Machine zu sehen.",
         Msg::NoticeScheduleFailed => "Die geplante Prüfung konnte nicht geändert werden: {}",
         Msg::NoticeNoDrift => "Kein angewendeter Tweak wurde zurückgesetzt.",
+        Msg::NoticeDriftCheckFailed => "Die Prüfung auf Änderungen ist fehlgeschlagen: {}",
         Msg::NotifyOpenQuestion => "Time Machine jetzt öffnen?",
 
         Msg::PageExtensions => "Erweiterungen",
@@ -2487,8 +2839,8 @@ fn de(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Installiert. Beim Deinstallieren werden heruntergeladene Werkzeuge gelöscht, die keine andere Erweiterung nutzt.",
         Msg::ExtInstalledBuiltIn => "Installiert. Es wurde nichts heruntergeladen, deshalb nimmt Deinstallieren es nur von dieser Seite.",
         Msg::ExtStripperNeeds => "In WindowCraft eingebaut. Es wird nichts heruntergeladen, und es funktioniert offline.",
-        Msg::ExtFfmpegNeeds => "Die Installation lädt ffmpeg (etwa 90 MB) aus seinen GitHub-Releases und prüft die SHA-256.",
-        Msg::ExtYoutubeNeeds => "Die Installation lädt yt-dlp, ffmpeg und Deno (etwa 150 MB) aus ihren GitHub-Releases und prüft ihre SHA-256.",
+        Msg::ExtFfmpegNeeds => "Die Installation lädt ffmpeg (etwa 90 MB, entpackt mehr) aus seinen GitHub-Releases und prüft die SHA-256.",
+        Msg::ExtYoutubeNeeds => "Die Installation lädt yt-dlp, ffmpeg und Deno (etwa 150 MB, entpackt etwa 300 MB auf dem Datenträger) aus ihren GitHub-Releases und prüft ihre SHA-256.",
         Msg::JobInstallingExtension => "{} wird installiert",
         Msg::JobRemovingExtension => "{} wird deinstalliert",
         Msg::NoticeExtensionInstalled => "{} ist installiert.",
@@ -2607,7 +2959,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Nettoyage",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Rechercher apps, services, correctifs",
+        Msg::SearchPlaceholder => "Rechercher des apps, ajustements, clés de registre, services et correctifs",
         Msg::Cancel => "Annuler",
         Msg::Close => "Fermer",
         Msg::Dismiss => "Ignorer",
@@ -2744,7 +3096,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::InspectorLicense => "Licence",
         Msg::OpenSource => "Open source",
         Msg::Proprietary => "Propriétaire",
-        Msg::InspectorPackage => "Package",
+        Msg::InspectorPackage => "Paquet",
         Msg::InspectorStoreId => "ID Microsoft Store",
         Msg::InspectorNone => "aucun",
 
@@ -2785,6 +3137,57 @@ fn fr(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Tous les packages ont été mis à jour",
         Msg::NoticeImported => "{} importé",
+        Msg::NoticeImportedKept => "Le mode Windows Update et les règles de services du fichier ne sont pas appliqués ici. Ils restent dans l'export, et windowcraft.exe --config avec --run les applique.",
+        Msg::NoticeUnknownInspect => "--inspect : aucun ajustement n'a l'identifiant {}.",
+        Msg::StepIsoMounting => "Montage de l'ISO",
+        Msg::StepIsoCopyingMedia => "Copie des fichiers d'installation",
+        Msg::StepIsoWritingAnswer => "Écriture du fichier de réponses et des scripts du premier démarrage",
+        Msg::StepIsoExportingDrivers => "Exportation des pilotes de ce PC",
+        Msg::StepIsoInjectingBoot => "Ajout des pilotes de stockage à boot.wim : {}",
+        Msg::StepIsoConvertingEsd => "Conversion de install.esd en install.wim",
+        Msg::StepIsoInjectingInstall => "Ajout des pilotes à install.wim : {}",
+        Msg::StepIsoInstallingOscdimg => "Installation d'oscdimg",
+        Msg::StepIsoBuilding => "Création de l'ISO",
+        Msg::StepIsoSplitting => "Découpage de install.wim",
+        Msg::StepIsoCopyingUsb => "Copie des fichiers sur la clé USB",
+        Msg::StepIsoPartitioning => "Partitionnement de la clé USB",
+        Msg::ErrWin32 => "Échec de {} pour {} : {} (0x{})",
+        Msg::ErrNeedsElevation => "Des droits d'administrateur sont nécessaires : {}",
+        Msg::ErrProtectedService => "Le service {} est protégé et ne peut pas être désactivé",
+        Msg::ErrInvalid => "Valeur non valide : {}",
+        Msg::ErrNotFound => "Introuvable : {}",
+        Msg::ErrUnsupported => "Non pris en charge sur ce système : {}",
+        Msg::ErrProcess => "{} s'est terminé avec le code {} : {}",
+        Msg::ErrCancelled => "L'opération a été annulée",
+        Msg::ErrStore => "Base des instantanés : {}",
+        Msg::ErrStoreBusy => "WindowCraft utilise déjà la base des instantanés. Fermez l'autre instance et réessayez.",
+        Msg::ErrNetwork => "Réseau : {}",
+        Msg::ErrChecksum => "La somme de contrôle de {} ne correspond pas : attendu {}, obtenu {}",
+        Msg::ErrJobPanicked => "L'opération s'est arrêtée à cause d'une erreur interne",
+        Msg::TimerMaxResolution => "Résolution maximale",
+        Msg::TimerMinResolution => "Résolution minimale",
+        Msg::CleanTempUser => "Fichiers temporaires de l'utilisateur",
+        Msg::CleanTempSystem => "Fichiers temporaires du système",
+        Msg::CleanCbsLogs => "Journaux CBS et DISM",
+        Msg::CleanMinidump => "Fichiers minidump",
+        Msg::CleanShaderNvidia => "Cache des shaders NVIDIA",
+        Msg::CleanShaderAmd => "Cache des shaders AMD",
+        Msg::CleanShaderD3d => "Cache des shaders DirectX",
+        Msg::CleanCargo => "Cache du registre Cargo",
+        Msg::CleanNpm => "Cache npm",
+        Msg::CleanPip => "Cache pip",
+        Msg::CleanNuget => "Cache des paquets NuGet",
+        Msg::CleanIsoWork => "Fichiers de travail d'ISO Studio",
+        Msg::CleanGroupSystem => "Système",
+        Msg::CleanGroupShaders => "Caches des shaders GPU",
+        Msg::CleanGroupDeveloper => "Caches de développement",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Planification de processeur graphique à accélération matérielle",
+        Msg::DisplayHagsDetail => "HwSchMode. Prend effet après un redémarrage.",
+        Msg::DisplayVrr => "Taux de rafraîchissement variable",
+        Msg::DisplayVrrDetail => "Optimisation VRR DirectX pour l'utilisateur actuel.",
+        Msg::DisplayFso => "Optimisations du plein écran",
+        Msg::DisplayFsoDetail => "Indicateurs de comportement FSE dans GameConfigStore.",
         Msg::NoticeImportFailed => "Échec de l'importation : {}",
         Msg::NoticeProfileSavedCopied => "Profil enregistré. Copié : {}",
         Msg::NoticeExportFailed => "Échec de l'exportation : {}",
@@ -2863,6 +3266,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::JobStarting => "Démarrage",
         Msg::NoticeItemsApplied => "Éléments appliqués : {}",
         Msg::NoticeFailures => "Échecs : {}. Première erreur : {}",
+        Msg::NoticeCancelledAfter => "Annulé après {} sur {}.",
         Msg::UnnamedJob => "L'opération en cours",
         Msg::DnsReturnedToDhcp => "DNS rétabli sur DHCP",
         Msg::DnsSetFastest => "DNS défini sur {}, le résolveur le plus rapide",
@@ -2895,6 +3299,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Ajustements annulés : {}. Cliquez pour les voir dans Time Machine de WindowCraft.",
         Msg::NoticeScheduleFailed => "Impossible de modifier la vérification planifiée : {}",
         Msg::NoticeNoDrift => "Aucun ajustement appliqué n'a été annulé.",
+        Msg::NoticeDriftCheckFailed => "Impossible de vérifier les modifications : {}",
         Msg::NotifyOpenQuestion => "Ouvrir Time Machine maintenant ?",
 
         Msg::PageExtensions => "Extensions",
@@ -2931,8 +3336,8 @@ fn fr(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Installée. La désinstallation supprime les outils téléchargés qu'aucune autre extension n'utilise.",
         Msg::ExtInstalledBuiltIn => "Installée. Rien n'a été téléchargé, la désinstallation la retire donc seulement de cette page.",
         Msg::ExtStripperNeeds => "Intégrée à WindowCraft. Rien n'est téléchargé et elle fonctionne hors ligne.",
-        Msg::ExtFfmpegNeeds => "L'installation télécharge ffmpeg (environ 90 Mo) depuis ses versions GitHub et vérifie son SHA-256.",
-        Msg::ExtYoutubeNeeds => "L'installation télécharge yt-dlp, ffmpeg et Deno (environ 150 Mo) depuis leurs versions GitHub et vérifie leur SHA-256.",
+        Msg::ExtFfmpegNeeds => "L'installation télécharge ffmpeg (environ 90 Mo, davantage une fois décompressé) depuis ses versions GitHub et vérifie son SHA-256.",
+        Msg::ExtYoutubeNeeds => "L'installation télécharge yt-dlp, ffmpeg et Deno (environ 150 Mo, environ 300 Mo sur le disque une fois décompressés) depuis leurs versions GitHub et vérifie leur SHA-256.",
         Msg::JobInstallingExtension => "Installation de {}",
         Msg::JobRemovingExtension => "Désinstallation de {}",
         Msg::NoticeExtensionInstalled => "{} est installée.",
@@ -3051,7 +3456,7 @@ fn es(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Limpieza",
         Msg::TabDns => "Prueba de DNS",
 
-        Msg::SearchPlaceholder => "Buscar apps, ajustes, servicios y reparaciones",
+        Msg::SearchPlaceholder => "Buscar apps, ajustes, claves del registro, servicios y reparaciones",
         Msg::Cancel => "Cancelar",
         Msg::Close => "Cerrar",
         Msg::Dismiss => "Descartar",
@@ -3229,6 +3634,57 @@ fn es(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Todos los paquetes han sido actualizados",
         Msg::NoticeImported => "{} importado con éxito",
+        Msg::NoticeImportedKept => "El modo de Windows Update y las reglas de servicios del archivo no se aplican aquí. Se mantienen en la exportación, y windowcraft.exe --config con --run los aplica.",
+        Msg::NoticeUnknownInspect => "--inspect: no hay ningún ajuste con el identificador {}.",
+        Msg::StepIsoMounting => "Montando la ISO",
+        Msg::StepIsoCopyingMedia => "Copiando los archivos de instalación",
+        Msg::StepIsoWritingAnswer => "Escribiendo el archivo de respuestas y los scripts del primer inicio",
+        Msg::StepIsoExportingDrivers => "Exportando los controladores de este equipo",
+        Msg::StepIsoInjectingBoot => "Añadiendo controladores de almacenamiento a boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Convirtiendo install.esd en install.wim",
+        Msg::StepIsoInjectingInstall => "Añadiendo controladores a install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Instalando oscdimg",
+        Msg::StepIsoBuilding => "Creando la ISO",
+        Msg::StepIsoSplitting => "Dividiendo install.wim",
+        Msg::StepIsoCopyingUsb => "Copiando archivos a la unidad USB",
+        Msg::StepIsoPartitioning => "Particionando la unidad USB",
+        Msg::ErrWin32 => "{} falló para {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "Se necesitan permisos de administrador: {}",
+        Msg::ErrProtectedService => "El servicio {} está protegido y no se puede desactivar",
+        Msg::ErrInvalid => "Valor no válido: {}",
+        Msg::ErrNotFound => "No encontrado: {}",
+        Msg::ErrUnsupported => "No compatible con este sistema: {}",
+        Msg::ErrProcess => "{} terminó con el código {}: {}",
+        Msg::ErrCancelled => "Se canceló la operación",
+        Msg::ErrStore => "Base de datos de instantáneas: {}",
+        Msg::ErrStoreBusy => "WindowCraft ya está usando la base de datos de instantáneas. Cierra la otra instancia e inténtalo de nuevo.",
+        Msg::ErrNetwork => "Red: {}",
+        Msg::ErrChecksum => "La suma de comprobación de {} no coincide: se esperaba {}, se obtuvo {}",
+        Msg::ErrJobPanicked => "La operación se detuvo por un error interno",
+        Msg::TimerMaxResolution => "Resolución máxima",
+        Msg::TimerMinResolution => "Resolución mínima",
+        Msg::CleanTempUser => "Archivos temporales del usuario",
+        Msg::CleanTempSystem => "Archivos temporales del sistema",
+        Msg::CleanCbsLogs => "Registros de CBS y DISM",
+        Msg::CleanMinidump => "Archivos de minivolcado",
+        Msg::CleanShaderNvidia => "Caché de sombreadores de NVIDIA",
+        Msg::CleanShaderAmd => "Caché de sombreadores de AMD",
+        Msg::CleanShaderD3d => "Caché de sombreadores de DirectX",
+        Msg::CleanCargo => "Caché del registro de Cargo",
+        Msg::CleanNpm => "Caché de npm",
+        Msg::CleanPip => "Caché de pip",
+        Msg::CleanNuget => "Caché de paquetes de NuGet",
+        Msg::CleanIsoWork => "Archivos de trabajo de ISO Studio",
+        Msg::CleanGroupSystem => "Sistema",
+        Msg::CleanGroupShaders => "Cachés de sombreadores de GPU",
+        Msg::CleanGroupDeveloper => "Cachés de desarrollo",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Programación de GPU acelerada por hardware",
+        Msg::DisplayHagsDetail => "HwSchMode. Se aplica tras reiniciar.",
+        Msg::DisplayVrr => "Frecuencia de actualización variable",
+        Msg::DisplayVrrDetail => "Optimización VRR de DirectX para el usuario actual.",
+        Msg::DisplayFso => "Optimizaciones de pantalla completa",
+        Msg::DisplayFsoDetail => "Indicadores de comportamiento FSE de GameConfigStore.",
         Msg::NoticeImportFailed => "Error al importar: {}",
         Msg::NoticeProfileSavedCopied => "Perfil guardado. Copiado: {}",
         Msg::NoticeExportFailed => "Error al exportar: {}",
@@ -3307,6 +3763,7 @@ fn es(msg: Msg) -> &'static str {
         Msg::JobStarting => "Iniciando",
         Msg::NoticeItemsApplied => "Elementos aplicados: {}",
         Msg::NoticeFailures => "Errores: {}. Primer error: {}",
+        Msg::NoticeCancelledAfter => "Cancelado tras {} de {}.",
         Msg::UnnamedJob => "La operación actual",
         Msg::DnsReturnedToDhcp => "DNS restablecido a DHCP",
         Msg::DnsSetFastest => "DNS establecido en {}, el resolvedor más rápido",
@@ -3339,6 +3796,7 @@ fn es(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Ajustes revertidos: {}. Haga clic para verlos en Time Machine de WindowCraft.",
         Msg::NoticeScheduleFailed => "No se pudo cambiar la comprobación programada: {}",
         Msg::NoticeNoDrift => "No se revirtió ningún ajuste aplicado.",
+        Msg::NoticeDriftCheckFailed => "No se pudieron comprobar los cambios: {}",
         Msg::NotifyOpenQuestion => "¿Abrir Time Machine ahora?",
 
         Msg::PageExtensions => "Extensiones",
@@ -3375,8 +3833,8 @@ fn es(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Instalada. Al desinstalarla se borran las herramientas descargadas que no usa ninguna otra extensión.",
         Msg::ExtInstalledBuiltIn => "Instalada. No se descargó nada, así que desinstalarla solo la quita de esta página.",
         Msg::ExtStripperNeeds => "Integrada en WindowCraft. No se descarga nada y funciona sin conexión.",
-        Msg::ExtFfmpegNeeds => "La instalación descarga ffmpeg (unos 90 MB) de sus versiones en GitHub y comprueba su SHA-256.",
-        Msg::ExtYoutubeNeeds => "La instalación descarga yt-dlp, ffmpeg y Deno (unos 150 MB) de sus versiones en GitHub y comprueba su SHA-256.",
+        Msg::ExtFfmpegNeeds => "La instalación descarga ffmpeg (unos 90 MB, más una vez descomprimido) de sus versiones en GitHub y comprueba su SHA-256.",
+        Msg::ExtYoutubeNeeds => "La instalación descarga yt-dlp, ffmpeg y Deno (unos 150 MB, unos 300 MB en disco una vez descomprimidos) de sus versiones en GitHub y comprueba su SHA-256.",
         Msg::JobInstallingExtension => "Instalando {}",
         Msg::JobRemovingExtension => "Desinstalando {}",
         Msg::NoticeExtensionInstalled => "{} está instalada.",
@@ -3495,7 +3953,7 @@ fn it(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Pulizia",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Cerca app, modifiche, servizi e correzioni",
+        Msg::SearchPlaceholder => "Cerca app, ottimizzazioni, chiavi di registro, servizi e correzioni",
         Msg::Cancel => "Annulla",
         Msg::Close => "Chiudi",
         Msg::Dismiss => "Ignora",
@@ -3673,6 +4131,57 @@ fn it(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Tutti i pacchetti sono stati aggiornati",
         Msg::NoticeImported => "Importato {}",
+        Msg::NoticeImportedKept => "La modalità di Windows Update e le regole dei servizi del file non vengono applicate qui. Restano nell'esportazione, e windowcraft.exe --config con --run le applica.",
+        Msg::NoticeUnknownInspect => "--inspect: non esiste un'ottimizzazione con l'ID {}.",
+        Msg::StepIsoMounting => "Montaggio dell'ISO",
+        Msg::StepIsoCopyingMedia => "Copia dei file di installazione",
+        Msg::StepIsoWritingAnswer => "Scrittura del file di risposte e degli script del primo avvio",
+        Msg::StepIsoExportingDrivers => "Esportazione dei driver di questo PC",
+        Msg::StepIsoInjectingBoot => "Aggiunta dei driver di archiviazione a boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Conversione di install.esd in install.wim",
+        Msg::StepIsoInjectingInstall => "Aggiunta dei driver a install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Installazione di oscdimg",
+        Msg::StepIsoBuilding => "Creazione dell'ISO",
+        Msg::StepIsoSplitting => "Suddivisione di install.wim",
+        Msg::StepIsoCopyingUsb => "Copia dei file sull'unità USB",
+        Msg::StepIsoPartitioning => "Partizionamento dell'unità USB",
+        Msg::ErrWin32 => "{} non riuscito per {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "Servono i diritti di amministratore: {}",
+        Msg::ErrProtectedService => "Il servizio {} è protetto e non può essere disattivato",
+        Msg::ErrInvalid => "Valore non valido: {}",
+        Msg::ErrNotFound => "Non trovato: {}",
+        Msg::ErrUnsupported => "Non supportato su questo sistema: {}",
+        Msg::ErrProcess => "{} è terminato con il codice {}: {}",
+        Msg::ErrCancelled => "L'operazione è stata annullata",
+        Msg::ErrStore => "Database degli snapshot: {}",
+        Msg::ErrStoreBusy => "WindowCraft sta già usando il database degli snapshot. Chiudi l'altra istanza e riprova.",
+        Msg::ErrNetwork => "Rete: {}",
+        Msg::ErrChecksum => "Il checksum di {} non corrisponde: atteso {}, ottenuto {}",
+        Msg::ErrJobPanicked => "L'operazione si è interrotta per un errore interno",
+        Msg::TimerMaxResolution => "Risoluzione massima",
+        Msg::TimerMinResolution => "Risoluzione minima",
+        Msg::CleanTempUser => "File temporanei dell'utente",
+        Msg::CleanTempSystem => "File temporanei di sistema",
+        Msg::CleanCbsLogs => "Log di CBS e DISM",
+        Msg::CleanMinidump => "File minidump",
+        Msg::CleanShaderNvidia => "Cache degli shader NVIDIA",
+        Msg::CleanShaderAmd => "Cache degli shader AMD",
+        Msg::CleanShaderD3d => "Cache degli shader DirectX",
+        Msg::CleanCargo => "Cache del registro Cargo",
+        Msg::CleanNpm => "Cache di npm",
+        Msg::CleanPip => "Cache di pip",
+        Msg::CleanNuget => "Cache dei pacchetti NuGet",
+        Msg::CleanIsoWork => "File di lavoro di ISO Studio",
+        Msg::CleanGroupSystem => "Sistema",
+        Msg::CleanGroupShaders => "Cache degli shader GPU",
+        Msg::CleanGroupDeveloper => "Cache per sviluppatori",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Pianificazione GPU con accelerazione hardware",
+        Msg::DisplayHagsDetail => "HwSchMode. Ha effetto dopo il riavvio.",
+        Msg::DisplayVrr => "Frequenza di aggiornamento variabile",
+        Msg::DisplayVrrDetail => "Ottimizzazione VRR di DirectX per l'utente corrente.",
+        Msg::DisplayFso => "Ottimizzazioni a schermo intero",
+        Msg::DisplayFsoDetail => "Flag di comportamento FSE in GameConfigStore.",
         Msg::NoticeImportFailed => "Importazione non riuscita: {}",
         Msg::NoticeProfileSavedCopied => "Profilo salvato. Copiato: {}",
         Msg::NoticeExportFailed => "Esportazione non riuscita: {}",
@@ -3751,6 +4260,7 @@ fn it(msg: Msg) -> &'static str {
         Msg::JobStarting => "Avvio",
         Msg::NoticeItemsApplied => "Elementi applicati: {}",
         Msg::NoticeFailures => "Non riusciti: {}. Primo errore: {}",
+        Msg::NoticeCancelledAfter => "Annullato dopo {} su {}.",
         Msg::UnnamedJob => "L'operazione in corso",
         Msg::DnsReturnedToDhcp => "DNS ripristinato su DHCP",
         Msg::DnsSetFastest => "DNS impostato su {}, il resolver più veloce",
@@ -3783,6 +4293,7 @@ fn it(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Ottimizzazioni annullate: {}. Fai clic per vederle in Time Machine di WindowCraft.",
         Msg::NoticeScheduleFailed => "Impossibile modificare il controllo pianificato: {}",
         Msg::NoticeNoDrift => "Nessuna ottimizzazione applicata è stata annullata.",
+        Msg::NoticeDriftCheckFailed => "Impossibile controllare le modifiche: {}",
         Msg::NotifyOpenQuestion => "Aprire Time Machine ora?",
 
         Msg::PageExtensions => "Estensioni",
@@ -3819,8 +4330,8 @@ fn it(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Installata. La disinstallazione elimina gli strumenti scaricati che nessun'altra estensione usa.",
         Msg::ExtInstalledBuiltIn => "Installata. Non è stato scaricato nulla, quindi la disinstallazione la toglie solo da questa pagina.",
         Msg::ExtStripperNeeds => "Integrata in WindowCraft. Non scarica nulla e funziona offline.",
-        Msg::ExtFfmpegNeeds => "L'installazione scarica ffmpeg (circa 90 MB) dalle sue release su GitHub e ne verifica lo SHA-256.",
-        Msg::ExtYoutubeNeeds => "L'installazione scarica yt-dlp, ffmpeg e Deno (circa 150 MB) dalle loro release su GitHub e ne verifica lo SHA-256.",
+        Msg::ExtFfmpegNeeds => "L'installazione scarica ffmpeg (circa 90 MB, di più una volta estratto) dalle sue release su GitHub e ne verifica lo SHA-256.",
+        Msg::ExtYoutubeNeeds => "L'installazione scarica yt-dlp, ffmpeg e Deno (circa 150 MB, circa 300 MB su disco una volta estratti) dalle loro release su GitHub e ne verifica lo SHA-256.",
         Msg::JobInstallingExtension => "Installazione di {}",
         Msg::JobRemovingExtension => "Disinstallazione di {}",
         Msg::NoticeExtensionInstalled => "{} è installata.",
@@ -3939,7 +4450,7 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Limpeza",
         Msg::TabDns => "Benchmark de DNS",
 
-        Msg::SearchPlaceholder => "Pesquisar apps, ajustes, serviços e correções",
+        Msg::SearchPlaceholder => "Pesquisar apps, ajustes, chaves do registro, serviços e correções",
         Msg::Cancel => "Cancelar",
         Msg::Close => "Fechar",
         Msg::Dismiss => "Descartar",
@@ -4117,6 +4628,57 @@ fn pt_br(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Todos os pacotes foram atualizados",
         Msg::NoticeImported => "{} importado com sucesso",
+        Msg::NoticeImportedKept => "O modo do Windows Update e as regras de serviços do arquivo não são aplicados aqui. Eles ficam na exportação, e windowcraft.exe --config com --run os aplica.",
+        Msg::NoticeUnknownInspect => "--inspect: não há ajuste com o identificador {}.",
+        Msg::StepIsoMounting => "Montando a ISO",
+        Msg::StepIsoCopyingMedia => "Copiando os arquivos de instalação",
+        Msg::StepIsoWritingAnswer => "Gravando o arquivo de resposta e os scripts da primeira inicialização",
+        Msg::StepIsoExportingDrivers => "Exportando os drivers deste PC",
+        Msg::StepIsoInjectingBoot => "Adicionando drivers de armazenamento ao boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Convertendo install.esd em install.wim",
+        Msg::StepIsoInjectingInstall => "Adicionando drivers ao install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Instalando o oscdimg",
+        Msg::StepIsoBuilding => "Criando a ISO",
+        Msg::StepIsoSplitting => "Dividindo o install.wim",
+        Msg::StepIsoCopyingUsb => "Copiando arquivos para a unidade USB",
+        Msg::StepIsoPartitioning => "Particionando a unidade USB",
+        Msg::ErrWin32 => "{} falhou para {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "São necessários direitos de administrador: {}",
+        Msg::ErrProtectedService => "O serviço {} é protegido e não pode ser desativado",
+        Msg::ErrInvalid => "Valor inválido: {}",
+        Msg::ErrNotFound => "Não encontrado: {}",
+        Msg::ErrUnsupported => "Sem suporte neste sistema: {}",
+        Msg::ErrProcess => "{} terminou com o código {}: {}",
+        Msg::ErrCancelled => "A operação foi cancelada",
+        Msg::ErrStore => "Banco de instantâneos: {}",
+        Msg::ErrStoreBusy => "O WindowCraft já está usando o banco de instantâneos. Feche a outra instância e tente novamente.",
+        Msg::ErrNetwork => "Rede: {}",
+        Msg::ErrChecksum => "A soma de verificação de {} não confere: esperado {}, obtido {}",
+        Msg::ErrJobPanicked => "A operação parou por causa de um erro interno",
+        Msg::TimerMaxResolution => "Resolução máxima",
+        Msg::TimerMinResolution => "Resolução mínima",
+        Msg::CleanTempUser => "Arquivos temporários do usuário",
+        Msg::CleanTempSystem => "Arquivos temporários do sistema",
+        Msg::CleanCbsLogs => "Logs do CBS e do DISM",
+        Msg::CleanMinidump => "Arquivos de minidespejo",
+        Msg::CleanShaderNvidia => "Cache de shaders da NVIDIA",
+        Msg::CleanShaderAmd => "Cache de shaders da AMD",
+        Msg::CleanShaderD3d => "Cache de shaders do DirectX",
+        Msg::CleanCargo => "Cache do registro do Cargo",
+        Msg::CleanNpm => "Cache do npm",
+        Msg::CleanPip => "Cache do pip",
+        Msg::CleanNuget => "Cache de pacotes do NuGet",
+        Msg::CleanIsoWork => "Arquivos de trabalho do ISO Studio",
+        Msg::CleanGroupSystem => "Sistema",
+        Msg::CleanGroupShaders => "Caches de shaders da GPU",
+        Msg::CleanGroupDeveloper => "Caches de desenvolvimento",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Agendamento de GPU acelerado por hardware",
+        Msg::DisplayHagsDetail => "HwSchMode. Entra em vigor após reiniciar.",
+        Msg::DisplayVrr => "Taxa de atualização variável",
+        Msg::DisplayVrrDetail => "Otimização de VRR do DirectX para o usuário atual.",
+        Msg::DisplayFso => "Otimizações de tela cheia",
+        Msg::DisplayFsoDetail => "Sinalizadores de comportamento FSE do GameConfigStore.",
         Msg::NoticeImportFailed => "Falha na importação: {}",
         Msg::NoticeProfileSavedCopied => "Perfil salvo. Copiado: {}",
         Msg::NoticeExportFailed => "Falha na exportação: {}",
@@ -4195,6 +4757,7 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::JobStarting => "Iniciando",
         Msg::NoticeItemsApplied => "Itens aplicados: {}",
         Msg::NoticeFailures => "Falhas: {}. Primeiro erro: {}",
+        Msg::NoticeCancelledAfter => "Cancelado após {} de {}.",
         Msg::UnnamedJob => "A operação atual",
         Msg::DnsReturnedToDhcp => "DNS restaurado para DHCP",
         Msg::DnsSetFastest => "DNS definido como {}, o resolvedor mais rápido",
@@ -4227,6 +4790,7 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Ajustes revertidos: {}. Clique para vê-los no Time Machine do WindowCraft.",
         Msg::NoticeScheduleFailed => "Não foi possível alterar a verificação agendada: {}",
         Msg::NoticeNoDrift => "Nenhum ajuste aplicado foi revertido.",
+        Msg::NoticeDriftCheckFailed => "Não foi possível verificar as alterações: {}",
         Msg::NotifyOpenQuestion => "Abrir o Time Machine agora?",
 
         Msg::PageExtensions => "Extensões",
@@ -4263,8 +4827,8 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Instalada. Desinstalar apaga as ferramentas baixadas que nenhuma outra extensão usa.",
         Msg::ExtInstalledBuiltIn => "Instalada. Nada foi baixado, então desinstalar só a tira desta página.",
         Msg::ExtStripperNeeds => "Embutida no WindowCraft. Nada é baixado e funciona sem internet.",
-        Msg::ExtFfmpegNeeds => "A instalação baixa o ffmpeg (cerca de 90 MB) das versões dele no GitHub e confere o SHA-256.",
-        Msg::ExtYoutubeNeeds => "A instalação baixa yt-dlp, ffmpeg e Deno (cerca de 150 MB) das versões deles no GitHub e confere o SHA-256.",
+        Msg::ExtFfmpegNeeds => "A instalação baixa o ffmpeg (cerca de 90 MB, mais depois de descompactado) das versões dele no GitHub e confere o SHA-256.",
+        Msg::ExtYoutubeNeeds => "A instalação baixa yt-dlp, ffmpeg e Deno (cerca de 150 MB, cerca de 300 MB no disco depois de descompactados) das versões deles no GitHub e confere o SHA-256.",
         Msg::JobInstallingExtension => "Instalando {}",
         Msg::JobRemovingExtension => "Desinstalando {}",
         Msg::NoticeExtensionInstalled => "{} está instalada.",
@@ -4383,7 +4947,7 @@ fn uk(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Очищення",
         Msg::TabDns => "Тест DNS",
 
-        Msg::SearchPlaceholder => "Пошук програм, служб, налаштувань і виправлень",
+        Msg::SearchPlaceholder => "Пошук програм, налаштувань, ключів реєстру, служб і виправлень",
         Msg::Cancel => "Скасувати",
         Msg::Close => "Закрити",
         Msg::Dismiss => "Відхилити",
@@ -4445,7 +5009,7 @@ fn uk(msg: Msg) -> &'static str {
 
         Msg::IsoSourceTitle => "1. Джерело",
         Msg::IsoEditionTitle => "2. Редакція",
-        Msg::IsoConfigurationTitle => "3. Конfigurація",
+        Msg::IsoConfigurationTitle => "3. Конфігурація",
         Msg::IsoExportTitle => "4. Експорт",
         Msg::IsoDirectDownloadUrlPlaceholder => "Пряме посилання для завантаження з microsoft.com",
         Msg::IsoExpectedSha256Placeholder => "Очікуваний SHA-256 (необов'язково)",
@@ -4561,6 +5125,57 @@ fn uk(msg: Msg) -> &'static str {
 
         Msg::NoticeAllPackagesUpgraded => "Всі пакети успішно оновлено",
         Msg::NoticeImported => "Імпортовано {}",
+        Msg::NoticeImportedKept => "Режим Windows Update і правила служб із файлу тут не застосовуються. Вони лишаються в експорті, а windowcraft.exe --config з --run їх застосовує.",
+        Msg::NoticeUnknownInspect => "--inspect: немає налаштування з ідентифікатором {}.",
+        Msg::StepIsoMounting => "Підключення ISO",
+        Msg::StepIsoCopyingMedia => "Копіювання файлів інсталяції",
+        Msg::StepIsoWritingAnswer => "Запис файлу відповідей і сценаріїв першого запуску",
+        Msg::StepIsoExportingDrivers => "Експорт драйверів цього ПК",
+        Msg::StepIsoInjectingBoot => "Додавання драйверів накопичувачів до boot.wim: {}",
+        Msg::StepIsoConvertingEsd => "Перетворення install.esd на install.wim",
+        Msg::StepIsoInjectingInstall => "Додавання драйверів до install.wim: {}",
+        Msg::StepIsoInstallingOscdimg => "Встановлення oscdimg",
+        Msg::StepIsoBuilding => "Створення ISO",
+        Msg::StepIsoSplitting => "Поділ install.wim",
+        Msg::StepIsoCopyingUsb => "Копіювання файлів на USB-накопичувач",
+        Msg::StepIsoPartitioning => "Розбиття USB-накопичувача на розділи",
+        Msg::ErrWin32 => "Помилка {} для {}: {} (0x{})",
+        Msg::ErrNeedsElevation => "Потрібні права адміністратора: {}",
+        Msg::ErrProtectedService => "Служба {} захищена, її не можна вимкнути",
+        Msg::ErrInvalid => "Неприпустиме значення: {}",
+        Msg::ErrNotFound => "Не знайдено: {}",
+        Msg::ErrUnsupported => "Не підтримується в цій системі: {}",
+        Msg::ErrProcess => "{} завершився з кодом {}: {}",
+        Msg::ErrCancelled => "Операцію скасовано",
+        Msg::ErrStore => "База знімків: {}",
+        Msg::ErrStoreBusy => "WindowCraft уже використовує базу знімків. Закрийте інший екземпляр і спробуйте ще раз.",
+        Msg::ErrNetwork => "Мережа: {}",
+        Msg::ErrChecksum => "Контрольна сума {} не збігається: очікувалося {}, отримано {}",
+        Msg::ErrJobPanicked => "Операцію зупинено через внутрішню помилку",
+        Msg::TimerMaxResolution => "Максимальна роздільна здатність",
+        Msg::TimerMinResolution => "Мінімальна роздільна здатність",
+        Msg::CleanTempUser => "Тимчасові файли користувача",
+        Msg::CleanTempSystem => "Системні тимчасові файли",
+        Msg::CleanCbsLogs => "Журнали CBS і DISM",
+        Msg::CleanMinidump => "Файли мінідампів",
+        Msg::CleanShaderNvidia => "Кеш шейдерів NVIDIA",
+        Msg::CleanShaderAmd => "Кеш шейдерів AMD",
+        Msg::CleanShaderD3d => "Кеш шейдерів DirectX",
+        Msg::CleanCargo => "Кеш реєстру Cargo",
+        Msg::CleanNpm => "Кеш npm",
+        Msg::CleanPip => "Кеш pip",
+        Msg::CleanNuget => "Кеш пакетів NuGet",
+        Msg::CleanIsoWork => "Робочі файли ISO Studio",
+        Msg::CleanGroupSystem => "Система",
+        Msg::CleanGroupShaders => "Кеші шейдерів GPU",
+        Msg::CleanGroupDeveloper => "Кеші для розробників",
+        Msg::CleanGroupWindowCraft => "WindowCraft",
+        Msg::DisplayHags => "Планування GPU з апаратним прискоренням",
+        Msg::DisplayHagsDetail => "HwSchMode. Діє після перезавантаження.",
+        Msg::DisplayVrr => "Змінна частота оновлення",
+        Msg::DisplayVrrDetail => "Оптимізація VRR DirectX для поточного користувача.",
+        Msg::DisplayFso => "Оптимізація повноекранного режиму",
+        Msg::DisplayFsoDetail => "Прапорці поведінки FSE у GameConfigStore.",
         Msg::NoticeImportFailed => "Помилка імпорту: {}",
         Msg::NoticeProfileSavedCopied => "Профіль збережено. Скопійовано: {}",
         Msg::NoticeExportFailed => "Помилка експорту: {}",
@@ -4639,6 +5254,7 @@ fn uk(msg: Msg) -> &'static str {
         Msg::JobStarting => "Запуск",
         Msg::NoticeItemsApplied => "Застосовано елементів: {}",
         Msg::NoticeFailures => "Помилок: {}. Перша помилка: {}",
+        Msg::NoticeCancelledAfter => "Скасовано після {} з {}.",
         Msg::UnnamedJob => "Поточна операція",
         Msg::DnsReturnedToDhcp => "DNS повернуто до DHCP",
         Msg::DnsSetFastest => "DNS встановлено на {}, найшвидший сервер",
@@ -4671,6 +5287,7 @@ fn uk(msg: Msg) -> &'static str {
         Msg::NotifyDriftBody => "Скинуті налаштування: {}. Клацніть, щоб переглянути їх у Time Machine WindowCraft.",
         Msg::NoticeScheduleFailed => "Не вдалося змінити заплановану перевірку: {}",
         Msg::NoticeNoDrift => "Жодне застосоване налаштування не скинуто.",
+        Msg::NoticeDriftCheckFailed => "Не вдалося перевірити зміни: {}",
         Msg::NotifyOpenQuestion => "Відкрити Time Machine зараз?",
 
         Msg::PageExtensions => "Розширення",
@@ -4707,8 +5324,8 @@ fn uk(msg: Msg) -> &'static str {
         Msg::ExtInstalled => "Встановлено. Видалення стирає завантажені інструменти, якими не користується інше розширення.",
         Msg::ExtInstalledBuiltIn => "Встановлено. Нічого не завантажувалося, тож видалення лише прибирає його з цієї сторінки.",
         Msg::ExtStripperNeeds => "Вбудовано у WindowCraft. Нічого не завантажується, працює без інтернету.",
-        Msg::ExtFfmpegNeeds => "Встановлення завантажує ffmpeg (близько 90 МБ) з його випусків на GitHub і перевіряє SHA-256.",
-        Msg::ExtYoutubeNeeds => "Встановлення завантажує yt-dlp, ffmpeg і Deno (близько 150 МБ) з їхніх випусків на GitHub і перевіряє SHA-256.",
+        Msg::ExtFfmpegNeeds => "Встановлення завантажує ffmpeg (близько 90 МБ, після розпакування більше) з його випусків на GitHub і перевіряє SHA-256.",
+        Msg::ExtYoutubeNeeds => "Встановлення завантажує yt-dlp, ffmpeg і Deno (близько 150 МБ, після розпакування близько 300 МБ на диску) з їхніх випусків на GitHub і перевіряє SHA-256.",
         Msg::JobInstallingExtension => "Встановлення: {}",
         Msg::JobRemovingExtension => "Видалення: {}",
         Msg::NoticeExtensionInstalled => "Встановлено: {}.",
@@ -4866,6 +5483,90 @@ mod tests {
     }
 
     #[test]
+    fn iso_steps_and_engine_errors_are_worded_in_every_language() {
+        use windowcraft_engine::EngineError;
+        use windowcraft_iso::IsoStep;
+        let steps = [
+            IsoStep::Mounting,
+            IsoStep::CopyingMedia,
+            IsoStep::WritingAnswerFile,
+            IsoStep::ExportingDrivers,
+            IsoStep::InjectingBoot(3),
+            IsoStep::ConvertingEsd,
+            IsoStep::InjectingInstall(12),
+            IsoStep::InstallingOscdimg,
+            IsoStep::BuildingIso,
+            IsoStep::SplittingWim,
+            IsoStep::CopyingToUsb,
+            IsoStep::Partitioning,
+        ];
+        let errors = || {
+            vec![
+                EngineError::Win32 { operation: "RegSetValueExW", target: "HKLM\\X".into(), code: 5, message: "Odmowa dostępu.\r\n".into() },
+                EngineError::NeedsElevation("X".into()),
+                EngineError::ProtectedService("WinDefend".into()),
+                EngineError::Invalid("x".into()),
+                EngineError::NotFound("x".into()),
+                EngineError::Unsupported("x".into()),
+                EngineError::Process { program: "dism.exe".into(), code: 87, detail: "x".into() },
+                EngineError::Cancelled,
+                EngineError::Store("x".into()),
+                EngineError::StoreBusy,
+                EngineError::Network("x".into()),
+                EngineError::Checksum { file: "f".into(), expected: "a".into(), actual: "b".into() },
+            ]
+        };
+        for &lang in Language::ALL {
+            for step in steps {
+                let text = iso_step(lang, step);
+                assert!(!text.is_empty() && !text.contains("{}"), "{lang:?} {step:?}: {text}");
+                if lang != Language::En {
+                    assert_ne!(text, step.english(), "{lang:?} {step:?} is still English");
+                }
+            }
+            for error in errors() {
+                let text = error_text(lang, &error);
+                assert!(!text.contains("{}"), "{lang:?}: {text}");
+            }
+        }
+        let win32 = error_text(Language::Pl, &errors()[0]);
+        assert_eq!(win32, "RegSetValueExW nie powiodło się dla HKLM\\X: Odmowa dostępu. (0x00000005)");
+    }
+
+    #[test]
+    fn no_ukrainian_word_mixes_cyrillic_and_latin_letters() {
+        for &msg in Msg::ALL {
+            let text = t(Language::Uk, msg);
+            for word in text.split(|c: char| !c.is_alphabetic()) {
+                let cyrillic = word.chars().any(|c| ('\u{0400}'..='\u{04FF}').contains(&c));
+                let latin = word.chars().any(|c| c.is_ascii_alphabetic());
+                assert!(!(cyrillic && latin), "{msg:?}: '{word}' in '{text}'");
+            }
+        }
+    }
+
+    #[test]
+    fn every_cleaner_target_and_display_toggle_has_a_translation() {
+        for target in windowcraft_engine::cleaner::targets() {
+            let (name, _) = clean_target(Language::Pl, &target);
+            assert_ne!(name, target.name, "{} has no Polish name", target.id);
+        }
+        for toggle in windowcraft_engine::gaming::display_toggles() {
+            let (name, detail) = display_toggle(Language::De, &toggle.id).unwrap_or_else(|| panic!("{}", toggle.id));
+            assert!(name != toggle.name && detail != toggle.description, "{}", toggle.id);
+        }
+    }
+
+    #[test]
+    fn polish_and_ukrainian_plurals_differ_only_where_the_languages_do() {
+        let forms = |lang: Language| -> Vec<&str> {
+            [1, 2, 5, 12, 21, 22, 25, 101, 111, 112].iter().map(|&n| lang.plural(n, "one", "few", "many")).collect()
+        };
+        assert_eq!(forms(Language::Pl), ["one", "few", "many", "many", "many", "few", "many", "many", "many", "many"]);
+        assert_eq!(forms(Language::Uk), ["one", "few", "many", "many", "one", "few", "many", "one", "many", "many"]);
+    }
+
+    #[test]
     fn drift_summary_is_translated_and_names_the_cause() {
         let drift = |after_update| Drift {
             tweak_id: "t".into(),
@@ -4895,6 +5596,7 @@ mod tests {
     #[test]
     fn parse_settings_json() {
         assert_eq!(parse_settings_language(r#"{"language":"pl"}"#), Some(Language::Pl));
+        assert_eq!(parse_settings_language("\u{FEFF}{\"language\":\"de\"}"), Some(Language::De));
         assert_eq!(parse_settings_language(r#"{"language": "pt-BR"}"#), Some(Language::PtBr));
         assert_eq!(parse_settings_language(r#"{"language": "unknown"}"#), None);
         assert_eq!(parse_settings_language(r#"{}"#), None);

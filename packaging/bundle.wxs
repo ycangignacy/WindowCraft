@@ -39,7 +39,9 @@
          The MSI starts the app only after a full-UI install, never with /quiet
          or /passive. setup.exe LaunchWindowCraft=0 turns it off. -->
     <Variable Name="LaunchWindowCraft" Type="numeric" Value="1" bal:Overridable="yes" />
-    <bal:Condition Message="WindowCraft requires Windows 11 or later.">WindowsBuildNumber &gt;= 22000</bal:Condition>
+    <!-- WixStdBA fills #(loc.*) in condition messages from the thm.wxl of the
+         language it runs in, the same as the theme text. -->
+    <bal:Condition Message="#(loc.ConditionWindows11)">WindowsBuildNumber &gt;= 22000</bal:Condition>
     <Chain>
       <MsiPackage SourceFile="$(var.Msi)" DisplayInternalUI="no" Vital="yes" Compressed="yes">
         <MsiProperty Name="WCLANGUAGE" Value="[WCLANGUAGE]" />

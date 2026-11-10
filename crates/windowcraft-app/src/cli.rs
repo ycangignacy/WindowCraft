@@ -105,6 +105,16 @@ fn load_profile(cli: &Cli, catalog: &Catalog) -> Result<ResolvedProfile, String>
     Err("--run needs --preset or --config".to_owned())
 }
 
+/// "1 item", "2 items". The CLI speaks English only.
+fn counted(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
+}
+
+/// A folder gets the report under a fixed name inside it.
+fn report_path(path: &std::path::Path) -> PathBuf {
+    if path.is_dir() { path.join("windowcraft-report.json") } else { path.to_path_buf() }
+}
+
 fn run(cli: &Cli) -> Result<(), String> {
     if cli.close_running {
         return close_running();
@@ -125,6 +135,7 @@ fn run(cli: &Cli) -> Result<(), String> {
     let engine = Engine::system(catalog.clone()).map_err(|e| e.to_string())?;
 
     if let Some(path) = &cli.export_report {
+        let path = &report_path(path);
         let report = report::build(&engine).map_err(|e| e.to_string())?;
         let text = report::to_json(&report).map_err(|e| e.to_string())?;
         std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -145,7 +156,7 @@ fn run(cli: &Cli) -> Result<(), String> {
                 }
                 if cli.fix {
                     let repaired = engine.repair_drift().map_err(|e| e.to_string())?;
-                    println!("Re-applied {repaired} tweaks.");
+                    println!("Re-applied {}.", counted(repaired, "tweak", "tweaks"));
                 }
             }
         }
@@ -157,12 +168,12 @@ fn run(cli: &Cli) -> Result<(), String> {
             println!("[{:>3.0}%] {step}", fraction * 100.0);
         })
         .map_err(|e| e.to_string())?;
-        println!("Applied {} items.", summary.applied);
+        println!("Applied {}.", counted(summary.applied, "item", "items"));
         if !summary.failed.is_empty() {
             for (name, reason) in &summary.failed {
                 eprintln!("Failed: {name}: {reason}");
             }
-            return Err(format!("{} items failed", summary.failed.len()));
+            return Err(format!("{} failed", counted(summary.failed.len(), "item", "items")));
         }
     }
     Ok(())
@@ -226,6 +237,21 @@ mod tests {
 
         let cli = parse(&["--export-report", r"C:\report.json"]).unwrap();
         assert_eq!(cli.export_report, Some(PathBuf::from(r"C:\report.json")));
+    }
+
+    #[test]
+    fn counts_take_the_singular_for_one_only() {
+        assert_eq!(counted(1, "item", "items"), "1 item");
+        assert_eq!(counted(0, "item", "items"), "0 items");
+        assert_eq!(counted(21, "tweak", "tweaks"), "21 tweaks");
+    }
+
+    #[test]
+    fn a_report_folder_gets_a_file_name() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(report_path(dir.path()), dir.path().join("windowcraft-report.json"));
+        let file = dir.path().join("mine.json");
+        assert_eq!(report_path(&file), file);
     }
 
     #[test]

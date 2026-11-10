@@ -79,6 +79,17 @@ impl Catalog {
         self.tweaks.iter().find(|tweak| tweak.id == id)
     }
 
+    /// Other tweaks in the same `exclusive` group as `id`. Choosing `id`
+    /// clears them.
+    pub fn exclusive_peers<'a>(&'a self, id: &str) -> impl Iterator<Item = &'a str> + use<'a> {
+        let group = self.tweak(id).and_then(|tweak| tweak.exclusive.clone());
+        let id = id.to_owned();
+        self.tweaks
+            .iter()
+            .filter(move |tweak| tweak.id != id && group.is_some() && tweak.exclusive == group)
+            .map(|tweak| tweak.id.as_str())
+    }
+
     pub fn tweak_by_legacy(&self, legacy_id: &str) -> Option<&Tweak> {
         self.tweaks.iter().find(|tweak| tweak.legacy_id == legacy_id)
     }

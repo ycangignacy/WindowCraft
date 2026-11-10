@@ -525,10 +525,18 @@ fn strip_mp3(data: &[u8]) -> (Vec<u8>, usize) {
             let footer = end - 32;
             let size = le32(data, footer + 12).unwrap_or(0);
             let has_header = le32(data, footer + 20).is_some_and(|flags| flags & 0x8000_0000 != 0);
-            let total = size + if has_header { 32 } else { 0 };
-            end = end.saturating_sub(total).max(start);
-            removed += 1;
-            continue;
+            // The size counts the items and the footer, not the header. A size
+            // below 32 or a tag longer than what is left is damaged: keep the
+            // bytes and stop, so every pass of the loop moves `end` back.
+            let total = size.checked_add(if has_header { 32 } else { 0 });
+            match total {
+                Some(total) if size >= 32 && total <= end - start => {
+                    end -= total;
+                    removed += 1;
+                    continue;
+                }
+                _ => break,
+            }
         }
         if tail.len() >= 15 && &tail[tail.len() - 9..] == b"LYRICS200" {
             let digits = std::str::from_utf8(&tail[tail.len() - 15..tail.len() - 9]).ok();
@@ -790,6 +798,47 @@ mod tests {
         data.extend_from_slice(&v1);
         let (clean, removed) = strip_bytes(Kind::Mp3, &data).unwrap();
         assert_eq!(removed, 3);
+        assert_eq!(clean, b"\xFF\xFBaudio");
+    }
+
+    fn ape_footer(size: u32, flags: u32) -> Vec<u8> {
+        let mut ape = b"APETAGEX".to_vec();
+        ape.extend_from_slice(&2000u32.to_le_bytes());
+        ape.extend_from_slice(&size.to_le_bytes());
+        ape.extend_from_slice(&0u32.to_le_bytes());
+        ape.extend_from_slice(&flags.to_le_bytes());
+        ape.extend_from_slice(&[0u8; 8]);
+        ape
+    }
+
+    #[test]
+    fn mp3_ape_footer_with_size_zero_ends_and_keeps_the_bytes() {
+        let mut data = b"\xFF\xFBaudio".to_vec();
+        data.extend_from_slice(&ape_footer(0, 0));
+        let (clean, removed) = strip_bytes(Kind::Mp3, &data).unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(clean, data);
+    }
+
+    #[test]
+    fn mp3_ape_footer_larger_than_the_file_ends_and_keeps_the_bytes() {
+        let mut data = b"\xFF\xFBaudio".to_vec();
+        data.extend_from_slice(&ape_footer(u32::MAX, 0x8000_0000));
+        let (clean, removed) = strip_bytes(Kind::Mp3, &data).unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(clean, data);
+    }
+
+    #[test]
+    fn mp3_valid_ape_tag_with_header_is_removed() {
+        let mut data = b"\xFF\xFBaudio".to_vec();
+        let mut header = b"APETAGEX".to_vec();
+        header.resize(32, 0);
+        data.extend_from_slice(&header);
+        data.extend_from_slice(b"item");
+        data.extend_from_slice(&ape_footer(36, 0x8000_0000));
+        let (clean, removed) = strip_bytes(Kind::Mp3, &data).unwrap();
+        assert_eq!(removed, 1);
         assert_eq!(clean, b"\xFF\xFBaudio");
     }
 

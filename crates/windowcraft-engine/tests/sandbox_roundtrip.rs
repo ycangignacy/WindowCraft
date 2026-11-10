@@ -245,6 +245,88 @@ fn single_key_rollback_leaves_the_rest_applied() {
 }
 
 #[test]
+fn a_missing_value_takes_the_state_default_on_names() {
+    let rig = rig("default-on");
+    let path = RegPath::parse(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced").unwrap();
+
+    // default_on: true. A clean Windows 11 centers the taskbar without TaskbarAl.
+    let centered = tweak(&rig, "taskbar-alignment").clone();
+    assert_eq!(rig.engine.detect(&centered).unwrap(), Detection::Applied);
+    rig.sandbox.scope.write(&path, "TaskbarAl", &RegValue::DWord(0)).unwrap();
+    assert_eq!(rig.engine.detect(&centered).unwrap(), Detection::NotApplied);
+
+    // default_on: false. Hidden files stay hidden without the value.
+    let hidden = tweak(&rig, "hidden-files").clone();
+    assert_eq!(rig.engine.detect(&hidden).unwrap(), Detection::NotApplied);
+    rig.sandbox.scope.write(&path, "Hidden", &RegValue::DWord(1)).unwrap();
+    assert_eq!(rig.engine.detect(&hidden).unwrap(), Detection::Applied);
+}
+
+#[test]
+fn a_value_removed_where_default_on_means_the_applied_state_is_not_drift() {
+    let rig = rig("default-on-drift");
+    let path = RegPath::parse(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced").unwrap();
+    let cancel = CancelToken::new();
+    let centered = tweak(&rig, "taskbar-alignment").clone();
+    let hidden = tweak(&rig, "hidden-files").clone();
+    let actions = [(&centered, TweakAction::Set(true)), (&hidden, TweakAction::Set(true))];
+    rig.engine.run("default-on drift", &actions, &cancel, |_, _| {}).unwrap();
+    assert!(rig.engine.detect_drift().unwrap().is_empty());
+
+    rig.sandbox.scope.write_opt(&path, "TaskbarAl", None).unwrap();
+    assert!(rig.engine.detect_drift().unwrap().is_empty(), "a missing TaskbarAl still means centered");
+
+    rig.sandbox.scope.write_opt(&path, "Hidden", None).unwrap();
+    let drift = rig.engine.detect_drift().unwrap();
+    assert_eq!(drift.iter().map(|d| d.tweak_id.as_str()).collect::<Vec<_>>(), ["hidden-files"]);
+}
+
+#[test]
+fn folder_discovery_rollback_brings_back_the_folder_type_it_replaced() {
+    let rig = rig("folder-discovery");
+    let cancel = CancelToken::new();
+    let shell = r"HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell";
+    let all_folders = RegPath::parse(&format!(r"{shell}\Bags\AllFolders\Shell")).unwrap();
+    let saved_view = RegPath::parse(&format!(r"{shell}\Bags\7\Shell")).unwrap();
+    rig.sandbox.scope.write(&all_folders, "FolderType", &RegValue::String("Pictures".to_owned())).unwrap();
+    rig.sandbox.scope.write(&saved_view, "Mode", &RegValue::DWord(4)).unwrap();
+
+    let discovery = tweak(&rig, "disable-explorer-auto-discovery").clone();
+    let report = rig.engine.run("discovery", &[(&discovery, TweakAction::Apply)], &cancel, |_, _| {}).unwrap();
+    assert_eq!(report.applied, ["disable-explorer-auto-discovery"]);
+    assert_eq!(rig.sandbox.scope.read(&saved_view, "Mode").unwrap(), None, "prepare clears saved views");
+    assert_eq!(
+        rig.sandbox.scope.read(&all_folders, "FolderType").unwrap(),
+        Some(RegValue::String("NotSpecified".to_owned()))
+    );
+
+    rig.engine.rollback_session(report.session).unwrap();
+    assert_eq!(rig.sandbox.scope.read(&all_folders, "FolderType").unwrap(), Some(RegValue::String("Pictures".to_owned())));
+}
+
+#[test]
+fn undo_deletes_a_tree_only_when_the_tweak_created_what_is_in_it() {
+    let cancel = CancelToken::new();
+    let clsid = RegPath::parse(r"HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}").unwrap();
+    let server = RegPath::parse(r"HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32").unwrap();
+
+    // Nothing there before: undo removes the whole key, as the catalog asks.
+    let new = rig("undo-tree-new");
+    let menu = tweak(&new, "right-click-menu").clone();
+    let report = new.engine.run("menu", &[(&menu, TweakAction::Apply)], &cancel, |_, _| {}).unwrap();
+    assert!(new.sandbox.scope.read(&server, "").unwrap().is_some());
+    new.engine.rollback_session(report.session).unwrap();
+    assert!(new.sandbox.scope.open(&clsid).unwrap().is_none());
+
+    // A value set before the tweak comes back and stays.
+    let kept = rig("undo-tree-kept");
+    kept.sandbox.scope.write(&server, "", &RegValue::String("mine.dll".to_owned())).unwrap();
+    let report = kept.engine.run("menu", &[(&menu, TweakAction::Apply)], &cancel, |_, _| {}).unwrap();
+    kept.engine.rollback_session(report.session).unwrap();
+    assert_eq!(kept.sandbox.scope.read(&server, "").unwrap(), Some(RegValue::String("mine.dll".to_owned())));
+}
+
+#[test]
 fn toggles_switch_both_ways_with_catalog_values() {
     let rig = rig("toggle");
     let toggle = tweak(&rig, "show-ext").clone();

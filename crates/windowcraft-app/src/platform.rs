@@ -35,13 +35,12 @@ pub fn harden_dll_search() {
     }
 }
 
-/// Claims the single GUI instance, or brings the running one forward.
-/// Two windows would otherwise fight over one snapshot database.
+/// Claims the single GUI instance, or hands this launch's arguments to the
+/// running one, see `remote`. Two windows would otherwise fight over one
+/// snapshot database.
 pub fn claim_single_instance() -> Option<windowcraft_engine::win::HandleGuard> {
     use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
     use windows::Win32::System::Threading::CreateMutexW;
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow};
-    use windows::core::PCWSTR;
     // SAFETY: The name is a static string. Ownership of the handle moves into
     // the guard, and GetLastError is read straight after the creating call.
     let mutex = unsafe { CreateMutexW(None, false, w!("Local\\WindowCraft.SingleInstance")) }.ok()?;
@@ -51,13 +50,8 @@ pub fn claim_single_instance() -> Option<windowcraft_engine::win::HandleGuard> {
     if !existing {
         return Some(guard);
     }
-    // SAFETY: The title is a static string, and a failed lookup is harmless.
-    unsafe {
-        if let Ok(window) = FindWindowW(PCWSTR::null(), w!("WindowCraft")) {
-            let _ = ShowWindow(window, SW_RESTORE);
-            let _ = SetForegroundWindow(window);
-        }
-    }
+    // An older running version ignores the message and only comes forward.
+    let _ = crate::remote::send(&crate::remote::Request::current());
     None
 }
 

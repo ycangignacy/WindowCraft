@@ -1268,17 +1268,7 @@
         "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU"
       }
     ],
-    "undo": [
-      {
-        "op": "reg_delete_tree",
-        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags"
-      },
-      {
-        "op": "reg_delete_tree",
-        "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU"
-      }
-    ],
-    "notice": "Sign out or restart for the change to take effect."
+    "notice": "Sign out or restart for the change to take effect. Saved folder views are deleted, and undo does not bring them back."
   },
   {
     "id": "detailed-bso-d",
