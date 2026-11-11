@@ -1,6 +1,6 @@
 # Release Checklist
 
-Status as of 2026-11-11: 1.4.0 is prepared and committed, not yet tagged or published. It
+Status as of 2026-11-11: 1.4.0 is the current stable release, published with x64 and ARM64 files matching `SHA256SUMS.txt`. It
 translates the catalog into the seven other interface languages and closes the rest of the
 1.3.0 audit (E10, E11, D1 to D12, offline t14), see `docs/RELEASE-NOTES-1.4.0.md`. 1.3.1
 fixed what a full audit of 1.3.0 found in the engine, ISO Studio, the interface, profiles and
