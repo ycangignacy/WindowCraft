@@ -32,6 +32,7 @@ wgpu.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+windowcraft-engine = { workspace = true, features = ["testing"] }
 # Writes the review renders of the onboarding screens, see `render_guide_screens`.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 

@@ -51,6 +51,9 @@ pub struct Catalog {
     pub dns: Vec<DnsProvider>,
     pub presets: Presets,
     pub updates: Vec<UpdateMode>,
+    /// English name and description of each translated item, keyed
+    /// `kind:id`, so search still finds the English words. Empty in English.
+    pub english: std::collections::BTreeMap<String, String>,
 }
 
 fn parse<T: DeserializeOwned>(name: &str, source: &str) -> Result<T, String> {
@@ -67,6 +70,7 @@ impl Catalog {
             dns: parse("dns.json", DNS)?,
             presets: parse("preset.json", PRESETS)?,
             updates: parse("updates.json", UPDATES)?,
+            english: std::collections::BTreeMap::new(),
         };
         let ids: WinUtilIds = parse("winutil-import.json", WINUTIL_IMPORT)?;
         attach_ids("tweak", &ids.tweaks, catalog.tweaks.iter_mut().map(|t| (t.id.as_str(), &mut t.legacy_id)))?;
@@ -125,7 +129,7 @@ impl Catalog {
     /// Application categories in display order.
     pub fn app_categories(&self) -> Vec<&str> {
         let mut categories: Vec<&str> = self.apps.iter().map(|app| app.category.as_str()).collect();
-        categories.sort_unstable();
+        categories.sort_unstable_by_key(|category| sort_key(category));
         categories.dedup();
         categories
     }
@@ -139,4 +143,37 @@ impl Catalog {
         }
         categories
     }
+}
+
+/// Alphabetical key for translated names. Byte order puts "é" after "z" and
+/// the Ukrainian "І" before "А", so accents are folded to their base letter
+/// and the Ukrainian letters are placed right after their Russian neighbours,
+/// as in the Ukrainian alphabet.
+pub(crate) fn sort_key(text: &str) -> String {
+    let mut key = String::with_capacity(text.len());
+    for c in text.chars().flat_map(char::to_lowercase) {
+        let folded = match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ą' => "a",
+            'ç' | 'ć' => "c",
+            'è' | 'é' | 'ê' | 'ë' | 'ę' => "e",
+            'ì' | 'í' | 'î' | 'ï' => "i",
+            'ł' => "l",
+            'ñ' | 'ń' => "n",
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' => "o",
+            'ś' => "s",
+            'ù' | 'ú' | 'û' | 'ü' => "u",
+            'ź' | 'ż' => "z",
+            'ß' => "ss",
+            'ґ' => "г\u{ffff}",
+            'є' => "е\u{ffff}",
+            'і' => "и\u{ffff}",
+            'ї' => "и\u{ffff}\u{ffff}",
+            _ => {
+                key.push(c);
+                continue;
+            }
+        };
+        key.push_str(folded);
+    }
+    key
 }

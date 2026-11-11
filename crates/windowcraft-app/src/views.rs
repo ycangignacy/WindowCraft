@@ -12,7 +12,7 @@ use crate::theme::*;
 use crate::ui::*;
 use iced::widget::{Column, Row, column, container, mouse_area, opaque, row, scrollable, space, stack, text_input};
 use iced::{Alignment, Border, Color, Length, Padding, mouse};
-use windowcraft_config::{Area, CleanScope, Depth, FeatureKind, Goal, Tweak, TweakGroup, TweakKind};
+use windowcraft_config::{Area, CleanScope, Depth, FeatureKind, Goal, SearchKind, Tweak, TweakGroup, TweakKind};
 use windowcraft_engine::Detection;
 use windowcraft_engine::autoruns::EntrySource;
 use windowcraft_engine::gaming::InterruptPriority;
@@ -691,11 +691,21 @@ fn search_results(app: &App, p: Palette) -> El<'_> {
         .hits
         .iter()
         .map(|hit| {
+            // The catalog gives English context; tweaks and fixes get the
+            // tab or page name in the chosen language instead.
+            let detail = match hit.kind {
+                SearchKind::Tweak => app
+                    .catalog
+                    .tweak(&hit.id)
+                    .map_or(hit.detail.as_str(), |tweak| i18n::tweak_group(app.language, tweak.group)),
+                SearchKind::Fix => Page::System.title_in(app.language),
+                _ => hit.detail.as_str(),
+            };
             list_row(
                 p,
                 None,
                 hit.title.as_str(),
-                hit.detail.as_str(),
+                detail,
                 badge(p, i18n::search_kind(app.language, hit.kind), p.ink_secondary),
                 Some(Message::SearchSelected(hit.kind, hit.id.clone())),
             )
@@ -1120,7 +1130,7 @@ fn install_rows<'a>(app: &'a App, p: Palette, extension: Extension, title: &'a s
 
 fn stripper_rows(app: &App, p: Palette) -> Vec<El<'_>> {
     let lang = app.language;
-    if !app.misc.has(Extension::Stripper) {
+    if !app.extensions.has(Extension::Stripper) {
         return install_rows(app, p, Extension::Stripper, t(lang, Msg::MiscStripperTitle), t(lang, Msg::MiscStripperDetail), t(lang, Msg::ExtStripperNeeds));
     }
     vec![
@@ -1137,14 +1147,14 @@ fn stripper_rows(app: &App, p: Palette) -> Vec<El<'_>> {
 
 fn converter_rows(app: &App, p: Palette) -> Vec<El<'_>> {
     let lang = app.language;
-    if !app.misc.has(Extension::Converter) {
+    if !app.extensions.has(Extension::Converter) {
         return install_rows(app, p, Extension::Converter, t(lang, Msg::ConverterTitle), t(lang, Msg::ConverterDetail), t(lang, Msg::ExtStripperNeeds));
     }
     let mut families = Column::new().spacing(8);
     for (family, msg) in [(Family::Image, Msg::ConverterImage), (Family::Video, Msg::ConverterVideo), (Family::Audio, Msg::ConverterAudio)] {
         let mut chips = Row::new().spacing(6);
         for target in Target::ALL.into_iter().filter(|target| target.family() == family) {
-            chips = chips.push(chip(p, target.label().to_owned(), app.misc.target == target, Message::ConvertTarget(target)));
+            chips = chips.push(chip(p, target.label().to_owned(), app.extensions.target == target, Message::ConvertTarget(target)));
         }
         families = families.push(
             row![caption(t(lang, msg), p.ink_secondary).width(Length::Fixed(90.0)), chips.wrap().vertical_spacing(6)]
@@ -1160,14 +1170,14 @@ fn converter_rows(app: &App, p: Palette) -> Vec<El<'_>> {
             button(p, t(lang, Msg::MiscChooseFiles), Some(Icon::Folder), Tone::Primary, app.job.is_none().then_some(Message::ConvertPick)),
         ),
         container(families).width(Length::Fill).padding([10.0, ROW_INSET]).into(),
-        note_row(if app.misc.ffmpeg { t(lang, Msg::ConverterCopyNote) } else { t(lang, Msg::ConverterNativeNote) }, p.ink_tertiary),
+        note_row(if app.extensions.ffmpeg { t(lang, Msg::ConverterCopyNote) } else { t(lang, Msg::ConverterNativeNote) }, p.ink_tertiary),
         installed_row(app, p, Extension::Converter),
     ]
 }
 
 fn ffmpeg_rows(app: &App, p: Palette) -> Vec<El<'_>> {
     let lang = app.language;
-    if !app.misc.has(Extension::Ffmpeg) {
+    if !app.extensions.has(Extension::Ffmpeg) {
         return install_rows(app, p, Extension::Ffmpeg, t(lang, Msg::FfmpegTitle), t(lang, Msg::FfmpegDetail), t(lang, Msg::ExtFfmpegNeeds));
     }
     vec![setting_row(p, t(lang, Msg::FfmpegTitle), t(lang, Msg::FfmpegDetail), space().width(0).into()), installed_row(app, p, Extension::Ffmpeg)]
@@ -1175,8 +1185,8 @@ fn ffmpeg_rows(app: &App, p: Palette) -> Vec<El<'_>> {
 
 fn youtube_rows(app: &App, p: Palette) -> Vec<El<'_>> {
     let lang = app.language;
-    let misc = &app.misc;
-    if !misc.has(Extension::YouTube) {
+    let state = &app.extensions;
+    if !state.has(Extension::YouTube) {
         let mut rows = install_rows(app, p, Extension::YouTube, t(lang, Msg::YoutubeTitle), t(lang, Msg::YoutubeDetail), t(lang, Msg::ExtYoutubeNeeds));
         rows.push(note_row(t(lang, Msg::MiscPrivacyNote), p.ink_tertiary));
         return rows;
@@ -1184,16 +1194,16 @@ fn youtube_rows(app: &App, p: Palette) -> Vec<El<'_>> {
     let formats = tabs(p, vec!["MP4", "MP3"], app.timeline.channels[TAB].value(), 64.0, |index| {
         Message::VideoFormat(if index == 0 { Format::Mp4 } else { Format::Mp3 })
     });
-    let format_detail = match misc.format {
+    let format_detail = match state.format {
         Format::Mp4 => t(lang, Msg::MiscFormatDetailMp4),
         Format::Mp3 => t(lang, Msg::MiscFormatDetailMp3),
     };
-    let can_download = app.job.is_none() && !misc.url.trim().is_empty();
+    let can_download = app.job.is_none() && !state.url.trim().is_empty();
     vec![
         container(
             column![
                 row![
-                    input(p, t(lang, Msg::MiscUrlPlaceholder), &misc.url, Message::VideoUrl),
+                    input(p, t(lang, Msg::MiscUrlPlaceholder), &state.url, Message::VideoUrl),
                     formats,
                     button(p, t(lang, Msg::Download), Some(Icon::Download), Tone::Primary, can_download.then_some(Message::VideoDownload)),
                 ]
@@ -1208,7 +1218,7 @@ fn youtube_rows(app: &App, p: Palette) -> Vec<El<'_>> {
         container(
             row![
                 caption(t(lang, Msg::MiscSaveTo), p.ink_secondary),
-                input(p, "", &misc.folder, Message::VideoFolder),
+                input(p, "", &state.folder, Message::VideoFolder),
                 button(p, t(lang, Msg::Browse), Some(Icon::Folder), Tone::Secondary, Some(Message::VideoBrowseFolder)),
             ]
             .spacing(8)
@@ -1300,7 +1310,8 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
             .flat_map(|drift| {
                 drift.entries.iter().map(move |(target, expected, live)| {
                     let detail = format_3(t(app.language, Msg::DriftDetailFormat), target, expected, live);
-                    list_row(p, None, drift.tweak_name.as_str(), detail, dot(p.amber), None)
+                    let name = app.catalog.tweak(&drift.tweak_id).map_or(drift.tweak_name.as_str(), |tweak| tweak.name.as_str());
+                    list_row(p, None, name, detail, dot(p.amber), None)
                 })
             })
             .collect();
@@ -1834,9 +1845,9 @@ fn confirm_dialog(app: &App, p: Palette) -> El<'_> {
             t(app.language, Msg::ConfirmRollbackSessionDetail).to_owned(),
             t(app.language, Msg::ConfirmRollbackSessionAction),
         ),
-        Some(Confirm::EraseDisk { number, model }) => (
+        Some(Confirm::EraseDisk { number, disk }) => (
             format_1(t(app.language, Msg::ConfirmEraseDiskTitle), &number.to_string()),
-            format_1(t(app.language, Msg::ConfirmEraseDiskDetail), model),
+            format_1(t(app.language, Msg::ConfirmEraseDiskDetail), &disk.model),
             t(app.language, Msg::ConfirmEraseDiskAction),
         ),
         Some(Confirm::IrreversibleTweak(id)) => (

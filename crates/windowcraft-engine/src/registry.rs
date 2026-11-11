@@ -144,7 +144,6 @@ impl RegValue {
         let invalid = || EngineError::Invalid(format!("'{text}' as {kind:?}"));
         Ok(match kind {
             RegKind::String => Self::String(text.to_owned()),
-            RegKind::ExpandString => Self::ExpandString(text.to_owned()),
             RegKind::DWord => Self::DWord(text.parse().map_err(|_| invalid())?),
             RegKind::QWord => Self::QWord(text.parse().map_err(|_| invalid())?),
             RegKind::Binary => {
@@ -158,7 +157,6 @@ impl RegValue {
                 }
                 Self::Binary(bytes)
             }
-            RegKind::MultiString => Self::MultiString(text.split('|').map(str::to_owned).collect()),
         })
     }
 

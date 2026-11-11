@@ -55,15 +55,6 @@ pub enum InterruptPriority {
 impl InterruptPriority {
     pub const ALL: [Self; 4] = [Self::Undefined, Self::Low, Self::Normal, Self::High];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Undefined => "Undefined",
-            Self::Low => "Low",
-            Self::Normal => "Normal",
-            Self::High => "High",
-        }
-    }
-
     fn from_value(value: u32) -> Self {
         match value {
             1 => Self::Low,

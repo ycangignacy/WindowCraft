@@ -38,6 +38,14 @@ fn live() -> bool {
     true
 }
 
+/// raw.githubusercontent.com answers on port 443 within five seconds.
+fn online() -> bool {
+    use std::net::ToSocketAddrs;
+    ("raw.githubusercontent.com", 443).to_socket_addrs().ok().and_then(|mut addresses| addresses.next()).is_some_and(
+        |address| std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(5)).is_ok(),
+    )
+}
+
 fn ps(script: &str) -> String {
     let output = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
@@ -421,9 +429,9 @@ fn t09_usb_guard_and_write() {
     let catalog = Arc::new(Catalog::load().unwrap());
     let work = windowcraft_engine::win::local_app_dir().join("iso");
     let mut session = pipeline::StudioSession::resume(&work).expect("session from t08");
-    let (number, model_job) = (target.number, target.model.clone());
+    let (number, identity) = (target.number, target.identity.clone());
     job("usb", move |context| {
-        pipeline::export_usb(&mut session, &work, &catalog, number, &model_job, context)
+        pipeline::export_usb(&mut session, &work, &catalog, number, &identity, context)
             .map_err(|error| windowcraft_engine::EngineError::Invalid(error.to_string()))?;
         Ok("written".to_owned())
     });
@@ -633,7 +641,14 @@ fn t14_every_reversible_tweak_rolls_back_cleanly() {
         "revert-start-menu",
     ];
     let engine = engine();
+    // Tweaks that download a list (block-adobe-net) cannot run while the VM
+    // is offline, and t14 runs offline so Windows Update stays quiet.
+    let online = online();
+    let downloads = |tweak: &windowcraft_config::Tweak| {
+        serde_json::to_string(&tweak.apply).is_ok_and(|json| json.contains("\"url\":\"http"))
+    };
     let mut problems = Vec::new();
+    let mut skipped = Vec::new();
     let mut checked = 0;
     for tweak in &engine.catalog.tweaks {
         let action = match tweak.kind {
@@ -641,6 +656,11 @@ fn t14_every_reversible_tweak_rolls_back_cleanly() {
             TweakKind::Toggle => TweakAction::Set(true),
             _ => continue,
         };
+        if !online && downloads(tweak) {
+            println!("  {} skipped: it downloads a list and the network is off", tweak.id);
+            skipped.push(tweak.id.clone());
+            continue;
+        }
         let values: Vec<(String, String)> = tweak.registry.iter().map(|e| (e.path.clone(), e.name.clone())).collect();
         let services: Vec<String> = tweak.services.iter().map(|rule| rule.name.clone()).collect();
         let read = || {
@@ -674,7 +694,7 @@ fn t14_every_reversible_tweak_rolls_back_cleanly() {
         checked += 1;
         println!("  {} checked: {} values, {} services", tweak.id, values.len(), services.len());
     }
-    println!("checked {checked} tweaks");
+    println!("checked {checked} tweaks, skipped {} without network: {skipped:?}", skipped.len());
     for problem in &problems {
         println!("PROBLEM {problem}");
     }

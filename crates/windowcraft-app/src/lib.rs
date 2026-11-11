@@ -102,7 +102,13 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
         return ExitCode::SUCCESS;
     };
 
-    let catalog = match Catalog::load() {
+    // The app shows the catalog in its language; the engine keeps the English
+    // one, so the log and the snapshot records read the same everywhere.
+    let catalog = match Catalog::load_in(lang.tag()) {
+        Ok(catalog) => Arc::new(catalog),
+        Err(error) => return report_fatal(lang, &error),
+    };
+    let english = match Catalog::load() {
         Ok(catalog) => Arc::new(catalog),
         Err(error) => return report_fatal(lang, &error),
     };
@@ -125,7 +131,7 @@ fn run_gui(cli: cli::Cli) -> ExitCode {
         Ok(info) => info,
         Err(error) => return report_fatal(lang, &error.to_string()),
     };
-    let engine = match Engine::system(catalog.clone()) {
+    let engine = match Engine::system(english) {
         Ok(engine) => Arc::new(engine),
         Err(error) => return report_fatal(lang, &error.to_string()),
     };

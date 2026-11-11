@@ -1,13 +1,5 @@
 // Made by ycangignacy
-//! Momentum projection and rubber-banding.
-
-/// Distance a flick travels before friction stops it.
-///
-/// `deceleration_rate` is `0.998` for a normal scroll or sheet feel and `0.99`
-/// for a snappier settle.
-pub fn project_momentum(initial_velocity_px_per_sec: f64, deceleration_rate: f64) -> f64 {
-    (initial_velocity_px_per_sec / 1000.0) * deceleration_rate / (1.0 - deceleration_rate)
-}
+//! Rubber-banding past a boundary.
 
 /// Progressive resistance past a boundary. The default constant is `0.55`.
 pub fn rubberband(overshoot: f64, dimension: f64, constant: f64) -> f64 {
@@ -17,15 +9,6 @@ pub fn rubberband(overshoot: f64, dimension: f64, constant: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn momentum_matches_reference_values() {
-        assert!((project_momentum(1_000.0, 0.998) - 499.0).abs() < 1e-9);
-        assert!((project_momentum(2_000.0, 0.998) - 998.0).abs() < 1e-9);
-        assert!((project_momentum(1_000.0, 0.99) - 99.0).abs() < 1e-9);
-        assert!((project_momentum(-1_000.0, 0.998) + 499.0).abs() < 1e-9);
-        assert_eq!(project_momentum(0.0, 0.998), 0.0);
-    }
 
     #[test]
     fn rubberband_approaches_but_never_reaches_dimension() {

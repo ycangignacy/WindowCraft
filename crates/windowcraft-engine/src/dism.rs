@@ -66,16 +66,11 @@ const STATE_INSTALLED: i32 = 4;
 const STATE_INSTALL_PENDING: i32 = 5;
 const STATE_PARTIALLY_INSTALLED: i32 = 7;
 
-/// Owned copy of a driver package entry.
+/// The parts of a driver package entry the driver export reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DriverInfo {
-    pub published_name: String,
     pub inf_path: PathBuf,
     pub in_box: bool,
-    pub class_name: String,
-    pub boot_critical: bool,
-    pub provider: String,
-    pub version: (u32, u32, u32, u32),
 }
 
 struct Api {
@@ -347,18 +342,8 @@ impl DismSession {
                 let entry = packages.add(index);
                 let read = |pointer: *const PCWSTR| from_pcwstr(core::ptr::read_unaligned(pointer));
                 DriverInfo {
-                    published_name: read(&raw const (*entry).published_name),
                     inf_path: PathBuf::from(read(&raw const (*entry).original_file_name)),
                     in_box: core::ptr::read_unaligned(&raw const (*entry).in_box).as_bool(),
-                    class_name: read(&raw const (*entry).class_name),
-                    boot_critical: core::ptr::read_unaligned(&raw const (*entry).boot_critical).as_bool(),
-                    provider: read(&raw const (*entry).provider_name),
-                    version: (
-                        core::ptr::read_unaligned(&raw const (*entry).major_version),
-                        core::ptr::read_unaligned(&raw const (*entry).minor_version),
-                        core::ptr::read_unaligned(&raw const (*entry).build),
-                        core::ptr::read_unaligned(&raw const (*entry).revision),
-                    ),
                 }
             };
             drivers.push(info);
@@ -422,10 +407,6 @@ impl MountedImage {
         };
         api.check(status, "DismMountImage", &image.display().to_string())?;
         Ok(Self { api, path: directory.to_path_buf(), active: true })
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     fn unmount(&mut self, flags: u32) -> Result<()> {
@@ -628,7 +609,7 @@ mod tests {
     fn mounted_image_exposes_mount_path_and_attempts_unmount_on_commit_or_drop() {
         let mount_dir = PathBuf::from(r"C:\WindowCraft_MountTest");
         let mounted = MountedImage { api: fake_api(), path: mount_dir.clone(), active: true };
-        assert_eq!(mounted.path(), mount_dir.as_path());
+        assert_eq!(mounted.path, mount_dir);
 
         let err = mounted.commit().unwrap_err();
         assert!(matches!(

@@ -130,6 +130,123 @@ pub fn apply_sddl(path: &Path, sddl: &str) -> Result<()> {
     write_dacl(path, dacl, DACL_SECURITY_INFORMATION | flag)
 }
 
+/// Owner and DACL for a folder that only administrators may change. SYSTEM
+/// and Administrators have full control, users may read and run. The OWNER
+/// RIGHTS entry takes away the implicit right of an owner to rewrite the DACL.
+pub const ADMIN_ONLY_SDDL: &str =
+    "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)(A;OICI;0x1200a9;;;OW)";
+
+/// Owner and DACL of a path in SDDL form.
+pub fn owner_and_dacl_sddl(path: &Path) -> Result<String> {
+    let name = name_of(path);
+    let information = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+    let mut descriptor = PSECURITY_DESCRIPTOR::default();
+    // SAFETY: `name` is null-terminated and the descriptor out pointer is
+    // valid. The descriptor is LocalAlloc'd and owned by the guard below.
+    let status = unsafe {
+        GetNamedSecurityInfoW(pcwstr(&name), SE_FILE_OBJECT, information, None, None, None, None, &mut descriptor)
+    };
+    if status.is_err() {
+        return Err(EngineError::win32("GetNamedSecurityInfoW", path.display().to_string(), status.0));
+    }
+    let _descriptor = LocalGuard(descriptor.0);
+    let mut text = PWSTR::null();
+    // SAFETY: The descriptor is live. The output string is LocalAlloc'd and
+    // moved into a guard immediately after the call.
+    unsafe {
+        ConvertSecurityDescriptorToStringSecurityDescriptorW(descriptor, SDDL_REVISION_1, information, &mut text, None)
+    }
+    .map_err(|error| {
+        EngineError::windows("ConvertSecurityDescriptorToStringSecurityDescriptorW", path.display().to_string(), &error)
+    })?;
+    let _guard = LocalGuard::pwstr(text);
+    // SAFETY: On success `text` is a valid null-terminated string.
+    Ok(unsafe { from_pcwstr(PCWSTR(text.0)) })
+}
+
+/// Sets the owner and a protected DACL from SDDL text. On a folder, Windows
+/// passes the inheritable entries down to everything inside. Setting the
+/// owner to Administrators needs an elevated token.
+pub fn apply_owner_and_dacl(path: &Path, sddl: &str) -> Result<()> {
+    let wide_sddl = wide(sddl);
+    let mut descriptor = PSECURITY_DESCRIPTOR::default();
+    // SAFETY: The input is null-terminated. The output descriptor is
+    // LocalAlloc'd and moved into a guard immediately after the call.
+    unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(pcwstr(&wide_sddl), SDDL_REVISION_1, &mut descriptor, None)
+    }
+    .map_err(|error| EngineError::windows("ConvertStringSecurityDescriptorToSecurityDescriptorW", sddl, &error))?;
+    let _guard = LocalGuard(descriptor.0);
+
+    let (mut present, mut defaulted) = (BOOL::default(), BOOL::default());
+    let mut dacl = core::ptr::null_mut();
+    let mut owner = PSID::default();
+    // SAFETY: The descriptor is live and all out pointers are valid.
+    unsafe {
+        GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted)
+            .and_then(|()| GetSecurityDescriptorOwner(descriptor, &mut owner, &mut defaulted))
+    }
+    .map_err(|error| EngineError::windows("GetSecurityDescriptor", sddl, &error))?;
+
+    let name = name_of(path);
+    let information = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION;
+    // SAFETY: `name` is null-terminated; owner and DACL point into the live
+    // descriptor.
+    let status = unsafe {
+        SetNamedSecurityInfoW(pcwstr(&name), SE_FILE_OBJECT, information, Some(owner), None, Some(dacl), None)
+    };
+    if status.is_err() {
+        return Err(EngineError::win32("SetNamedSecurityInfoW", path.display().to_string(), status.0));
+    }
+    Ok(())
+}
+
+/// Access bits that let a principal change a file, its DACL or its owner.
+const WRITE_BITS: u32 = 0x2 | 0x4 | 0x10 | 0x40 | 0x100 | 0x1_0000 | 0x4_0000 | 0x8_0000 | 0x1000_0000 | 0x4000_0000;
+
+fn is_admin_sid(sid: &str) -> bool {
+    matches!(sid, "SY" | "BA" | "S-1-5-18" | "S-1-5-32-544")
+}
+
+/// Rights in SDDL form that only read or run. Anything not listed counts as
+/// a write, so unknown forms fail safe.
+fn read_only_rights(rights: &str) -> bool {
+    if let Some(hex) = rights.strip_prefix("0x") {
+        return u32::from_str_radix(hex, 16).is_ok_and(|mask| mask & WRITE_BITS == 0);
+    }
+    rights.len().is_multiple_of(2)
+        && rights.as_bytes().chunks(2).all(|pair| matches!(pair, b"FR" | b"FX" | b"GR" | b"GX" | b"RC"))
+}
+
+/// True when the SDDL (owner and DACL) leaves changes to SYSTEM and
+/// Administrators only: one of them owns the path and every allow entry
+/// for anyone else only reads or runs. `protected` also asks for a DACL
+/// that does not inherit from the parent.
+pub fn admin_only(sddl: &str, protected: bool) -> bool {
+    let Some(rest) = sddl.strip_prefix("O:") else {
+        return false;
+    };
+    let Some((owner, dacl)) = rest.split_once("D:") else {
+        return false;
+    };
+    if !is_admin_sid(owner) {
+        return false;
+    }
+    let flags = dacl.split('(').next().unwrap_or_default();
+    if protected && !flags.contains('P') {
+        return false;
+    }
+    let entries: Vec<&str> = dacl.split('(').skip(1).map(|entry| entry.trim_end_matches(')')).collect();
+    !entries.is_empty()
+        && entries.iter().all(|entry| {
+            let fields: Vec<&str> = entry.split(';').collect();
+            match fields.as_slice() {
+                [kind, _, rights, _, _, sid, ..] => *kind != "A" || is_admin_sid(sid) || read_only_rights(rights),
+                _ => false,
+            }
+        })
+}
+
 /// Adds an explicit DENY entry.
 pub fn add_deny(path: &Path, sid: &str, mask: u32) -> Result<()> {
     let descriptor = read_dacl(path)?;
@@ -373,6 +490,40 @@ mod tests {
         let before = dacl_sddl(dir.path()).unwrap();
         assert!(add_deny(dir.path(), "not-a-sid", delete_mask()).is_err());
         assert_eq!(normalized(&dacl_sddl(dir.path()).unwrap()), normalized(&before));
+    }
+
+    #[test]
+    fn admin_only_accepts_the_lockdown_and_rejects_user_write_access() {
+        assert!(admin_only(ADMIN_ONLY_SDDL, true));
+        let inherited = "O:BAD:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1200a9;;;BU)(A;ID;0x1200a9;;;OW)";
+        assert!(admin_only(inherited, false));
+        assert!(!admin_only(inherited, true), "an inheriting DACL is not a lockdown");
+        // A file the user created, or one with an entry the user added.
+        assert!(!admin_only("O:S-1-5-21-1-2-3-1001D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)", false));
+        assert!(!admin_only("O:BAD:AI(A;;FA;;;S-1-5-21-1-2-3-1001)(A;ID;FA;;;BA)", false));
+        assert!(!admin_only("O:BAD:AI(A;ID;0x1301bf;;;BU)", false));
+        assert!(!admin_only("O:BAD:AI(A;ID;WD;;;BU)", false));
+        assert!(admin_only("O:SYD:(A;;FRFX;;;BU)(D;;FA;;;WD)", false));
+        assert!(!admin_only("O:BAD:", false), "WindowCraft never writes an empty DACL");
+        assert!(!admin_only("D:(A;;FA;;;SY)", false));
+    }
+
+    #[test]
+    fn lockdown_is_read_back_as_admin_only() {
+        if !crate::sysinfo::is_elevated() {
+            eprintln!("skipped: setting Administrators as owner needs an elevated token");
+            return;
+        }
+        let dir = directory();
+        let file = dir.path().join("tool.exe");
+        fs::write(&file, b"MZ").unwrap();
+        assert!(!admin_only(&owner_and_dacl_sddl(&file).unwrap(), false), "a temp file lets the user write");
+        apply_owner_and_dacl(dir.path(), ADMIN_ONLY_SDDL).unwrap();
+        assert!(admin_only(&owner_and_dacl_sddl(dir.path()).unwrap(), true));
+        let file_sddl = owner_and_dacl_sddl(&file).unwrap();
+        assert!(file_sddl.contains("(A;ID;"), "the entries are passed down: {file_sddl}");
+        // The owner of the file stays whoever created it; elevated, that is BA.
+        assert!(admin_only(&file_sddl, false), "{file_sddl}");
     }
 
     #[test]

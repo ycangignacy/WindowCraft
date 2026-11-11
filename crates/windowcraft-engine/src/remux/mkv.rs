@@ -59,6 +59,7 @@ const CUE_TIME: u32 = 0xB3;
 const CUE_TRACK_POSITIONS: u32 = 0xB7;
 const CUE_TRACK: u32 = 0xF7;
 const CUE_CLUSTER_POSITION: u32 = 0xF1;
+#[cfg(test)]
 const VOID: u32 = 0xEC;
 /// Elements that can follow a cluster at the top level.
 const TOP_LEVEL: [u32; 8] = [CLUSTER, CUES, SEEK_HEAD, INFO, TRACKS, 0x1254_C367, 0x1043_A770, 0x1941_A469];
@@ -491,12 +492,7 @@ fn float_element(id: u32, value: f64) -> Vec<u8> {
 /// A Void element of exactly `len` bytes.
 fn void(len: usize) -> Vec<u8> {
     let mut out = vec![0u8; len];
-    let header = if len - 2 < 127 { vec![VOID as u8, 0x80 | (len - 2) as u8] } else {
-        let mut header = vec![VOID as u8, 0x01];
-        header.extend_from_slice(&((len - 9) as u64).to_be_bytes()[1..]);
-        header
-    };
-    out[..header.len()].copy_from_slice(&header);
+    crate::containers::write_void(&mut out);
     out
 }
 

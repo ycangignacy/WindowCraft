@@ -33,8 +33,14 @@ pub struct Output {
     pub text: String,
 }
 
-/// Decodes console output, which may be UTF-16 (`sfc`) or the OEM code page.
-fn decode(bytes: &[u8]) -> String {
+/// Decodes console output, which may be UTF-16 (`sfc`) or the OEM code page,
+/// and text files such as driver INFs, which may be UTF-16 with a byte order
+/// mark.
+pub fn decode(bytes: &[u8]) -> String {
+    if let Some(body) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        let units: Vec<u16> = body.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
+        return String::from_utf16_lossy(&units);
+    }
     let looks_utf16 = bytes.len() >= 2 && bytes.iter().skip(1).step_by(2).take(32).filter(|&&b| b == 0).count() > 8;
     if looks_utf16 {
         let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();

@@ -32,7 +32,7 @@ use windowcraft_engine::packages::{self, InstalledProgram, PackageManager};
 use windowcraft_engine::snapshot::{ChangeRecord, Session};
 use windowcraft_engine::sysinfo::{self, SystemInfo};
 use windowcraft_engine::{Detection, Drift, Engine, EngineError, InspectRow, RegPath, TweakAction};
-use windowcraft_iso::usb::DiskFacts;
+use windowcraft_iso::usb::{DiskFacts, DiskIdentity};
 use windowcraft_iso::{AnswerOptions, ImageInfo, StudioSession, pipeline, usb};
 use windowcraft_physics::{Axis, DragGesture, MotionMode, Timeline, rubberband};
 
@@ -77,10 +77,6 @@ impl Page {
         Self::Inspector,
         Self::Extensions,
     ];
-
-    pub fn title(self) -> &'static str {
-        self.title_in(Language::En)
-    }
 
     pub fn title_in(self, lang: Language) -> &'static str {
         match self {
@@ -208,10 +204,6 @@ pub enum TweakTab {
 impl TweakTab {
     pub const ALL: [Self; 4] = [Self::Essential, Self::Advanced, Self::Preferences, Self::Appx];
 
-    pub fn title(self) -> &'static str {
-        self.title_in(Language::En)
-    }
-
     pub fn title_in(self, lang: Language) -> &'static str {
         match self {
             Self::Essential => t(lang, Msg::TabEssential),
@@ -237,10 +229,6 @@ pub enum InspectorTab {
 
 impl InspectorTab {
     pub const ALL: [Self; 5] = [Self::Interrupts, Self::Display, Self::Autoruns, Self::Cleaner, Self::Dns];
-
-    pub fn title(self) -> &'static str {
-        self.title_in(Language::En)
-    }
 
     pub fn title_in(self, lang: Language) -> &'static str {
         match self {
@@ -276,7 +264,7 @@ pub enum Inspected {
 pub enum Confirm {
     DisableUpdates,
     RollbackSession(u64),
-    EraseDisk { number: u32, model: String },
+    EraseDisk { number: u32, disk: DiskIdentity },
     IrreversibleTweak(String),
     QuitDuringJob,
 }
@@ -497,7 +485,7 @@ pub struct IsoState {
     pub disks: Vec<DiskFacts>,
 }
 
-pub struct MiscState {
+pub struct ExtensionsState {
     pub url: String,
     pub format: Format,
     pub folder: String,
@@ -508,7 +496,7 @@ pub struct MiscState {
     pub ffmpeg: bool,
 }
 
-impl MiscState {
+impl ExtensionsState {
     pub fn has(&self, extension: Extension) -> bool {
         self.installed.contains(&extension)
     }
@@ -568,7 +556,7 @@ pub struct App {
     pub fix_modes: BTreeMap<String, String>,
     pub update_mode: String,
     pub iso: IsoState,
-    pub misc: MiscState,
+    pub extensions: ExtensionsState,
     // Time Machine
     pub sessions: Vec<Session>,
     pub drift: Vec<Drift>,
@@ -816,7 +804,7 @@ impl App {
                 output: String::new(),
                 disks: Vec::new(),
             },
-            misc: MiscState {
+            extensions: ExtensionsState {
                 url: String::new(),
                 format: Format::Mp4,
                 folder: youtube::downloads_dir().display().to_string(),
@@ -1068,9 +1056,9 @@ impl App {
             Page::Tweaks => self.animate(TAB, self.tab.index() as f64),
             Page::Inspector => self.animate(TAB, self.inspector_tab.index() as f64),
             Page::Extensions => {
-                self.animate(TAB, format_index(self.misc.format));
-                self.misc.installed = tools::installed();
-                self.misc.ffmpeg = tools::installed_ffmpeg().is_some();
+                self.animate(TAB, format_index(self.extensions.format));
+                self.extensions.installed = tools::installed();
+                self.extensions.ffmpeg = tools::installed_ffmpeg().is_some();
             }
             _ => {}
         }
@@ -1870,7 +1858,7 @@ impl App {
             Message::IsoDisks(disks) => self.iso.disks = disks,
             Message::IsoWriteUsb(number) => {
                 if let Some(disk) = self.iso.disks.iter().find(|disk| disk.number == number) {
-                    self.confirm = Some(Confirm::EraseDisk { number, model: disk.model.clone() });
+                    self.confirm = Some(Confirm::EraseDisk { number, disk: disk.identity.clone() });
                 }
             }
             Message::StripPick => {
@@ -1892,12 +1880,12 @@ impl App {
                     strip_files(lang, &files, context)
                 });
             }
-            Message::VideoUrl(url) => self.misc.url = url,
+            Message::VideoUrl(url) => self.extensions.url = url,
             Message::VideoFormat(format) => {
-                self.misc.format = format;
+                self.extensions.format = format;
                 self.animate(TAB, format_index(format));
             }
-            Message::VideoFolder(folder) => self.misc.folder = folder,
+            Message::VideoFolder(folder) => self.extensions.folder = folder,
             Message::VideoBrowseFolder => {
                 return Task::perform(
                     platform::pick_folder(t(self.language, Msg::DialogSelectFolderTitle)),
@@ -1906,21 +1894,21 @@ impl App {
             }
             Message::VideoFolderPicked(folder) => {
                 if let Some(folder) = folder {
-                    self.misc.folder = folder.display().to_string();
+                    self.extensions.folder = folder.display().to_string();
                 }
             }
             Message::VideoDownload => {
-                let url = self.misc.url.trim().to_owned();
+                let url = self.extensions.url.trim().to_owned();
                 if !youtube::is_youtube_url(&url) {
                     self.notice = Some(t(self.language, Msg::NoticeInvalidYoutubeUrl).to_owned());
                     return Task::none();
                 }
-                let folder = if self.misc.folder.trim().is_empty() {
+                let folder = if self.extensions.folder.trim().is_empty() {
                     youtube::downloads_dir()
                 } else {
-                    PathBuf::from(self.misc.folder.trim())
+                    PathBuf::from(self.extensions.folder.trim())
                 };
-                let (lang, format) = (self.language, self.misc.format);
+                let (lang, format) = (self.language, self.extensions.format);
                 return self.start_private_job(t(lang, Msg::JobDownloadingVideo), move |context| {
                     let report = |stage: Stage| {
                         let (fraction, step) = stage_step(lang, stage);
@@ -1952,7 +1940,7 @@ impl App {
                     Ok(format_1(t(lang, Msg::NoticeExtensionRemoved), name))
                 });
             }
-            Message::ConvertTarget(target) => self.misc.target = target,
+            Message::ConvertTarget(target) => self.extensions.target = target,
             Message::ConvertPick => {
                 return Task::perform(
                     platform::pick_open_files(
@@ -1967,7 +1955,7 @@ impl App {
                 if files.is_empty() {
                     return Task::none();
                 }
-                let (lang, target) = (self.language, self.misc.target);
+                let (lang, target) = (self.language, self.extensions.target);
                 return self.start_private_job(&format_1(t(lang, Msg::JobConverting), target.label()), move |context| {
                     convert_files(lang, &files, target, context)
                 });
@@ -2196,6 +2184,17 @@ impl App {
             Message::SetLanguage(lang) => {
                 self.language = lang;
                 i18n::set_current(lang);
+                match Catalog::load_in(lang.tag()) {
+                    Ok(catalog) => {
+                        self.catalog = Arc::new(catalog);
+                        // Category filters hold the shown names.
+                        self.categories.clear();
+                        if !self.query.trim().is_empty() {
+                            self.hits = windowcraft_config::search(&self.catalog, &self.query, 60);
+                        }
+                    }
+                    Err(error) => self.notice = Some(error),
+                }
                 if let Err(error) = i18n::save_settings_language(lang) {
                     self.notice = Some(format_1(t(self.language, Msg::NoticeFailedToSaveSettings), &error));
                 }
@@ -2409,7 +2408,7 @@ impl App {
         })
     }
 
-    fn iso_job(&mut self, disk: Option<(u32, String)>) -> Task<Message> {
+    fn iso_job(&mut self, disk: Option<(u32, DiskIdentity)>) -> Task<Message> {
         let mut session = self.studio_session();
         session.step = windowcraft_iso::Step::Extracted;
         let (work, output) = (work_dir(), PathBuf::from(&self.iso.output));
@@ -2419,8 +2418,8 @@ impl App {
             let wrap = iso_error;
             pipeline::configure(&mut session, &work, &catalog, context).map_err(wrap)?;
             match disk {
-                Some((number, model)) => {
-                    pipeline::export_usb(&mut session, &work, &catalog, number, &model, context).map_err(wrap)?;
+                Some((number, identity)) => {
+                    pipeline::export_usb(&mut session, &work, &catalog, number, &identity, context).map_err(wrap)?;
                     Ok(t(lang, Msg::NoticeUsbDriveReady).to_owned())
                 }
                 None => {
@@ -2447,7 +2446,7 @@ impl App {
                     })
                 })
             }
-            Confirm::EraseDisk { number, model } => self.iso_job(Some((number, model))),
+            Confirm::EraseDisk { number, disk } => self.iso_job(Some((number, disk))),
             Confirm::IrreversibleTweak(_) => self.apply_selected_tweaks(),
             Confirm::QuitDuringJob => {
                 // Cancelling lets the job stop its child tools. The app exits
@@ -2499,8 +2498,8 @@ impl App {
                     Err(error) => format_1(t(self.language, Msg::NoticeFailedPrefix), &failure_text(self.language, error)),
                 });
                 if private {
-                    self.misc.installed = tools::installed();
-                self.misc.ffmpeg = tools::installed_ffmpeg().is_some();
+                    self.extensions.installed = tools::installed();
+                self.extensions.ffmpeg = tools::installed_ffmpeg().is_some();
                 } else {
                     actions::append_log(&windowcraft_engine::win::local_app_dir().join("windowcraft.log"), &label, &lines);
                 }
@@ -3735,6 +3734,7 @@ mod tests {
         for &language in Language::ALL {
             let mut rig = rig("apptoolbar");
             rig.app.language = language;
+            rig.app.catalog = Arc::new(Catalog::load_in(language.tag()).unwrap());
             send(&mut rig.app, Message::Navigate(Page::Applications));
             drop(rig.app.update(Message::Inspect(Inspected::App("7zip".to_owned()))));
             settle(&mut rig.app);
@@ -3744,11 +3744,27 @@ mod tests {
                 let bounds = find(&found, label);
                 assert!(inside(bounds, size) && bounds.height < 28.0, "{language:?} '{label}': {bounds:?}");
             }
-            let last = rig.app.catalog.app_categories().last().unwrap().to_owned();
-            // The first match is the chip; the list repeats the name as a group title.
-            let chip = found.iter().find(|(text, _)| *text == last).map(|(_, bounds)| *bounds).unwrap();
-            assert!(inside(chip, size), "{language:?}: category '{last}' is cut off: {chip:?}");
+            // Category names come from the translated catalog. The first match
+            // is the chip; the list repeats the name as a group title.
+            for category in rig.app.catalog.app_categories() {
+                let chip = found.iter().find(|(text, _)| *text == category).map(|(_, bounds)| *bounds).unwrap();
+                assert!(inside(chip, size), "{language:?}: category '{category}' is cut off: {chip:?}");
+            }
         }
+    }
+
+    #[test]
+    fn switching_the_language_translates_the_catalog_and_resets_category_filters() {
+        let mut rig = rig("langcatalog");
+        let english = rig.app.catalog.tweak("telemetry").unwrap().name.clone();
+        let category = rig.app.catalog.app_categories()[0].to_owned();
+        send(&mut rig.app, Message::Category(category));
+        assert_eq!(rig.app.categories.len(), 1);
+        send(&mut rig.app, Message::SetLanguage(Language::Pl));
+        assert_eq!(rig.app.catalog.tweak("telemetry").unwrap().name, "Wyłącz telemetrię Windows");
+        assert!(rig.app.categories.is_empty(), "an English category name would filter out everything");
+        send(&mut rig.app, Message::SetLanguage(Language::En));
+        assert_eq!(rig.app.catalog.tweak("telemetry").unwrap().name, english);
     }
 
     /// 878x425 is what a 1366x768 screen at 150 % leaves, see `window_layout`.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 - 2026-11-11
+
+The catalog in every interface language, and the rest of the 1.3.0 audit.
+
+- Tweak, application, fix and update mode names and descriptions, tweak notices, AppX warnings, option labels and the application and AppX categories are translated into Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. The texts live in `crates/windowcraft-config/catalog/i18n/<tag>.json`, keyed by catalog id, and an item that has no entry keeps its English text. Changing the language in Settings switches the catalog at once, and the application categories are sorted alphabetically in that language, with accents and the Ukrainian letters І, Ї, Є and Ґ in their alphabet place. Search finds an item by its translated words and by its English ones. A test fails the build when a language leaves an item in English, names an id that does not exist or drops a path such as `%SystemRoot%\Temp` from a description.
+- Search results for tweaks and fixes show the tab or page name in the chosen language instead of "Essential" or "System Config".
+- The tools folder of the extensions (`%LOCALAPPDATA%\WindowCraft\tools`) is locked to Administrators and SYSTEM, with read and run rights for users. Before yt-dlp, ffmpeg or Deno runs, WindowCraft checks that the folder and every file the tool loads are owned by Administrators or SYSTEM and that no one else can write to them; a file that fails the check is deleted and downloaded again. Tools that 1.3.1 or older downloaded sit in a folder users could write to, so the first use after the update downloads them again.
+- Before ISO Studio erases a USB drive, it compares the serial number and the partition table id of the disk with the ones read when the disk was chosen. A stick that reports neither is refused with a message, so another stick of the same model that got the same disk number is never erased.
+- The live VM test of every reversible tweak skips the tweaks that download a list when the network is off and lists them as skipped.
+- Removed code nothing used: the `Close` and `Continue` messages in all eight tables, the English `title()` methods of pages and tabs, `project_momentum`, `relative_velocity` and `Spring2D` in the physics crate, `usb::volume_label` and `DiskFacts::removable`, the unused fields of `DriverInfo`, `MountedImage::path`, the English `label()` methods of session states, autorun sources, package managers, service run states, interrupt priorities and search kinds, and the `ExpandString` and `MultiString` catalog value types, which no catalog entry used. The registry sandbox and the recording runner for tests are built only for tests (feature `testing`). `copy_tree`, the text decoder for console output and INF files, the mounted-image check and the EBML Void writer each have one copy now. `MiscState` is now `ExtensionsState`.
+
 ## 1.3.1 - 2026-11-10
 
 Fixes from a full audit of 1.3.0.

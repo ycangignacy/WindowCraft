@@ -35,18 +35,6 @@ pub enum RunState {
     Unknown,
 }
 
-impl RunState {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Stopped => "Stopped",
-            Self::Pending => "Pending",
-            Self::Running => "Running",
-            Self::Paused => "Paused",
-            Self::Unknown => "Unknown",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceInfo {
     pub name: String,

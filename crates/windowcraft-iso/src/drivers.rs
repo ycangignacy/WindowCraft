@@ -1,7 +1,7 @@
 // Made by ycangignacy
 //! Driver export, deduplication and injection.
 
-use crate::error::{IsoError, Result};
+use crate::error::Result;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -40,14 +40,6 @@ pub fn parse_inf(text: &str) -> Option<InfFacts> {
     let (month, day, year) = (parts.next()?, parts.next()?, parts.next()?);
     let version = version.trim().split('.').filter_map(|part| part.trim().parse().ok()).collect();
     Some(InfFacts { class, date: (year, month, day), version })
-}
-
-fn decode(bytes: &[u8]) -> String {
-    if let Some(body) = bytes.strip_prefix(&[0xFF, 0xFE]) {
-        let units: Vec<u16> = body.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
-        return String::from_utf16_lossy(&units);
-    }
-    String::from_utf8_lossy(bytes).into_owned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,32 +84,13 @@ pub fn partition_by_target(packages: Vec<DriverPackage>) -> (Vec<DriverPackage>,
     packages.into_iter().partition(DriverPackage::is_boot_critical)
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
-    std::fs::create_dir_all(destination).map_err(|e| IsoError::io(destination.display().to_string(), e))?;
-    let entries: Vec<_> = std::fs::read_dir(source)
-        .map_err(|e| IsoError::io(source.display().to_string(), e))?
-        .flatten()
-        .collect();
-    entries.par_iter().try_for_each(|entry| {
-        let target = destination.join(entry.file_name());
-        let kind = entry.file_type().map_err(|e| IsoError::io(entry.path().display().to_string(), e))?;
-        if kind.is_dir() {
-            copy_tree(&entry.path(), &target)
-        } else if kind.is_file() {
-            std::fs::copy(entry.path(), &target).map(drop).map_err(|e| IsoError::io(target.display().to_string(), e))
-        } else {
-            Ok(())
-        }
-    })
-}
-
 fn package_from(info: &DriverInfo, export_root: &Path) -> Option<DriverPackage> {
     let directory = info.inf_path.parent()?;
     let bytes = std::fs::read(&info.inf_path).ok()?;
-    let facts = parse_inf(&decode(&bytes))?;
+    let facts = parse_inf(&windowcraft_engine::process::decode(&bytes))?;
     let folder = directory.file_name()?;
     let exported = export_root.join(folder);
-    copy_tree(directory, &exported).ok()?;
+    crate::pipeline::copy_tree(directory, &exported, None).ok()?;
     Some(DriverPackage { inf: exported.join(info.inf_path.file_name()?), directory: exported, facts })
 }
 
@@ -181,7 +154,7 @@ mod tests {
     fn utf16_inf_files_decode() {
         let mut bytes = vec![0xFF, 0xFE];
         bytes.extend("Class=Net".encode_utf16().flat_map(u16::to_le_bytes));
-        assert_eq!(decode(&bytes), "Class=Net");
+        assert_eq!(windowcraft_engine::process::decode(&bytes), "Class=Net");
     }
 
     #[test]
@@ -220,7 +193,7 @@ mod tests {
         std::fs::create_dir(source.path().join("sub")).unwrap();
         std::fs::write(source.path().join("a.inf"), b"a").unwrap();
         std::fs::write(source.path().join("sub/b.sys"), b"b").unwrap();
-        copy_tree(source.path(), &target.path().join("pkg")).unwrap();
+        crate::pipeline::copy_tree(source.path(), &target.path().join("pkg"), None).unwrap();
         assert_eq!(std::fs::read(target.path().join("pkg/sub/b.sys")).unwrap(), b"b");
     }
 }

@@ -228,9 +228,7 @@ fn reg_add(entry: &RegistryEntry) -> Option<String> {
         RegKind::DWord => "REG_DWORD",
         RegKind::QWord => "REG_QWORD",
         RegKind::String => "REG_SZ",
-        RegKind::ExpandString => "REG_EXPAND_SZ",
         RegKind::Binary => "REG_BINARY",
-        RegKind::MultiString => "REG_MULTI_SZ",
     };
     let name = if entry.name.is_empty() { "/ve".to_owned() } else { format!("/v \"{}\"", entry.name) };
     Some(format!("reg add \"{}\" {name} /t {kind} /d \"{value}\" /f", entry.path))

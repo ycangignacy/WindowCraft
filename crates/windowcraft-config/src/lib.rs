@@ -7,6 +7,7 @@
 //! table is the only WinUtil material here, see `catalog/WINUTIL-LICENSE.txt`.
 
 pub mod catalog;
+pub mod localize;
 pub mod onboarding;
 pub mod profile;
 pub mod schema;

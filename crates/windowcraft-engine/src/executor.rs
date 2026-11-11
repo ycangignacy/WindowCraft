@@ -9,7 +9,9 @@ use crate::snapshot::{AppliedState, Change, ChangeRecord, FeatureStep, SessionSt
 
 /// Description prefix of a feature step in the timeline.
 const FEATURE_STEP: &str = "Enable Windows feature ";
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(any(test, feature = "testing"))]
+use std::sync::Mutex;
 use windowcraft_config::{Catalog, Feature, NativeOp, RegistryEntry, ServiceRule, StartupType, Tweak, TweakKind};
 
 /// Runs non-registry operations. The real implementation lives in `native`;
@@ -22,6 +24,7 @@ pub trait NativeRunner: Send + Sync {
 }
 
 /// Records operations without touching the system.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Debug, Default)]
 pub struct RecordingRunner {
     pub ran: Mutex<Vec<NativeOp>>,
@@ -33,6 +36,7 @@ pub struct RecordingRunner {
     pub feature_query_fails: std::sync::atomic::AtomicBool,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl NativeRunner for RecordingRunner {
     fn run(&self, op: &NativeOp, _cancel: &CancelToken) -> Result<()> {
         if self.fail_on.lock().is_ok_and(|fail| fail.as_ref() == Some(op)) {

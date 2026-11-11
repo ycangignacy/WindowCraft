@@ -484,7 +484,7 @@ fn void_header(len: usize) -> Vec<u8> {
 }
 
 /// Overwrites `buffer` with one Void element of exactly its length.
-fn write_void(buffer: &mut [u8]) {
+pub(crate) fn write_void(buffer: &mut [u8]) {
     buffer.fill(0);
     let header = void_header(buffer.len());
     buffer[..header.len()].copy_from_slice(&header);

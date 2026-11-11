@@ -8,7 +8,7 @@ use crate::answer::{AnswerOptions, autounattend, ei_cfg, setup_complete};
 use crate::drivers;
 use crate::error::{IsoError, Result};
 use crate::mount::MountedIso;
-use crate::usb::{SWM_PART_BYTES, prepare_disk};
+use crate::usb::{DiskIdentity, SWM_PART_BYTES, prepare_disk};
 use crate::wim::{ImageInfo, WimFile};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -452,12 +452,12 @@ pub fn export_usb(
     work: &Path,
     catalog: &Catalog,
     disk: u32,
-    model: &str,
+    identity: &DiskIdentity,
     context: &JobContext,
 ) -> Result<()> {
     convert_oversized_esd(session, work, catalog, context)?;
     step(context, 0.74, IsoStep::Partitioning);
-    let root = prepare_disk(disk, model, "WIN11")?;
+    let root = prepare_disk(disk, identity, "WIN11")?;
     copy_to_usb(&work.join("media"), &root, context)?;
     session.step = Step::Exported;
     session.save(work)

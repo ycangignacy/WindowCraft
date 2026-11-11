@@ -25,15 +25,6 @@ pub enum PackageManager {
     Chocolatey,
 }
 
-impl PackageManager {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Winget => "WinGet",
-            Self::Chocolatey => "Chocolatey",
-        }
-    }
-}
-
 pub fn winget_path() -> Option<PathBuf> {
     let local = std::env::var_os("LOCALAPPDATA")?;
     let path = PathBuf::from(local).join(r"Microsoft\WindowsApps\winget.exe");

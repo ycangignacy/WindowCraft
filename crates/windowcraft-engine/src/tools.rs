@@ -7,6 +7,11 @@
 //! checks each against the SHA-256 the release publishes, and keeps them in
 //! WindowCraft's data folder, which uninstall removes. Removing an extension
 //! deletes every tool no other installed extension still uses.
+//!
+//! WindowCraft runs elevated and starts these tools, so the tools folder is
+//! locked to Administrators and SYSTEM. Before a tool runs, its files must
+//! still be owned by one of them with no write access for anyone else;
+//! a file that fails this is deleted and fetched again.
 
 use crate::download::{block_on, download, download_accepting, fetch_text, fetch_text_accepting};
 use crate::error::{EngineError, Result};
@@ -112,11 +117,44 @@ impl Tools {
         self.ffmpeg_dir.join("ffprobe.exe")
     }
 
+    /// The tool is in place and only administrators could have changed it.
     pub fn has(&self, tool: Tool) -> bool {
-        match tool {
+        let present = match tool {
             Tool::YtDlp => self.yt_dlp.is_file(),
             Tool::Ffmpeg => self.ffmpeg().is_file() && self.ffprobe().is_file(),
             Tool::Deno => self.deno.is_file(),
+        };
+        present && self.trusted(tool)
+    }
+
+    fn dir(&self) -> &Path {
+        self.deno.parent().unwrap_or(Path::new("."))
+    }
+
+    /// Checks owner and DACL of the folder and of every file the tool loads.
+    /// A process without elevation gains nothing from a changed tool, so
+    /// there the check is skipped.
+    fn trusted(&self, tool: Tool) -> bool {
+        if !crate::sysinfo::is_elevated() {
+            return true;
+        }
+        let locked = |path: &Path, protected: bool| {
+            !is_link(path)
+                && crate::security::owner_and_dacl_sddl(path)
+                    .is_ok_and(|sddl| crate::security::admin_only(&sddl, protected))
+        };
+        if !locked(self.dir(), true) {
+            return false;
+        }
+        match tool {
+            Tool::YtDlp => locked(&self.yt_dlp, false),
+            Tool::Deno => locked(&self.deno, false),
+            Tool::Ffmpeg => {
+                locked(&self.ffmpeg_dir, false)
+                    && std::fs::read_dir(&self.ffmpeg_dir).is_ok_and(|entries| {
+                        entries.filter_map(std::result::Result::ok).all(|entry| locked(&entry.path(), false))
+                    })
+            }
         }
     }
 
@@ -138,7 +176,36 @@ impl Tools {
 /// The ffmpeg WindowCraft fetched earlier, if any. The metadata stripper uses
 /// it for video and for audio other than MP3 and FLAC.
 pub fn installed_ffmpeg() -> Option<PathBuf> {
-    Some(Tools::in_dir(&tools_dir()).ffmpeg()).filter(|path| path.is_file())
+    let tools = Tools::in_dir(&tools_dir());
+    tools.has(Tool::Ffmpeg).then(|| tools.ffmpeg())
+}
+
+/// A symbolic link or a junction.
+fn is_link(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
+}
+
+/// Locks the tools folder to Administrators and SYSTEM. A link in place of
+/// the folder is removed first, so the lock cannot land somewhere else.
+/// Tools found in a folder that was not locked yet (WindowCraft 1.3 and
+/// older) could have been changed in place, so they are deleted.
+fn lock_dir(dir: &Path) -> Result<()> {
+    if is_link(dir) {
+        std::fs::remove_dir(dir).or_else(|_| std::fs::remove_file(dir)).map_err(io_error(dir))?;
+    }
+    std::fs::create_dir_all(dir).map_err(io_error(dir))?;
+    if !crate::sysinfo::is_elevated() {
+        return Ok(());
+    }
+    let sddl = crate::security::owner_and_dacl_sddl(dir)?;
+    if crate::security::admin_only(&sddl, true) {
+        return Ok(());
+    }
+    let tools = Tools::in_dir(dir);
+    for tool in Tool::ALL {
+        tools.remove(tool)?;
+    }
+    crate::security::apply_owner_and_dacl(dir, crate::security::ADMIN_ONLY_SDDL)
 }
 
 fn read_markers(dir: &Path) -> Vec<Extension> {
@@ -315,11 +382,17 @@ fn ensure(dir: &Path, needed: &[Tool], cancel: &CancelToken, mut progress: impl 
     if needed.is_empty() {
         return Ok(tools);
     }
-    std::fs::create_dir_all(dir).map_err(io_error(dir))?;
+    lock_dir(dir)?;
     for tool in needed {
-        let refresh = *tool == Tool::YtDlp && tools.has(Tool::YtDlp) && stale(&tools.yt_dlp);
-        if tools.has(*tool) && !refresh {
+        let has = tools.has(*tool);
+        let refresh = *tool == Tool::YtDlp && has && stale(&tools.yt_dlp);
+        if has && !refresh {
             continue;
+        }
+        if !has {
+            // Missing, or a copy someone without elevation could have
+            // changed. Either way it goes before the fresh download.
+            tools.remove(*tool)?;
         }
         let fetched = fetch_tool(&source(*tool), dir, &tools, cancel, &mut progress);
         match fetched {
@@ -575,6 +648,7 @@ mod tests {
     }
 
     fn fake_tools(dir: &Path) {
+        lock_dir(dir).unwrap();
         let tools = Tools::in_dir(dir);
         std::fs::create_dir_all(&tools.ffmpeg_dir).unwrap();
         for file in [tools.yt_dlp.clone(), tools.deno.clone(), tools.ffmpeg(), tools.ffprobe(), tools.ffmpeg_dir.join("avcodec.dll")] {
@@ -608,6 +682,49 @@ mod tests {
 
         uninstall_in(dir.path(), Extension::Ffmpeg).unwrap();
         assert!(!dir.path().exists(), "the folder goes with the last extension");
+    }
+
+    #[test]
+    fn a_tool_a_user_could_change_is_not_trusted() {
+        if !crate::sysinfo::is_elevated() {
+            eprintln!("skipped: the lock needs an elevated token");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        fake_tools(dir.path());
+        let tools = Tools::in_dir(dir.path());
+        assert!(Tool::ALL.iter().all(|tool| tools.has(*tool)), "files written into the locked folder are trusted");
+        // An explicit entry that gives users write access to one DLL.
+        crate::security::apply_sddl(&tools.ffmpeg_dir.join("avcodec.dll"), "D:(A;;FA;;;BU)").unwrap();
+        assert!(!tools.has(Tool::Ffmpeg));
+        assert!(tools.has(Tool::YtDlp) && tools.has(Tool::Deno));
+        // A planted file owned by nobody trusted also fails the check.
+        std::fs::write(tools.ffmpeg_dir.join("extra.dll"), b"x").unwrap();
+        crate::security::apply_owner_and_dacl(&tools.ffmpeg_dir.join("extra.dll"), "O:BUD:(A;;FA;;;BU)").ok();
+        assert!(!tools.has(Tool::Ffmpeg));
+    }
+
+    #[test]
+    fn a_folder_that_inherits_from_the_profile_is_not_trusted() {
+        if !crate::sysinfo::is_elevated() {
+            eprintln!("skipped: the check only runs elevated");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let tools = Tools::in_dir(dir.path());
+        std::fs::write(&tools.deno, b"x").unwrap();
+        assert!(!tools.has(Tool::Deno), "a 1.3 tools folder lets the user write");
+        std::fs::write(
+            dir.path().join(MARKERS),
+            "youtube-downloader
+",
+        )
+        .unwrap();
+        lock_dir(dir.path()).unwrap();
+        assert!(!tools.deno.exists(), "a tool from before the lock is fetched again");
+        assert_eq!(read_markers(dir.path()), vec![Extension::YouTube], "the markers stay");
+        std::fs::write(&tools.deno, b"x").unwrap();
+        assert!(tools.has(Tool::Deno), "a file written after the lock is trusted");
     }
 
     #[test]

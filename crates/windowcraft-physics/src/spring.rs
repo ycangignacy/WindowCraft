@@ -30,15 +30,6 @@ impl SpringConfig {
     }
 }
 
-/// `relative_velocity = gesture_velocity / (target - current)`.
-///
-/// Returns zero when the element is already on target, where the ratio is
-/// undefined.
-pub fn relative_velocity(gesture_velocity: f64, current: f64, target: f64) -> f64 {
-    let distance = target - current;
-    if distance.abs() < f64::EPSILON { 0.0 } else { gesture_velocity / distance }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Spring1D {
     position: f64,
@@ -160,34 +151,6 @@ impl Spring1D {
         let c2 = x0 - c1;
         let (e1, e2) = ((r1 * t).exp(), (r2 * t).exp());
         (c1 * e1 + c2 * e2, c1 * r1 * e1 + c2 * r2 * e2)
-    }
-}
-
-/// 2D motion is two independent solvers, so each axis keeps its own velocity.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Spring2D {
-    pub x: Spring1D,
-    pub y: Spring1D,
-}
-
-impl Spring2D {
-    pub fn new(x: f64, y: f64, config: SpringConfig) -> Self {
-        Self { x: Spring1D::new(x, config), y: Spring1D::new(y, config) }
-    }
-
-    pub fn retarget(&mut self, x: f64, y: f64) {
-        self.x.retarget(x);
-        self.y.retarget(y);
-    }
-
-    pub fn step(&mut self, dt: f64) -> bool {
-        let x = self.x.step(dt);
-        let y = self.y.step(dt);
-        x || y
-    }
-
-    pub fn is_settled(&self) -> bool {
-        self.x.is_settled() && self.y.is_settled()
     }
 }
 
@@ -322,20 +285,4 @@ mod tests {
         assert_eq!(coarse.position(), 340.0, "a resting spring lands exactly on target");
     }
 
-    #[test]
-    fn relative_velocity_handles_zero_distance() {
-        assert_eq!(relative_velocity(100.0, 5.0, 5.0), 0.0);
-        assert_eq!(relative_velocity(100.0, 0.0, 50.0), 2.0);
-    }
-
-    #[test]
-    fn axes_are_independent() {
-        let mut spring = Spring2D::new(0.0, 0.0, SpringConfig::UI);
-        spring.retarget(100.0, 0.0);
-        spring.step(0.1);
-        assert!(spring.x.position() > 0.0);
-        assert_eq!(spring.y.position(), 0.0);
-        while spring.step(DT) {}
-        assert!(spring.is_settled());
-    }
 }

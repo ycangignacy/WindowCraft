@@ -10,14 +10,14 @@ use crate::fat32;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::*;
 use windows::Win32::System::IO::DeviceIoControl;
 use windows::Win32::System::Ioctl::*;
 use windows::core::GUID;
 use windowcraft_engine::EngineError;
-use windowcraft_engine::win::{HandleGuard, from_wide, pcwstr, wide};
+use windowcraft_engine::win::{HandleGuard, pcwstr, wide};
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const MIN_DISK_BYTES: u64 = 8 * GIB;
@@ -53,12 +53,48 @@ impl Bus {
     }
 }
 
+/// What tells one disk from another of the same model. The disk number
+/// alone does not: a stick pulled out and another put in can get the same
+/// `PhysicalDriveN`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DiskIdentity {
+    pub model: String,
+    /// Serial number the device reports, empty when it reports none.
+    pub serial: String,
+    /// MBR signature or GPT disk GUID, empty on a disk with no partition table.
+    pub layout_id: String,
+    pub bytes: u64,
+}
+
+impl DiskIdentity {
+    /// A serial number or a partition table id is there to compare.
+    pub fn is_known(&self) -> bool {
+        !self.serial.is_empty() || !self.layout_id.is_empty()
+    }
+}
+
+/// The disk about to be erased is the one the user confirmed.
+pub fn same_disk(confirmed: &DiskIdentity, now: &DiskIdentity, number: u32) -> Result<()> {
+    if !confirmed.is_known() {
+        return Err(IsoError::DiskGuard(format!(
+            "disk {number} reports no serial number and has no partition table, so it cannot be told apart from another stick of the same model; create a partition on it in Disk Management and choose it again"
+        )));
+    }
+    if confirmed != now {
+        return Err(IsoError::DiskGuard(format!(
+            "disk {number} is not the disk that was chosen ('{}', {} bytes, now '{}', {} bytes); choose it again",
+            confirmed.model, confirmed.bytes, now.model, now.bytes
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiskFacts {
     pub number: u32,
     pub model: String,
     pub bus: Bus,
-    pub removable: bool,
+    pub identity: DiskIdentity,
     pub bytes: u64,
     pub partitions: u32,
     pub letters: Vec<char>,
@@ -155,7 +191,8 @@ unsafe fn ioctl<I, O>(device: HANDLE, code: u32, input: Option<&I>, output: Opti
 #[repr(C, align(8))]
 struct Buffer<const N: usize>([u8; N]);
 
-fn query_device(handle: HANDLE) -> Result<(Bus, bool, String)> {
+/// Bus, model and serial number.
+fn query_device(handle: HANDLE) -> Result<(Bus, String, String)> {
     let query = STORAGE_PROPERTY_QUERY {
         PropertyId: StorageDeviceProperty,
         QueryType: PropertyStandardQuery,
@@ -167,20 +204,28 @@ fn query_device(handle: HANDLE) -> Result<(Bus, bool, String)> {
     unsafe { ioctl(handle, IOCTL_STORAGE_QUERY_PROPERTY, Some(&query), Some(&mut buffer), "storage property")? };
     let descriptor = buffer.0.as_ptr().cast::<STORAGE_DEVICE_DESCRIPTOR>();
     // SAFETY: The buffer is aligned and the API filled the fixed header.
-    let (bus, removable, product_offset) =
-        unsafe { ((*descriptor).BusType, (*descriptor).RemovableMedia, (*descriptor).ProductIdOffset) };
-    let bus = [(BusTypeUsb, Bus::Usb), (BusTypeSata, Bus::Sata), (BusTypeNvme, Bus::Nvme), (BusTypeScsi, Bus::Scsi), (BusTypeSas, Bus::Sas)]
-        .into_iter()
-        .find_map(|(kind, bus_kind)| (kind == bus).then_some(bus_kind))
-        .unwrap_or(Bus::Other(bus.0));
-    let model = if product_offset == 0 {
-        String::new()
-    } else {
-        let tail = &buffer.0[product_offset as usize..];
+    let (bus, product_offset, serial_offset) =
+        unsafe { ((*descriptor).BusType, (*descriptor).ProductIdOffset, (*descriptor).SerialNumberOffset) };
+    let bus = [
+        (BusTypeUsb, Bus::Usb),
+        (BusTypeSata, Bus::Sata),
+        (BusTypeNvme, Bus::Nvme),
+        (BusTypeScsi, Bus::Scsi),
+        (BusTypeSas, Bus::Sas),
+    ]
+    .into_iter()
+    .find_map(|(kind, bus_kind)| (kind == bus).then_some(bus_kind))
+    .unwrap_or(Bus::Other(bus.0));
+    let text_at = |offset: u32| {
+        let offset = offset as usize;
+        if offset == 0 || offset >= buffer.0.len() {
+            return String::new();
+        }
+        let tail = &buffer.0[offset..];
         let end = tail.iter().position(|&byte| byte == 0).unwrap_or(tail.len());
         String::from_utf8_lossy(&tail[..end]).trim().to_owned()
     };
-    Ok((bus, removable, model))
+    Ok((bus, text_at(product_offset), text_at(serial_offset)))
 }
 
 fn disk_of_volume(letter: char) -> Option<(u32, u32)> {
@@ -210,32 +255,45 @@ fn letters_of_disk(number: u32) -> Vec<char> {
 }
 
 fn query_disk(number: u32) -> Option<DiskFacts> {
-    let handle = open_device(&format!(r"\\.\PhysicalDrive{number}"), GENERIC_READ.0).or_else(|_| {
-        open_device(&format!(r"\\.\PhysicalDrive{number}"), 0)
-    }).ok()?;
-    let (bus, removable, model) = query_device(handle.raw()).ok()?;
+    let handle = open_device(&format!(r"\\.\PhysicalDrive{number}"), GENERIC_READ.0)
+        .or_else(|_| open_device(&format!(r"\\.\PhysicalDrive{number}"), 0))
+        .ok()?;
+    let (bus, model, serial) = query_device(handle.raw()).ok()?;
 
     let mut length = GET_LENGTH_INFORMATION::default();
     // SAFETY: The output structure matches this control code.
-    let bytes = unsafe {
-        ioctl::<(), _>(handle.raw(), IOCTL_DISK_GET_LENGTH_INFO, None, Some(&mut length), "disk length")
-    }
-    .map_or(0, |_| length.Length.cast_unsigned());
+    let bytes =
+        unsafe { ioctl::<(), _>(handle.raw(), IOCTL_DISK_GET_LENGTH_INFO, None, Some(&mut length), "disk length") }
+            .map_or(0, |_| length.Length.cast_unsigned());
 
     let mut layout = Buffer::<8192>([0; 8192]);
     // SAFETY: The buffer holds the variable-length partition list.
-    let partitions = unsafe {
-        ioctl::<(), _>(handle.raw(), IOCTL_DISK_GET_DRIVE_LAYOUT_EX, None, Some(&mut layout), "disk layout")
-    }
-    .map_or(0, |_| {
-        // SAFETY: The API filled the fixed header.
-        unsafe { (*layout.0.as_ptr().cast::<DRIVE_LAYOUT_INFORMATION_EX>()).PartitionCount }
-    });
+    let (partitions, layout_id) =
+        unsafe { ioctl::<(), _>(handle.raw(), IOCTL_DISK_GET_DRIVE_LAYOUT_EX, None, Some(&mut layout), "disk layout") }
+            .map_or((0, String::new()), |_| {
+                let info = layout.0.as_ptr().cast::<DRIVE_LAYOUT_INFORMATION_EX>();
+                // SAFETY: The API filled the fixed header, and the union member read
+                // matches the partition style it reports.
+                unsafe {
+                    let style = (*info).PartitionStyle;
+                    let id = if style == PARTITION_STYLE_MBR.0 as u32 {
+                        format!("mbr:{:08x}", (*info).Anonymous.Mbr.Signature)
+                    } else if style == PARTITION_STYLE_GPT.0 as u32 {
+                        format!("gpt:{:?}", (*info).Anonymous.Gpt.DiskId)
+                    } else {
+                        String::new()
+                    };
+                    ((*info).PartitionCount, id)
+                }
+            });
+    // A blank MBR has signature 0, which every other blank stick shares.
+    let layout_id = if layout_id == "mbr:00000000" { String::new() } else { layout_id };
 
     let letters = letters_of_disk(number);
     let system = system_drive_letter();
     let is_system = letters.iter().any(|letter| letter.eq_ignore_ascii_case(&system));
-    Some(DiskFacts { number, model, bus, removable, bytes, partitions, letters, is_system })
+    let identity = DiskIdentity { model: model.clone(), serial, layout_id, bytes };
+    Some(DiskFacts { number, model, bus, identity, bytes, partitions, letters, is_system })
 }
 
 /// Lists physical disks. Probing stops at a generous upper bound, because
@@ -351,16 +409,12 @@ fn clear_old_signatures(number: u32) -> Result<()> {
 
 /// Erases a USB disk and leaves a single GPT/FAT32 partition. Returns the
 /// mounted root. Facts are re-read here, so a device swapped after selection
-/// still has to pass the guard.
-pub fn prepare_disk(number: u32, confirmed_model: &str, label: &str) -> Result<PathBuf> {
+/// still has to pass the guard, and its serial number and partition table id
+/// must match the confirmed ones.
+pub fn prepare_disk(number: u32, confirmed: &DiskIdentity, label: &str) -> Result<PathBuf> {
     let disk = query_disk(number).ok_or_else(|| IsoError::DiskGuard(format!("disk {number} is gone")))?;
     assess(&disk, system_drive_letter())?;
-    if disk.model != confirmed_model {
-        return Err(IsoError::DiskGuard(format!(
-            "disk {number} changed from '{confirmed_model}' to '{}'",
-            disk.model
-        )));
-    }
+    same_disk(confirmed, &disk.identity, number)?;
 
     let locks: Vec<LockedVolume> = disk.letters.iter().map(|letter| lock_volume(*letter)).collect::<Result<_>>()?;
     clear_old_signatures(number)?;
@@ -391,15 +445,6 @@ pub fn prepare_disk(number: u32, confirmed_model: &str, label: &str) -> Result<P
     Ok(PathBuf::from(format!(r"{letter}:\")))
 }
 
-/// Volume label for display.
-pub fn volume_label(root: &Path) -> Option<String> {
-    let path = wide(root);
-    let mut name = [0u16; 64];
-    // SAFETY: The path is null-terminated and the buffer outlives the call.
-    unsafe { GetVolumeInformationW(pcwstr(&path), Some(&mut name), None, None, None, None) }.ok()?;
-    Some(from_wide(&name))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,12 +454,40 @@ mod tests {
             number: 3,
             model: "SanDisk Ultra".to_owned(),
             bus: Bus::Usb,
-            removable: true,
+            identity: identity(),
             bytes: 64 * GIB,
             partitions: 1,
             letters: vec!['F'],
             is_system: false,
         }
+    }
+
+    fn identity() -> DiskIdentity {
+        DiskIdentity {
+            model: "SanDisk Ultra".to_owned(),
+            serial: "4C530001230512116054".to_owned(),
+            layout_id: "mbr:1a2b3c4d".to_owned(),
+            bytes: 64 * GIB,
+        }
+    }
+
+    #[test]
+    fn another_stick_of_the_same_model_is_refused() {
+        let chosen = identity();
+        assert!(same_disk(&chosen, &chosen.clone(), 3).is_ok());
+        let other = DiskIdentity { serial: "4C530001230512116099".to_owned(), ..identity() };
+        assert!(matches!(same_disk(&chosen, &other, 3), Err(IsoError::DiskGuard(_))));
+        let repartitioned = DiskIdentity { layout_id: "gpt:{0}".to_owned(), ..identity() };
+        assert!(same_disk(&chosen, &repartitioned, 3).is_err());
+        // Two blank sticks without serial numbers look the same: refused.
+        let blank = DiskIdentity { serial: String::new(), layout_id: String::new(), ..identity() };
+        assert!(!blank.is_known());
+        assert!(same_disk(&blank, &blank.clone(), 3).is_err());
+        // A serial number alone, or a partition table id alone, is enough.
+        let serial_only = DiskIdentity { layout_id: String::new(), ..identity() };
+        assert!(same_disk(&serial_only, &serial_only.clone(), 3).is_ok());
+        let layout_only = DiskIdentity { serial: String::new(), ..identity() };
+        assert!(same_disk(&layout_only, &layout_only.clone(), 3).is_ok());
     }
 
     #[test]

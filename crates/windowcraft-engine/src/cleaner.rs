@@ -166,7 +166,8 @@ pub fn scan(target: &CleanTarget) -> ScanResult {
 /// Id of the target that holds ISO Studio work files.
 pub const ISO_TARGET: &str = "windowcraft-iso";
 
-fn has_mounted_image(iso_dir: &Path) -> bool {
+/// An image is mounted under the ISO Studio work folder.
+pub(crate) fn has_mounted_image(iso_dir: &Path) -> bool {
     fs::read_dir(iso_dir.join("mount")).is_ok_and(|mut entries| entries.next().is_some())
 }
 

@@ -34,17 +34,6 @@ pub enum EntrySource {
     Service,
 }
 
-impl EntrySource {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::RunKey => "Run key",
-            Self::StartupFolder => "Startup folder",
-            Self::Task => "Scheduled task",
-            Self::Service => "Service",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutorunEntry {
     pub name: String,

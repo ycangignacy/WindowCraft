@@ -14,19 +14,6 @@ pub enum SearchKind {
     Appx,
 }
 
-impl SearchKind {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::App => "Application",
-            Self::Tweak => "Tweak",
-            Self::RegistryKey => "Registry",
-            Self::Service => "Service",
-            Self::Fix => "Fix",
-            Self::Appx => "AppX",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchHit {
     pub kind: SearchKind,
@@ -73,11 +60,13 @@ pub fn search(catalog: &Catalog, query: &str, limit: usize) -> Vec<SearchHit> {
 
     for app in &catalog.apps {
         let source = app.winget.as_deref().or(app.choco.as_deref()).unwrap_or_default();
-        let text = format!("{} {} {}", app.name, app.description, source);
+        let english = catalog.english_text("app", &app.id).unwrap_or_default();
+        let text = format!("{} {} {} {english}", app.name, app.description, source);
         push(SearchKind::App, &app.id, &app.name, source, 10, &text);
     }
     for tweak in &catalog.tweaks {
-        let text = format!("{} {}", tweak.name, tweak.description);
+        let english = catalog.english_text("tweak", &tweak.id).unwrap_or_default();
+        let text = format!("{} {} {english}", tweak.name, tweak.description);
         push(SearchKind::Tweak, &tweak.id, &tweak.name, tweak.group.label(), 20, &text);
         for entry in &tweak.registry {
             let key = format!("{}\\{}", entry.path, entry.name);
@@ -89,12 +78,14 @@ pub fn search(catalog: &Catalog, query: &str, limit: usize) -> Vec<SearchHit> {
     }
     for feature in &catalog.features {
         if feature.kind != FeatureKind::Panel {
-            let text = format!("{} {}", feature.name, feature.description);
+            let english = catalog.english_text("feature", &feature.id).unwrap_or_default();
+            let text = format!("{} {} {english}", feature.name, feature.description);
             push(SearchKind::Fix, &feature.id, &feature.name, "System Config", 15, &text);
         }
     }
     for package in &catalog.appx {
-        let text = format!("{} {}", package.name, package.package_id);
+        let english = catalog.english_text("appx", &package.id).unwrap_or_default();
+        let text = format!("{} {} {english}", package.name, package.package_id);
         push(SearchKind::Appx, &package.id, &package.name, &package.package_id, 6, &text);
     }
 
@@ -106,6 +97,17 @@ pub fn search(catalog: &Catalog, query: &str, limit: usize) -> Vec<SearchHit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_translated_catalog_is_found_by_either_language() {
+        let catalog = Catalog::load_in("pl").unwrap();
+        let by_english = search(&catalog, "telemetry", 10);
+        let hit = by_english.iter().find(|hit| hit.id == "telemetry" && hit.kind == SearchKind::Tweak).unwrap();
+        assert_eq!(hit.title, "Wyłącz telemetrię Windows", "the hit shows the translated name");
+        assert!(search(&catalog, "telemetrię", 10).iter().any(|hit| hit.id == "telemetry"));
+        assert!(search(&catalog, "przeglądarka", 60).iter().any(|hit| hit.id == "firefox"));
+        assert!(search(&catalog, "browser mozilla", 10).iter().any(|hit| hit.id == "firefox"));
+    }
 
     fn catalog() -> Catalog {
         Catalog::load().unwrap()

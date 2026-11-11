@@ -42,7 +42,7 @@ fn check_value(owner: &str, entry: &RegistryEntry, value: &str) -> Result<(), St
         RegKind::Binary => {
             value.len().is_multiple_of(2) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
         }
-        RegKind::String | RegKind::ExpandString | RegKind::MultiString => true,
+        RegKind::String => true,
     };
     if valid {
         Ok(())
@@ -85,6 +85,11 @@ fn check_refs(label: &str, ids: &[String], known: &HashSet<&str>, problems: &mut
 
 impl Catalog {
     /// Returns every problem found; an empty list means the catalog is sound.
+    ///
+    /// `Catalog::load` does not call this. The catalog is compiled into the
+    /// binary, and `embedded_catalog_passes_every_validation_rule` and
+    /// `tests/catalog_integrity.rs` run it on every build, so a broken entry
+    /// fails the tests before it can ship.
     pub fn validate(&self) -> Vec<String> {
         let mut problems = Vec::new();
 

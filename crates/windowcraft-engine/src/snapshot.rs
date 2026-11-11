@@ -26,18 +26,6 @@ pub enum SessionState {
     PartlyRolledBack,
 }
 
-impl SessionState {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Open => "Interrupted",
-            Self::Committed => "Applied",
-            Self::RolledBack => "Rolled back",
-            Self::Failed => "Failed",
-            Self::PartlyRolledBack => "Partly rolled back",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     pub id: u64,

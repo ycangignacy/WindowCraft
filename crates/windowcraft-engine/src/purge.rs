@@ -77,7 +77,7 @@ fn remove_data_dir(dir: &Path) -> Result<bool> {
 /// True when ISO Studio left a mounted image behind, which a plain delete
 /// cannot clear.
 fn has_mounted_image(dir: &Path) -> bool {
-    std::fs::read_dir(dir.join(r"iso\mount")).is_ok_and(|mut entries| entries.next().is_some())
+    crate::cleaner::has_mounted_image(&dir.join("iso"))
 }
 
 /// Deletes what WindowCraft keeps for itself: its data folders, plus, when

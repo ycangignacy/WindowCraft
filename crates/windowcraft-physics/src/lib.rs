@@ -12,6 +12,6 @@ pub mod velocity;
 
 pub use animator::{Channel, MotionMode, Timeline};
 pub use gesture::{Axis, DragGesture, DragPhase, PressTracker, Release};
-pub use momentum::{project_momentum, rubberband};
-pub use spring::{SETTLE_EPSILON, Spring1D, Spring2D, SpringConfig, relative_velocity};
+pub use momentum::rubberband;
+pub use spring::{SETTLE_EPSILON, Spring1D, SpringConfig};
 pub use velocity::VelocityTracker;

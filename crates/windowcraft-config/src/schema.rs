@@ -26,13 +26,13 @@ pub struct App {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Value types the catalog writes. Live values of other types (REG_EXPAND_SZ,
+/// REG_MULTI_SZ) are still read and restored through `RegValue` in the engine.
 pub enum RegKind {
     String,
-    ExpandString,
     DWord,
     QWord,
     Binary,
-    MultiString,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

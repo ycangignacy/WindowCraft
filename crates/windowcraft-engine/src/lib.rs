@@ -35,6 +35,7 @@ pub mod snapshot;
 pub mod ssh;
 pub mod sysinfo;
 pub mod tasks;
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod tools;
 pub mod updates;
@@ -43,7 +44,9 @@ pub mod wmi;
 pub mod youtube;
 
 pub use error::{EngineError, Result};
-pub use executor::{Detection, Drift, Engine, InspectRow, NativeRunner, RecordingRunner, RunReport, TweakAction};
+#[cfg(any(test, feature = "testing"))]
+pub use executor::RecordingRunner;
+pub use executor::{Detection, Drift, Engine, InspectRow, NativeRunner, RunReport, TweakAction};
 pub use jobs::{CancelToken, JobContext, JobEvent, JobFailure, JobHandle, LogRing};
 pub use native::SystemRunner;
 pub use registry::{RegPath, RegValue, RegistryScope};

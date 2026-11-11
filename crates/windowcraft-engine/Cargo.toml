@@ -26,8 +26,14 @@ symphonia = { version = "0.5", default-features = false, features = ["aac", "ala
 flacenc = { version = "0.5.1", default-features = false }
 mp3lame-encoder = "0.3.0"
 
+[features]
+# The registry sandbox and the recording runner, for tests in this and other crates.
+testing = []
+
 [dev-dependencies]
 tempfile.workspace = true
+# The integration tests in tests/ use the sandbox.
+windowcraft-engine = { path = ".", features = ["testing"] }
 
 [lints]
 workspace = true
