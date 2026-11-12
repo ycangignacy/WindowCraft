@@ -1,0 +1,34 @@
+# Made by ycangignacy
+name: Website rebuild
+
+# windowcraft.dev reads the release list, the download links and the checksums from
+# GitHub when it is built. After the Release workflow publishes a release, this calls
+# the Cloudflare Pages deploy hook, so the site shows the new version a few minutes
+# later. A release published by release.yml does not raise the `release` event for
+# other workflows (it uses GITHUB_TOKEN), hence the workflow_run trigger; the release
+# trigger covers releases made or changed by hand.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the Cloudflare Pages deploy hook
+        env:
+          HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice::The CLOUDFLARE_PAGES_DEPLOY_HOOK secret is not set, so the site was not rebuilt."
+            exit 0
+          fi
+          curl --fail --silent --show-error --retry 3 -X POST "$HOOK" > /dev/null
+          echo "Cloudflare Pages build started."
