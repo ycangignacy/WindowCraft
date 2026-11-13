@@ -314,13 +314,37 @@ mod tests {
         assert!(timer.current_ms >= timer.finest_ms - 0.001);
     }
 
+    /// Counts the GPU, network and USB instances straight from the registry
+    /// and expects the scan to classify each of them. A machine may have none:
+    /// a GitHub runner once had a single PCI entry of another class.
     #[test]
     fn real_device_scan_finds_what_the_registry_holds() {
+        const ALWAYS: [&str; 3] = [
+            "{4d36e968-e325-11ce-bfc1-08002be10318}",
+            "{4d36e972-e325-11ce-bfc1-08002be10318}",
+            "{36fc9e60-c465-11cf-8056-444553540000}",
+        ];
+        let scope = RegistryScope::System;
         let root = RegPath { hive: Hive::LocalMachine, subkey: PCI_ROOT.to_owned() };
-        let hardware = RegistryScope::System.open(&root).unwrap().map_or(0, |key| key.subkeys().unwrap().len());
-        let devices = pci_devices(&RegistryScope::System).unwrap();
-        // Any machine with PCI hardware has at least a NIC, GPU or USB controller.
-        assert!(hardware == 0 || !devices.is_empty(), "{hardware} PCI entries but no devices classified");
+        let mut expected = 0;
+        if let Some(key) = scope.open(&root).unwrap() {
+            for hardware in key.subkeys().unwrap() {
+                let path = RegPath { hive: Hive::LocalMachine, subkey: format!(r"{PCI_ROOT}\{hardware}") };
+                let Some(hardware_key) = scope.open(&path).unwrap() else { continue };
+                for instance in hardware_key.subkeys().unwrap() {
+                    let path = RegPath { hive: Hive::LocalMachine, subkey: format!(r"{PCI_ROOT}\{hardware}\{instance}") };
+                    let Some(instance_key) = scope.open(&path).ok().flatten() else { continue };
+                    let guid = string_of(&instance_key, "ClassGUID").to_ascii_lowercase();
+                    expected += usize::from(ALWAYS.contains(&guid.as_str()));
+                }
+            }
+        }
+        let devices = pci_devices(&scope).unwrap();
+        let found = devices
+            .iter()
+            .filter(|device| matches!(device.class, DeviceClass::Gpu | DeviceClass::Network | DeviceClass::Usb))
+            .count();
+        assert_eq!(found, expected, "GPU, network and USB instances in the registry against the scan");
     }
 
     #[test]
