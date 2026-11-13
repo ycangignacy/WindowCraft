@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Adapter enumeration and DNS configuration through IP Helper.
 
 use crate::error::{EngineError, Result};

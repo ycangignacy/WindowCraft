@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Privacy-safe environment report.
 //!
 //! Only hardware class, OS build, tool versions and boolean tweak states go in.

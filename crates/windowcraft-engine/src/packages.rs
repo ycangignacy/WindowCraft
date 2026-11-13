@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! WinGet and Chocolatey, plus a fast scan of installed programs.
 
 use crate::download::{block_on, download, fetch_text};

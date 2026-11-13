@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # Third-Party Notices
 
 WindowCraft links the following third-party Rust crates.

@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.2.0
 
 This release adds the Extensions page: a metadata stripper, a file converter, additional formats through ffmpeg and a YouTube downloader. None of them is installed until you choose it. Tweaks, applications, ISO Studio, Time Machine and the installers work as in 1.1.0.
@@ -78,7 +79,7 @@ Not tested: HEIC input, a video over 4 GB, the ARM64 build on ARM hardware (it c
 
 ffmpeg and yt-dlp are fetched from their "latest" GitHub releases and checked against the SHA-256 that the same release publishes, so the check catches a broken download, not a compromised release.
 
-The builds are not code-signed yet, so SmartScreen warns on first run. No ARM64 binary has run on ARM hardware. The other limitations of [1.1.0](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.1.0) still apply.
+The builds are not code-signed yet, so SmartScreen warns on first run. No ARM64 binary has run on ARM hardware. The other limitations of [1.1.0](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.1.0) still apply.
 
 ## Downloads
 

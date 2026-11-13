@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 #![windows_subsystem = "windows"]
 
 fn main() -> std::process::ExitCode {

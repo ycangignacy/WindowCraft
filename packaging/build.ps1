@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 <#
 .SYNOPSIS
     Builds the release binary and every download into dist\.
@@ -16,7 +16,7 @@
 param(
     [ValidateSet('x64', 'arm64')]
     [string] $Architecture = 'x64',
-    [string] $ProjectUrl = 'https://github.com/ycangignacy/WindowCraft',
+    [string] $ProjectUrl = 'https://github.com/windowcraftdev/WindowCraft',
     [switch] $SkipBuild
 )
 

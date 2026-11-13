@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! End-to-end engine tests against real registry calls, confined to
 //! `HKCU\Software\WindowCraft_TestSandbox` and an in-memory service table.
 
@@ -204,7 +204,7 @@ fn every_catalog_tweak_applies_and_rolls_back_in_the_sandbox() {
     for tweak in rig.engine.catalog.tweaks.clone() {
         let action = match tweak.kind {
             TweakKind::Toggle => TweakAction::Set(true),
-            TweakKind::Segmented => TweakAction::Select(tweak.options[1].label.clone()),
+            TweakKind::Segmented => TweakAction::Select(tweak.options[1].value().to_owned()),
             _ => TweakAction::Apply,
         };
         let report = rig.engine.run(&tweak.name, &[(&tweak, action)], &cancel, |_, _| {}).unwrap();
@@ -650,6 +650,29 @@ fn rolling_back_openssh_removes_the_rule_and_reports_the_rest_as_kept() {
     rig.engine.rollback_session(session).unwrap();
     assert_eq!(session_state(&rig, session), SessionState::PartlyRolledBack);
     assert_eq!(*rig.native.ran.lock().unwrap(), [NativeOp::SshServer, NativeOp::RemoveSshFirewallRule]);
+}
+
+/// Time Machine offers a rollback for a failed session, so the part of a
+/// feature set that did turn on can be turned off again.
+#[test]
+fn a_feature_set_that_failed_halfway_rolls_back_what_it_enabled() {
+    let rig = rig("featurefailed");
+    let feature = rig.engine.catalog.feature("wsl").unwrap().clone();
+    assert!(feature.features.len() >= 2);
+    let broken = feature.features.last().unwrap().clone();
+    *rig.native.fail_feature.lock().unwrap() = Some(broken.clone());
+    assert!(rig.engine.apply_feature(&feature, None, &CancelToken::new()).is_err());
+    let session = rig.engine.store.sessions().unwrap().iter().map(|entry| entry.id).max().unwrap();
+    assert_eq!(session_state(&rig, session), SessionState::Failed);
+    let enabled = rig.native.features.lock().unwrap().clone();
+    assert!(!enabled.is_empty() && !enabled.contains(&broken));
+
+    rig.engine.rollback_session(session).unwrap();
+    assert_eq!(session_state(&rig, session), SessionState::RolledBack);
+    let disabled = rig.native.disabled_features.lock().unwrap().clone();
+    for name in &enabled {
+        assert!(disabled.contains(name), "{name} stayed on after the rollback");
+    }
 }
 
 #[test]

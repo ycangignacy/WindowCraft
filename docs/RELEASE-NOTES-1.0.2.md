@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.0.2
 
 This release makes scrolling and animation smooth. It moves drawing to the GPU and eases the mouse wheel. Nothing that changes the system is different from 1.0.1.
@@ -58,7 +59,7 @@ The builds are not code-signed yet, so SmartScreen warns on first run.
 
 ARM64: the files build and have the right platform, but no ARM64 binary has run on ARM hardware, and the GPU path is untested there.
 
-Everything else in the limitations of [1.0.1](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.0.1) still applies: Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption; an uninstall deletes Time Machine history for every user; the portable build has no uninstaller; and an ISO build installs `oscdimg` through WinGet when it is missing.
+Everything else in the limitations of [1.0.1](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.0.1) still applies: Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption; an uninstall deletes Time Machine history for every user; the portable build has no uninstaller; and an ISO build installs `oscdimg` through WinGet when it is missing.
 
 ## Downloads
 

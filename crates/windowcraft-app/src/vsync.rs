@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Frame pacing against the display refresh.
 //!
 //! The software renderer presents through GDI, which never waits for the

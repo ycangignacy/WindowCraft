@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.4.0
 
 The catalog now follows the interface language. This release also closes the rest of the 1.3.0 audit: a lock on the downloaded tools, a stronger disk check before ISO Studio erases a USB drive, and the removal of code nothing used.

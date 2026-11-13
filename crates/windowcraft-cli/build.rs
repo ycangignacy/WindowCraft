@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Same DLL planting protection as the main binary: static imports resolve
 //! from System32 only.
 

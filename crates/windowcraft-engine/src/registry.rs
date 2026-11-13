@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Direct Win32 registry access.
 //!
 //! Keys are opened with `RegCreateKeyExW`, which never touches sibling values,

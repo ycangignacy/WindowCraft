@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Shared view building blocks: grouped inset lists, controls and text styles.
 
 use crate::app::Message;
@@ -356,6 +356,13 @@ pub fn scroll_style(p: Palette) -> impl Fn(&iced::Theme, scrollable::Status) -> 
 }
 
 pub fn scroll_area<'a>(p: Palette, content: impl Into<El<'a>>) -> El<'a> {
+    // The credit ends every page, right-aligned under the last group.
+    let credit = container(
+        text(crate::i18n::t(crate::i18n::current(), crate::i18n::Msg::MadeBy)).size(11).color(p.ink_tertiary).font(SANS),
+    )
+    .width(Length::Fill)
+    .align_x(Alignment::End);
+    let content = column![content.into(), credit].spacing(14);
     let body = scrollable(container(content).padding(Padding { top: 8.0, right: 22.0, bottom: 96.0, left: 22.0 }).width(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)

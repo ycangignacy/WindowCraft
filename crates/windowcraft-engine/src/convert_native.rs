@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Conversions WindowCraft does itself, without ffmpeg.
 //!
 //! Pictures go through the `image` crate. Sound is decoded by Symphonia and

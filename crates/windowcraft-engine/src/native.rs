@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Maps catalog operations onto the native adapters.
 
 use crate::atomicfs::{atomic_write, hosts_with, hosts_without, sanitize_blocklist};

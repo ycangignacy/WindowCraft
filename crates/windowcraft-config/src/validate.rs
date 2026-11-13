@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Structural validation of catalogs. Only tests run this over the embedded data.
 
 use crate::catalog::Catalog;
@@ -116,8 +116,8 @@ impl Catalog {
                 }
                 if let Some(values) = &entry.values {
                     for option in &tweak.options {
-                        if !values.contains_key(&option.label) {
-                            problems.push(format!("{}: no value for option '{}'", tweak.id, option.label));
+                        if !values.contains_key(option.value()) {
+                            problems.push(format!("{}: no value for option '{}'", tweak.id, option.value()));
                         }
                     }
                 }

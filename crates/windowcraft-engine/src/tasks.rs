@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Task Scheduler through its COM interfaces.
 
 use crate::error::{EngineError, Result};

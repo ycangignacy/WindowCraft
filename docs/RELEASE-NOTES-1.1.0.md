@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.1.0
 
 This release adds a Settings page with an optional scheduled check for reverted tweaks, replaces the text of every catalog entry, and fixes the installer and the Start menu entry. The registry values, services and operations of the tweaks are the same as in 1.0.3.
@@ -103,7 +104,7 @@ The scheduled check uses the `windowcraft.exe` it was turned on from. For the po
 
 Mica shows behind the sidebar only on the CPU path. The builds are not code-signed yet, so SmartScreen warns on first run. No ARM64 binary has run on ARM hardware.
 
-The other limitations of [1.0.1](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.0.1) still apply: Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption; an uninstall deletes Time Machine history for every user; the portable build has no uninstaller; and an ISO build installs `oscdimg` through WinGet when it is missing.
+The other limitations of [1.0.1](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.0.1) still apply: Time Machine cannot restore removed packages, uninstalled apps or BitLocker decryption; an uninstall deletes Time Machine history for every user; the portable build has no uninstaller; and an ISO build installs `oscdimg` through WinGet when it is missing.
 
 ## Downloads
 

@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # Security Policy
 
 WindowCraft runs elevated and changes Windows system settings, so a vulnerability can affect the whole machine. Do not open a public issue for one.
@@ -5,7 +6,7 @@ WindowCraft runs elevated and changes Windows system settings, so a vulnerabilit
 ## Reporting a Vulnerability
 
 Submit reports privately through the GitHub Security Advisory form:
-<https://github.com/ycangignacy/WindowCraft/security/advisories/new>
+<https://github.com/windowcraftdev/WindowCraft/security/advisories/new>
 
 Include the following facts in the report:
 - The affected WindowCraft version and build architecture.

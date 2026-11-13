@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 [workspace]
 resolver = "3"
 members = [
@@ -11,12 +11,12 @@ members = [
 ]
 
 [workspace.package]
-version = "1.4.0"
+version = "1.4.1"
 edition = "2024"
 license = "MIT"
-authors = ["ycangignacy"]
+authors = ["WindowCraft Dev Team"]
 description = "Windows 11 administration, debloating, optimization and ISO mastering tool in Rust."
-repository = "https://github.com/ycangignacy/WindowCraft"
+repository = "https://github.com/windowcraftdev/WindowCraft"
 rust-version = "1.99"
 
 [workspace.dependencies]

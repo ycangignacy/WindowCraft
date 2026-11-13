@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Reading and writing ISO base media files: MP4, MOV and M4A.
 //!
 //! Only regular files are read; fragmented ones (`moof`) go to ffmpeg. The

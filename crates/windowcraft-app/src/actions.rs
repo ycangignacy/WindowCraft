@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Operations shared by the GUI and the CLI.
 
 use crate::i18n::{Language, Msg, format_1, format_2, t};

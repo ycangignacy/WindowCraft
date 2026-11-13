@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! ISO Studio pipeline: select, configure, export.
 //!
 //! The work directory persists between steps. `session.json` records the last
@@ -431,7 +431,9 @@ pub fn copy_to_usb(media: &Path, root: &Path, context: &JobContext) -> Result<()
 
     if oversized {
         step(context, 0.75, IsoStep::SplittingWim);
-        let split_target = media.join(r"sources\install.swm");
+        let sources = media.join("sources");
+        remove_split_parts(&sources)?;
+        let split_target = sources.join("install.swm");
         WimFile::open(&image)?.split(&split_target, SWM_PART_BYTES)?;
         fs::rename(&image, &parked).map_err(|e| IsoError::io(image.display().to_string(), e))?;
     }
@@ -440,10 +442,25 @@ pub fn copy_to_usb(media: &Path, root: &Path, context: &JobContext) -> Result<()
     let copied = copy_tree(media, root, Some(context));
 
     if oversized {
-        // The work tree must stay usable whatever the copy did.
+        // The work tree must stay usable whatever the copy did. Parts left in
+        // it would go into the next ISO next to install.wim.
         fs::rename(&parked, &image).map_err(|e| IsoError::io(image.display().to_string(), e))?;
+        remove_split_parts(&media.join("sources"))?;
     }
     copied
+}
+
+/// Deletes `install.swm`, `install2.swm` and the other parts of a split image.
+fn remove_split_parts(sources: &Path) -> Result<()> {
+    let Ok(entries) = fs::read_dir(sources) else { return Ok(()) };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        if name.starts_with("install") && name.ends_with(".swm") {
+            fs::remove_file(&path).map_err(|e| IsoError::io(path.display().to_string(), e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Step three, option two: write directly to a USB drive.
@@ -480,6 +497,20 @@ mod tests {
 
     fn catalog() -> Catalog {
         Catalog::load().unwrap()
+    }
+
+    #[test]
+    fn split_parts_are_removed_and_the_rest_of_sources_stays() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["install.swm", "INSTALL2.SWM", "install.wim", "boot.wim", "other.swm"] {
+            fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        remove_split_parts(dir.path()).unwrap();
+        let mut left: Vec<String> =
+            fs::read_dir(dir.path()).unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["boot.wim", "install.wim", "other.swm"]);
+        remove_split_parts(&dir.path().join("missing")).unwrap();
     }
 
     fn media() -> tempfile::TempDir {

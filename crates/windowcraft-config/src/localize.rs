@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Translated catalog text.
 //!
 //! The catalog itself is English. `catalog/i18n/<tag>.json` holds the names,
@@ -78,6 +78,9 @@ fn set_options(options: &mut [ChoiceOption], text: &[OptionText]) {
         return;
     }
     for (option, text) in options.iter_mut().zip(text) {
+        if option.value.is_empty() {
+            option.value.clone_from(&option.label);
+        }
         set(&mut option.label, Some(&text.label));
         set(&mut option.description, Some(&text.description));
     }
@@ -240,6 +243,33 @@ mod tests {
             let text = text_for(tag).unwrap().unwrap();
             assert_eq!(unknown_ids(&catalog, &text), Vec::<String>::new(), "{tag}: ids that name nothing");
             assert_eq!(missing(&catalog, &text), Vec::<String>::new(), "{tag}: left in English");
+        }
+    }
+
+    /// 1.4.0 sent the translated label as the option value, so in Polish
+    /// "Całkowicie wyłączone" matched no registry value and the MPO values
+    /// were deleted, and "Agresywnie" ran the standard Windows Update reset.
+    #[test]
+    fn translated_options_keep_their_english_values() {
+        let catalog = english();
+        let profile = r#"{"version":1,"segmented":{"multiplane-overlay":"Fully Disabled"},"dns":"Cloudflare"}"#;
+        for (tag, _) in LANGUAGES {
+            let localized = Catalog::load_in(tag).unwrap();
+            let pairs = catalog
+                .tweaks
+                .iter()
+                .zip(&localized.tweaks)
+                .map(|(before, after)| (&before.id, &before.options, &after.options))
+                .chain(catalog.features.iter().zip(&localized.features).map(|(before, after)| (&before.id, &before.options, &after.options)));
+            for (id, before, after) in pairs {
+                assert_eq!(before.len(), after.len(), "{tag}: {id}");
+                for (english, shown) in before.iter().zip(after) {
+                    assert_eq!(shown.value(), english.label, "{tag}: {id} changed the value of '{}'", english.label);
+                }
+            }
+            let update = localized.feature("update").unwrap();
+            assert!(update.options.iter().any(|option| option.value() == "Aggressive"), "{tag}");
+            crate::import_any(profile, &localized).unwrap_or_else(|error| panic!("{tag}: {error}"));
         }
     }
 

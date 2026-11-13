@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Crash-safe replacement of system files, and the fenced hosts file editor.
 
 use crate::error::{EngineError, Result};

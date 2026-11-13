@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Global search across apps, tweaks, registry keys, services and fixes.
 
 use crate::catalog::Catalog;

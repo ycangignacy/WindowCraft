@@ -1,4 +1,23 @@
+<!-- Made by WindowCraft Dev Team -->
 # Changelog
+
+## 1.4.1 - 2026-11-13
+
+Fixes for option lists in the translated interface, and the credit moved to WindowCraft Dev Team.
+
+- In every language but English, choosing an option from a list sent its translated label to the engine. "Multiplane overlay" in Polish matched no registry value, so both MPO values were deleted and the change was reported as done. "Agresywnie" in the Windows Update reset ran the standard reset, and "Domyślny" or "Najszybszy" in the DNS list failed with "not found". The option lists now show the translated label and send the English option name, and a profile with English option names loads in every language. The lists also show the current choice again: in 1.4.0 they were empty in the other seven languages.
+- Installing AppX packages counted packages that have no Microsoft Store id as installed and unticked them: Xbox Speech To Text Overlay, Xbox TCUI and Solitaire Collection. They now stay ticked, and the notice names them.
+- A profile chosen in the import dialog while a job runs is refused with the "another operation is running" notice. Before, the end of the job unticked the same ids in the new profile.
+- A Time Machine session that failed, for example a feature set where one Windows component did not install, can be rolled back. Before, only finished and interrupted sessions had the button.
+- When a job ends, an open Time Machine session and the X-Ray Inspector read their values again. They kept the values from before the job, with an undo button for a change already undone.
+- ISO Studio left `install.swm`, `install2.swm` and the other parts of a split image in `work\media\sources` after writing a large image to USB. A later ISO export packed them next to `install.wim`. The parts are deleted after the copy, and before a new split.
+- Startup folder items in the System & Gaming Inspector always showed as on, even when Task Manager had turned them off. Turning off an item of the common Startup folder under ProgramData wrote its flag to HKCU, where Windows ignores it. Both now use the `StartupApproved\StartupFolder` key of the folder's own hive, HKCU or HKLM.
+- A session rollback runs the undo steps of each tweak once, also when the records of that tweak are not next to each other in the session.
+- The search field grows up to 460 px when the window has room, and the placeholder is shorter in Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian, so it is no longer cut off in a 1024 px window.
+- In the X-Ray Inspector the scroll bar covered the last letters of a description line and the right border of the cards. The drawer content keeps 12 px clear for it.
+- The credit is "Made by WindowCraft Dev Team" in all eight languages. It moved from the sidebar to the end of every page, in small type on the right under the last group. Settings has a new About group with the support address, support@windowcraft.dev, and a button that opens windowcraft.dev.
+- The copyright holder in `LICENSE`, the installers, the exe version data and `Cargo.toml` is WindowCraft Dev Team, and every source file starts with that credit.
+- The README is rewritten: shorter, with new screenshots of 1.4.1 drawn in the dark theme, and with windowcraft.dev at the top for the full description. The repository moved with the account to <https://github.com/windowcraftdev/WindowCraft>, and every link points there.
 
 ## 1.4.0 - 2026-11-11
 

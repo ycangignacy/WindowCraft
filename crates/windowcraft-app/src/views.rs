@@ -1,3 +1,4 @@
+// Made by WindowCraft Dev Team
 //! The three-column workspace and its eight modules.
 
 use crate::app::*;
@@ -335,7 +336,6 @@ fn sidebar(app: &App, p: Palette) -> El<'_> {
     let header = column![
         strong("WindowCraft", p.ink),
         mono(format_1(t(app.language, Msg::BuildFormat), &app.info.full_build()), p.ink_tertiary),
-        caption(t(app.language, Msg::MadeBy), p.ink_tertiary),
         space().height(6),
         elevation,
     ]
@@ -397,7 +397,7 @@ fn center(app: &App, p: Palette) -> El<'_> {
         .size(13)
         .font(SANS)
         .padding([6.0, 10.0])
-        .width(Length::Fixed(360.0))
+        .width(Length::Fill)
         .style(move |_, _| text_input::Style {
             background: p.elevated.into(),
             border: Border { color: p.border, width: 1.0, radius: CONTROL_RADIUS.into() },
@@ -409,7 +409,14 @@ fn center(app: &App, p: Palette) -> El<'_> {
 
     let toolbar = container(
         column![
-            row![heading(app.page.title_in(app.language), p.ink), space().width(Length::Fill), search, mono("Ctrl+K", p.ink_tertiary)]
+            // The field takes the room the heading leaves, up to 460 px, so
+            // the longer placeholders fit in a wide window and it still
+            // shrinks with the inspector open.
+            row![
+                heading(app.page.title_in(app.language), p.ink),
+                container(container(search).max_width(460)).width(Length::Fill).align_x(Alignment::End),
+                mono("Ctrl+K", p.ink_tertiary)
+            ]
                 .spacing(10)
                 .align_y(Alignment::Center),
             page_toolbar(app, p),
@@ -804,9 +811,9 @@ fn tweak_row<'a>(app: &'a App, p: Palette, tweak: &'a Tweak) -> El<'a> {
             (None, switch(p, on, move |value| Message::Toggle(id.clone(), value)), None)
         }
         TweakKind::Segmented => {
-            let labels: Vec<String> = tweak.options.iter().map(|option| option.label.clone()).collect();
-            let current = app.options.get(&tweak.id).cloned();
-            (None, select(p, labels, current, move |value| Message::Segment(id.clone(), value)), None)
+            let options = choices(&tweak.options);
+            let current = chosen(&options, app.options.get(&tweak.id).map(String::as_str));
+            (None, select(p, options, current, move |choice: Choice| Message::Segment(id.clone(), choice.value)), None)
         }
         TweakKind::Action => (
             None,
@@ -814,8 +821,9 @@ fn tweak_row<'a>(app: &'a App, p: Palette, tweak: &'a Tweak) -> El<'a> {
             None,
         ),
         TweakKind::Dns => {
-            let labels: Vec<String> = tweak.options.iter().map(|option| option.label.clone()).collect();
-            (None, select(p, labels, Some(app.dns_choice.clone()), Message::Dns), None)
+            let options = choices(&tweak.options);
+            let current = chosen(&options, Some(&app.dns_choice));
+            (None, select(p, options, current, |choice: Choice| Message::Dns(choice.value)), None)
         }
     };
 
@@ -904,9 +912,9 @@ fn system(app: &App, p: Palette) -> El<'_> {
             .map(|feature| {
                 let mut trailing = Row::new().spacing(8).align_y(Alignment::Center);
                 if !feature.options.is_empty() {
-                    let labels: Vec<String> = feature.options.iter().map(|option| option.label.clone()).collect();
-                    let current = app.fix_modes.get("update").cloned().unwrap_or_else(|| "Standard".to_owned());
-                    trailing = trailing.push(select(p, labels, Some(current), Message::FixMode));
+                    let options = choices(&feature.options);
+                    let current = chosen(&options, Some(app.fix_modes.get("update").map_or("Standard", String::as_str)));
+                    trailing = trailing.push(select(p, options, current, |choice: Choice| Message::FixMode(choice.value)));
                 }
                 trailing = trailing.push(button(
                     p,
@@ -1331,8 +1339,9 @@ fn time_machine(app: &App, p: Palette) -> El<'_> {
             let mut trailing = row![dot(state_color), caption(i18n::session_state(app.language, session.state), p.ink_secondary)]
                 .spacing(6)
                 .align_y(Alignment::Center);
-            // An interrupted session is exactly what the write-ahead record is for.
-            if matches!(session.state, SessionState::Committed | SessionState::Open) {
+            // An interrupted or failed session is exactly what the write-ahead
+            // record is for: a feature set can fail after some of it was enabled.
+            if matches!(session.state, SessionState::Committed | SessionState::Open | SessionState::Failed) {
                 trailing = trailing.push(button(
                     p,
                     t(app.language, Msg::RollBack),
@@ -1609,6 +1618,37 @@ fn setting_row<'a>(p: Palette, title: &'a str, detail: &'a str, control: El<'a>)
         .into()
 }
 
+/// A catalog option in a pick list: shown by its label in the chosen
+/// language, compared and sent by its English value.
+#[derive(Debug, Clone)]
+struct Choice {
+    value: String,
+    label: String,
+}
+
+impl PartialEq for Choice {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl std::fmt::Display for Choice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn choices(options: &[windowcraft_config::ChoiceOption]) -> Vec<Choice> {
+    options.iter().map(|option| Choice { value: option.value().to_owned(), label: option.label.clone() }).collect()
+}
+
+fn chosen(options: &[Choice], value: Option<&str>) -> Option<Choice> {
+    value.and_then(|value| options.iter().find(|choice| choice.value == value).cloned())
+}
+
+const SUPPORT_EMAIL: &str = "support@windowcraft.dev";
+const WEBSITE_URL: &str = "https://windowcraft.dev";
+
 fn interval_label(lang: Language, interval: CheckInterval) -> String {
     let msg = match interval {
         CheckInterval::Off => Msg::IntervalOff,
@@ -1686,12 +1726,29 @@ fn settings_page(app: &App, p: Palette) -> El<'_> {
         ),
     ];
 
+    // The addresses are not translated, so the buttons show them as they are.
+    let about = vec![
+        setting_row(
+            p,
+            t(lang, Msg::SettingsSupport),
+            t(lang, Msg::SettingsSupportDetail),
+            button(p, SUPPORT_EMAIL, None, Tone::Secondary, Some(Message::Launch(format!("mailto:{SUPPORT_EMAIL}")))),
+        ),
+        setting_row(
+            p,
+            t(lang, Msg::SettingsWebsite),
+            t(lang, Msg::SettingsWebsiteDetail),
+            button(p, "windowcraft.dev", None, Tone::Secondary, Some(Message::Launch(WEBSITE_URL.to_owned()))),
+        ),
+    ];
+
     scroll_area(
         p,
         column![
             group_titled(p, t(lang, Msg::SettingsGeneral), general, ROW_INSET),
             group_titled(p, t(lang, Msg::SettingsDriftGroup), checks, ROW_INSET),
             group_titled(p, t(lang, Msg::SettingsGuideGroup), guide, ROW_INSET),
+            group_titled(p, t(lang, Msg::SettingsAboutGroup), about, ROW_INSET),
         ]
         .spacing(16),
     )
@@ -1708,7 +1765,8 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
     .on_exit(Message::GripExit)
     .on_press(Message::GripPressed);
 
-    // The extra 12 keeps card borders clear of the overlay scrollbar.
+    // The overlay scrollbar sits on the right edge of the scrolled content,
+    // so the content keeps 12 px clear for it (see the padding below).
     let mut content = Column::new().spacing(14).width(INSPECTOR_WIDTH - DRAWER_GRIP - 30.0);
     match &app.inspected {
         Some(Inspected::Tweak(id)) => {
@@ -1812,7 +1870,16 @@ fn inspector(app: &App, p: Palette) -> El<'_> {
 
     let drawer = row![
         grip,
-        container(column![header, crate::smooth::smooth(iced::widget::scrollable(content).height(Length::Fill))].spacing(10))
+        container(
+            column![
+                header,
+                crate::smooth::smooth(
+                    iced::widget::scrollable(container(content).padding(Padding { right: 12.0, ..Padding::ZERO }))
+                        .height(Length::Fill)
+                )
+            ]
+            .spacing(10),
+        )
             .padding(Padding { top: 14.0, right: 14.0, bottom: 14.0, left: 2.0 })
             .width(INSPECTOR_WIDTH - DRAWER_GRIP)
     ]

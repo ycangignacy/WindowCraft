@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Translation tables, language detection and localization helpers.
 
 use std::fmt;
@@ -439,6 +439,7 @@ pub enum Msg {
     NoticeRevertedTweak,
     NoticeRemovedPackages,
     NoticeInstalledPackages,
+    NoticeAppxNoStore,
     NoticeItemsCompleted,
     NoticeWindowsUpdatesSetTo,
     NoticeSessionRolledBack,
@@ -677,6 +678,11 @@ pub enum Msg {
     SettingsTipsAgain,
     SettingsTipsAgainDetail,
     SettingsTipsAgainButton,
+    SettingsAboutGroup,
+    SettingsSupport,
+    SettingsSupportDetail,
+    SettingsWebsite,
+    SettingsWebsiteDetail,
     NoticeTipsReset,
 }
 
@@ -932,6 +938,7 @@ impl Msg {
         Self::NoticeRevertedTweak,
         Self::NoticeRemovedPackages,
         Self::NoticeInstalledPackages,
+        Self::NoticeAppxNoStore,
         Self::NoticeItemsCompleted,
         Self::NoticeWindowsUpdatesSetTo,
         Self::NoticeSessionRolledBack,
@@ -1144,6 +1151,11 @@ impl Msg {
         Self::SettingsTipsAgain,
         Self::SettingsTipsAgainDetail,
         Self::SettingsTipsAgainButton,
+        Self::SettingsAboutGroup,
+        Self::SettingsSupport,
+        Self::SettingsSupportDetail,
+        Self::SettingsWebsite,
+        Self::SettingsWebsiteDetail,
         Self::NoticeTipsReset,
     ];
 }
@@ -1442,7 +1454,7 @@ fn en(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Standard user",
-        Msg::MadeBy => "Made by ycangignacy",
+        Msg::MadeBy => "Made by WindowCraft Dev Team",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applications",
@@ -1705,6 +1717,7 @@ fn en(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "Reverted {}",
         Msg::NoticeRemovedPackages => "Packages removed: {}",
         Msg::NoticeInstalledPackages => "Packages installed: {}",
+        Msg::NoticeAppxNoStore => "No Microsoft Store entry, so not installed: {}",
         Msg::NoticeItemsCompleted => "Items completed: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Updates set to {}",
         Msg::NoticeSessionRolledBack => "Session rolled back",
@@ -1929,6 +1942,11 @@ fn en(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Show the tips again",
         Msg::SettingsTipsAgainDetail => "Each page shows its tip again the next time you open it.",
         Msg::SettingsTipsAgainButton => "Reset",
+        Msg::SettingsAboutGroup => "About",
+        Msg::SettingsSupport => "Support",
+        Msg::SettingsSupportDetail => "Questions and bug reports by e-mail.",
+        Msg::SettingsWebsite => "Website",
+        Msg::SettingsWebsiteDetail => "Features, downloads and release notes.",
         Msg::NoticeTipsReset => "Tips are on again. Each page shows its tip the next time you open it.",
     }
 }
@@ -1937,7 +1955,7 @@ fn pl(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Użytkownik standardowy",
-        Msg::MadeBy => "Autor: ycangignacy",
+        Msg::MadeBy => "Twórcy: WindowCraft Dev Team",
         Msg::BuildFormat => "Kompilacja {}",
 
         Msg::PageApplications => "Aplikacje",
@@ -1959,7 +1977,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Oczyszczanie",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Szukaj aplikacji, optymalizacji, kluczy rejestru, usług i napraw",
+        Msg::SearchPlaceholder => "Szukaj aplikacji, optymalizacji, rejestru, usług i napraw",
         Msg::Cancel => "Anuluj",
         Msg::Dismiss => "Odrzuć",
         Msg::RestartAsAdministrator => "Uruchom jako administrator",
@@ -2200,6 +2218,7 @@ fn pl(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "Przywrócono {}",
         Msg::NoticeRemovedPackages => "Usunięte pakiety: {}",
         Msg::NoticeInstalledPackages => "Zainstalowane pakiety: {}",
+        Msg::NoticeAppxNoStore => "Brak wpisu w Microsoft Store, więc nie zainstalowano: {}",
         Msg::NoticeItemsCompleted => "Ukończone elementy: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Ustawiono Windows Update na {}",
         Msg::NoticeSessionRolledBack => "Przywrócono sesję",
@@ -2424,6 +2443,11 @@ fn pl(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Pokaż wskazówki ponownie",
         Msg::SettingsTipsAgainDetail => "Każda strona pokaże swoją wskazówkę przy następnym otwarciu.",
         Msg::SettingsTipsAgainButton => "Resetuj",
+        Msg::SettingsAboutGroup => "O programie",
+        Msg::SettingsSupport => "Pomoc techniczna",
+        Msg::SettingsSupportDetail => "Pytania i zgłoszenia błędów przez e-mail.",
+        Msg::SettingsWebsite => "Strona internetowa",
+        Msg::SettingsWebsiteDetail => "Funkcje, pobieranie i informacje o wydaniach.",
         Msg::NoticeTipsReset => "Wskazówki są znowu włączone. Każda strona pokaże swoją przy następnym otwarciu.",
     }
 }
@@ -2432,7 +2456,7 @@ fn de(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Standardbenutzer",
-        Msg::MadeBy => "Von ycangignacy",
+        Msg::MadeBy => "Von WindowCraft Dev Team",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Anwendungen",
@@ -2454,7 +2478,7 @@ fn de(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Bereinigung",
         Msg::TabDns => "DNS-Test",
 
-        Msg::SearchPlaceholder => "Apps, Tweaks, Registrierungsschlüssel, Dienste und Reparaturen suchen",
+        Msg::SearchPlaceholder => "Apps, Tweaks, Registrierung, Dienste und Reparaturen suchen",
         Msg::Cancel => "Abbrechen",
         Msg::Dismiss => "Verwerfen",
         Msg::RestartAsAdministrator => "Als Administrator neu starten",
@@ -2695,6 +2719,7 @@ fn de(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "{} zurückgesetzt",
         Msg::NoticeRemovedPackages => "Entfernte Pakete: {}",
         Msg::NoticeInstalledPackages => "Installierte Pakete: {}",
+        Msg::NoticeAppxNoStore => "Kein Eintrag im Microsoft Store, daher nicht installiert: {}",
         Msg::NoticeItemsCompleted => "Abgeschlossene Elemente: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update festgelegt auf {}",
         Msg::NoticeSessionRolledBack => "Sitzung zurückgesetzt",
@@ -2919,6 +2944,11 @@ fn de(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Tipps erneut zeigen",
         Msg::SettingsTipsAgainDetail => "Jede Seite zeigt ihren Tipp beim nächsten Öffnen wieder.",
         Msg::SettingsTipsAgainButton => "Zurücksetzen",
+        Msg::SettingsAboutGroup => "Über WindowCraft",
+        Msg::SettingsSupport => "Support",
+        Msg::SettingsSupportDetail => "Fragen und Fehlermeldungen per E-Mail.",
+        Msg::SettingsWebsite => "Website",
+        Msg::SettingsWebsiteDetail => "Funktionen, Downloads und Versionshinweise.",
         Msg::NoticeTipsReset => "Tipps sind wieder an. Jede Seite zeigt ihren Tipp beim nächsten Öffnen.",
     }
 }
@@ -2927,7 +2957,7 @@ fn fr(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrateur",
         Msg::StandardUser => "Utilisateur standard",
-        Msg::MadeBy => "Par ycangignacy",
+        Msg::MadeBy => "Par WindowCraft Dev Team",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applications",
@@ -2949,7 +2979,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Nettoyage",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Rechercher des apps, ajustements, clés de registre, services et correctifs",
+        Msg::SearchPlaceholder => "Rechercher apps, réglages, registre, services et correctifs",
         Msg::Cancel => "Annuler",
         Msg::Dismiss => "Ignorer",
         Msg::RestartAsAdministrator => "Redémarrer en administrateur",
@@ -3190,6 +3220,7 @@ fn fr(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "{} rétabli",
         Msg::NoticeRemovedPackages => "Packages supprimés : {}",
         Msg::NoticeInstalledPackages => "Packages installés : {}",
+        Msg::NoticeAppxNoStore => "Absent du Microsoft Store, donc non installé : {}",
         Msg::NoticeItemsCompleted => "Éléments terminés : {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update configuré sur {}",
         Msg::NoticeSessionRolledBack => "Session restaurée",
@@ -3414,6 +3445,11 @@ fn fr(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Revoir les astuces",
         Msg::SettingsTipsAgainDetail => "Chaque page affiche de nouveau son astuce à la prochaine ouverture.",
         Msg::SettingsTipsAgainButton => "Réinitialiser",
+        Msg::SettingsAboutGroup => "À propos",
+        Msg::SettingsSupport => "Assistance",
+        Msg::SettingsSupportDetail => "Questions et signalements de bugs par e-mail.",
+        Msg::SettingsWebsite => "Site web",
+        Msg::SettingsWebsiteDetail => "Fonctions, téléchargements et notes de version.",
         Msg::NoticeTipsReset => "Les astuces sont de nouveau actives. Chaque page affiche la sienne à la prochaine ouverture.",
     }
 }
@@ -3422,7 +3458,7 @@ fn es(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrador",
         Msg::StandardUser => "Usuario estándar",
-        Msg::MadeBy => "Por ycangignacy",
+        Msg::MadeBy => "Por WindowCraft Dev Team",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Aplicaciones",
@@ -3444,7 +3480,7 @@ fn es(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Limpieza",
         Msg::TabDns => "Prueba de DNS",
 
-        Msg::SearchPlaceholder => "Buscar apps, ajustes, claves del registro, servicios y reparaciones",
+        Msg::SearchPlaceholder => "Buscar apps, ajustes, registro, servicios y reparaciones",
         Msg::Cancel => "Cancelar",
         Msg::Dismiss => "Descartar",
         Msg::RestartAsAdministrator => "Reiniciar como administrador",
@@ -3685,6 +3721,7 @@ fn es(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "Se restauró {}",
         Msg::NoticeRemovedPackages => "Paquetes eliminados: {}",
         Msg::NoticeInstalledPackages => "Paquetes instalados: {}",
+        Msg::NoticeAppxNoStore => "Sin entrada en Microsoft Store, por eso no se instaló: {}",
         Msg::NoticeItemsCompleted => "Elementos completados: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update configurado en {}",
         Msg::NoticeSessionRolledBack => "Sesión revertida",
@@ -3909,6 +3946,11 @@ fn es(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Mostrar de nuevo los consejos",
         Msg::SettingsTipsAgainDetail => "Cada página vuelve a mostrar su consejo la próxima vez que la abras.",
         Msg::SettingsTipsAgainButton => "Restablecer",
+        Msg::SettingsAboutGroup => "Acerca de",
+        Msg::SettingsSupport => "Soporte",
+        Msg::SettingsSupportDetail => "Preguntas e informes de errores por correo electrónico.",
+        Msg::SettingsWebsite => "Sitio web",
+        Msg::SettingsWebsiteDetail => "Funciones, descargas y notas de la versión.",
         Msg::NoticeTipsReset => "Los consejos vuelven a estar activos. Cada página muestra el suyo la próxima vez que la abras.",
     }
 }
@@ -3917,7 +3959,7 @@ fn it(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Amministratore",
         Msg::StandardUser => "Utente standard",
-        Msg::MadeBy => "Creato da ycangignacy",
+        Msg::MadeBy => "Creato da WindowCraft Dev Team",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applicazioni",
@@ -3939,7 +3981,7 @@ fn it(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Pulizia",
         Msg::TabDns => "Test DNS",
 
-        Msg::SearchPlaceholder => "Cerca app, ottimizzazioni, chiavi di registro, servizi e correzioni",
+        Msg::SearchPlaceholder => "Cerca app, ottimizzazioni, registro, servizi e correzioni",
         Msg::Cancel => "Annulla",
         Msg::Dismiss => "Ignora",
         Msg::RestartAsAdministrator => "Riavvia come amministratore",
@@ -4180,6 +4222,7 @@ fn it(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "Ripristinato {}",
         Msg::NoticeRemovedPackages => "Pacchetti rimossi: {}",
         Msg::NoticeInstalledPackages => "Pacchetti installati: {}",
+        Msg::NoticeAppxNoStore => "Nessuna voce nel Microsoft Store, quindi non installato: {}",
         Msg::NoticeItemsCompleted => "Elementi completati: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update impostato su {}",
         Msg::NoticeSessionRolledBack => "Sessione ripristinata",
@@ -4404,6 +4447,11 @@ fn it(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Mostra di nuovo i suggerimenti",
         Msg::SettingsTipsAgainDetail => "Ogni pagina mostra di nuovo il suo suggerimento alla prossima apertura.",
         Msg::SettingsTipsAgainButton => "Reimposta",
+        Msg::SettingsAboutGroup => "Informazioni",
+        Msg::SettingsSupport => "Assistenza",
+        Msg::SettingsSupportDetail => "Domande e segnalazioni di bug via e-mail.",
+        Msg::SettingsWebsite => "Sito web",
+        Msg::SettingsWebsiteDetail => "Funzioni, download e note di rilascio.",
         Msg::NoticeTipsReset => "I suggerimenti sono di nuovo attivi. Ogni pagina mostra il suo alla prossima apertura.",
     }
 }
@@ -4412,7 +4460,7 @@ fn pt_br(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrador",
         Msg::StandardUser => "Usuário padrão",
-        Msg::MadeBy => "Criado por ycangignacy",
+        Msg::MadeBy => "Criado por WindowCraft Dev Team",
         Msg::BuildFormat => "Compilação {}",
 
         Msg::PageApplications => "Aplicativos",
@@ -4434,7 +4482,7 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Limpeza",
         Msg::TabDns => "Benchmark de DNS",
 
-        Msg::SearchPlaceholder => "Pesquisar apps, ajustes, chaves do registro, serviços e correções",
+        Msg::SearchPlaceholder => "Pesquisar apps, ajustes, registro, serviços e correções",
         Msg::Cancel => "Cancelar",
         Msg::Dismiss => "Descartar",
         Msg::RestartAsAdministrator => "Reiniciar como administrador",
@@ -4675,6 +4723,7 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "{} restaurado",
         Msg::NoticeRemovedPackages => "Pacotes removidos: {}",
         Msg::NoticeInstalledPackages => "Pacotes instalados: {}",
+        Msg::NoticeAppxNoStore => "Sem entrada na Microsoft Store, por isso não instalado: {}",
         Msg::NoticeItemsCompleted => "Itens concluídos: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update definido como {}",
         Msg::NoticeSessionRolledBack => "Sessão revertida",
@@ -4899,6 +4948,11 @@ fn pt_br(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Mostrar as dicas de novo",
         Msg::SettingsTipsAgainDetail => "Cada página mostra a dica de novo na próxima vez que você abrir.",
         Msg::SettingsTipsAgainButton => "Redefinir",
+        Msg::SettingsAboutGroup => "Sobre",
+        Msg::SettingsSupport => "Suporte",
+        Msg::SettingsSupportDetail => "Dúvidas e relatos de erros por e-mail.",
+        Msg::SettingsWebsite => "Site",
+        Msg::SettingsWebsiteDetail => "Recursos, downloads e notas de versão.",
         Msg::NoticeTipsReset => "As dicas estão ativas de novo. Cada página mostra a sua na próxima vez que você abrir.",
     }
 }
@@ -4907,7 +4961,7 @@ fn uk(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Адміністратор",
         Msg::StandardUser => "Звичайний користувач",
-        Msg::MadeBy => "Автор: ycangignacy",
+        Msg::MadeBy => "Автори: WindowCraft Dev Team",
         Msg::BuildFormat => "Збірка {}",
 
         Msg::PageApplications => "Програми",
@@ -4929,7 +4983,7 @@ fn uk(msg: Msg) -> &'static str {
         Msg::TabCleaner => "Очищення",
         Msg::TabDns => "Тест DNS",
 
-        Msg::SearchPlaceholder => "Пошук програм, налаштувань, ключів реєстру, служб і виправлень",
+        Msg::SearchPlaceholder => "Пошук програм, налаштувань, реєстру, служб і виправлень",
         Msg::Cancel => "Скасувати",
         Msg::Dismiss => "Відхилити",
         Msg::RestartAsAdministrator => "Перезапустити від імені адміністратора",
@@ -5170,6 +5224,7 @@ fn uk(msg: Msg) -> &'static str {
         Msg::NoticeRevertedTweak => "Відновлено {}",
         Msg::NoticeRemovedPackages => "Видалено пакетів: {}",
         Msg::NoticeInstalledPackages => "Встановлено пакетів: {}",
+        Msg::NoticeAppxNoStore => "Немає в Microsoft Store, тому не встановлено: {}",
         Msg::NoticeItemsCompleted => "Завершено елементів: {}",
         Msg::NoticeWindowsUpdatesSetTo => "Windows Update налаштовано на {}",
         Msg::NoticeSessionRolledBack => "Сесію відкочено",
@@ -5394,6 +5449,11 @@ fn uk(msg: Msg) -> &'static str {
         Msg::SettingsTipsAgain => "Показати підказки ще раз",
         Msg::SettingsTipsAgainDetail => "Кожна сторінка знову покаже свою підказку під час наступного відкриття.",
         Msg::SettingsTipsAgainButton => "Скинути",
+        Msg::SettingsAboutGroup => "Про програму",
+        Msg::SettingsSupport => "Підтримка",
+        Msg::SettingsSupportDetail => "Запитання й повідомлення про помилки електронною поштою.",
+        Msg::SettingsWebsite => "Вебсайт",
+        Msg::SettingsWebsiteDetail => "Можливості, завантаження й примітки до випусків.",
         Msg::NoticeTipsReset => "Підказки знову ввімкнено. Кожна сторінка покаже свою під час наступного відкриття.",
     }
 }

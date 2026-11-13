@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 <#
 .SYNOPSIS
     Installs each x64 package from dist\, checks the result, uninstalls it and

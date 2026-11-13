@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! WindowCraft profiles and legacy WinUtil JSON compatibility.
 
 use crate::catalog::Catalog;
@@ -103,7 +103,7 @@ impl Profile {
             }
         }
         for (id, option) in &self.segmented {
-            let known = catalog.tweak(id).is_some_and(|tweak| tweak.options.iter().any(|o| &o.label == option));
+            let known = catalog.tweak(id).is_some_and(|tweak| tweak.options.iter().any(|o| o.value() == option));
             check(known, "option", option)?;
         }
         for id in &self.features {

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Declarative catalog entries. Unknown keys are rejected everywhere so a typo
 //! in a custom config fails loudly instead of silently doing nothing.
 
@@ -236,6 +236,18 @@ pub enum TweakKind {
 pub struct ChoiceOption {
     pub label: String,
     pub description: String,
+    /// The English label, kept here when `label` is translated. Registry
+    /// value maps, profiles and the engine know an option only by this name.
+    /// Empty while the label is still the English one.
+    #[serde(skip)]
+    pub value: String,
+}
+
+impl ChoiceOption {
+    /// The name the option is stored and applied under, in every language.
+    pub fn value(&self) -> &str {
+        if self.value.is_empty() { &self.label } else { &self.value }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

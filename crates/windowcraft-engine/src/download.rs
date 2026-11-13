@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Streaming downloads over rustls with SHA-256 verification.
 
 use crate::error::{EngineError, Result};

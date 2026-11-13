@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Integrity checks over every embedded catalog.
 
 use std::collections::BTreeMap;

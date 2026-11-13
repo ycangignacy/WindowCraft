@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 # Links the C runtime statically. Without this the exe needs VCRUNTIME140.dll,
 # which a clean Windows install, including first boot from ISO Studio, lacks.
 [target.'cfg(all(windows, target_env = "msvc"))']

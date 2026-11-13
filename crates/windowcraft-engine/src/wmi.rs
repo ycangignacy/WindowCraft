@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Minimal WMI client for volume encryption and adapter bindings.
 
 use crate::error::{EngineError, Result};

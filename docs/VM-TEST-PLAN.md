@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft VM Test Plan
 
 Checklist for the first live run of system-changing features inside a disposable Windows 11 virtual machine (VirtualBox or VMware Workstation/Player, since Windows 11 Home hosts do not include Hyper-V).

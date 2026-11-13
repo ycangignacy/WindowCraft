@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Demand-driven animation clock.
 //!
 //! The UI subscribes to display frames only while [`Timeline::needs_frame`] is

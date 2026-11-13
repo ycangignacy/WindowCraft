@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! DISM API bindings.
 //!
 //! The DLL is loaded at runtime because the import library ships only with the

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Entrance transition for a page body.
 //!
 //! When the key changes, the content rises a few pixels into place. The

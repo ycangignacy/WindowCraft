@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.0.0
 
 This pre-release adds seven interface languages and fixes the bugs listed as open in 0.1.0. It runs on Windows 11, x64 and ARM64.

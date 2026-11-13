@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! `wimgapi.dll` bindings with RAII handles.
 
 use crate::error::{IsoError, Result};

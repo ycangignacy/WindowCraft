@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Transactional snapshot store backed by redb.
 //!
 //! The pre-change state of every target is committed before the first

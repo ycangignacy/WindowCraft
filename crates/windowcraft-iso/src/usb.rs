@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! USB media creation with a layered disk-destruction guard.
 //!
 //! `assess` is a pure function over facts read from the OS, so each rejection

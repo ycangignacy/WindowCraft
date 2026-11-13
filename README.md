@@ -1,40 +1,113 @@
-<img src="crates/windowcraft-app/assets/logo-256.png" alt="WindowCraft logo" width="128">
+<!-- Made by WindowCraft Dev Team -->
+<p align="center">
+  <img src="crates/windowcraft-app/assets/logo-256.png" alt="WindowCraft logo" width="128">
+</p>
 
-# WindowCraft
+<h1 align="center">WindowCraft</h1>
 
-WindowCraft is a Windows 11 tool for installing apps, removing bloat, applying privacy and performance tweaks, and building custom installation media. It is a native program written in Rust for x64 and ARM64, with no PowerShell scripts behind it. Before every change it records the previous value, so changes can be rolled back later, one at a time or a whole session at once.
+<p align="center">
+  A native Windows 11 tool written in Rust (x64 and ARM64) for installing apps, removing bloat, applying privacy and performance tweaks, building custom installation media. Changes can be rolled back.
+</p>
 
-The current release is 1.4.0. Downloads are on the [Releases page](https://github.com/ycangignacy/WindowCraft/releases), and [docs/RELEASE-NOTES-1.4.0.md](docs/RELEASE-NOTES-1.4.0.md) says what changed and what was tested.
+<p align="center">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-b7410e?style=flat-square&logo=rust&logoColor=white">
+  <img alt="Windows 11 x64 | ARM64" src="https://img.shields.io/badge/Windows%2011-x64%20%7C%20ARM64-2f7bf5?style=flat-square">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3a3a3a?style=flat-square">
+  <a href="https://github.com/windowcraftdev/WindowCraft/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/windowcraftdev/WindowCraft?style=flat-square"></a>
+</p>
 
-![Tweaks & Privacy with the X-Ray Inspector open on the telemetry tweak](docs/screenshots/tweaks.png)
+<p align="center">
+  <a href="https://windowcraft.dev"><b>windowcraft.dev</b></a> ·
+  <a href="https://github.com/windowcraftdev/WindowCraft/releases/latest">Download</a> ·
+  <a href="docs/RELEASE-NOTES-1.4.1.md">Release notes</a> ·
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="#build-and-test">Build and test</a> ·
+  <a href="#support">Support</a> ·
+  <a href="#license">License</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/tweaks.png" alt="WindowCraft on the Tweaks and Privacy page with the X-Ray Inspector open on Turn off Windows telemetry" width="100%">
+  <br>
+  <sub>Tweaks &amp; Privacy with the X-Ray Inspector open on Turn off Windows telemetry.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="25%" valign="top">
+      <h3>Changes you can roll back</h3>
+      Before every change WindowCraft saves the previous value. Time Machine keeps each run as a session, and a rollback undoes the whole session or one change. Removed packages, uninstalled apps and BitLocker decryption cannot be undone, and WindowCraft asks before them.
+    </td>
+    <td width="25%" valign="top">
+      <h3>The X-Ray Inspector</h3>
+      For any tweak it lists each registry value and service it touches, with the current value, the target and the value a rollback writes back. You see it before anything runs.
+    </td>
+    <td width="25%" valign="top">
+      <h3>Nothing in the background</h3>
+      A native program written in Rust, with no PowerShell scripts behind it. It runs no background service, tray icon, update check or telemetry, and connects only for an action you start.
+    </td>
+    <td width="25%" valign="top">
+      <h3>ISO Studio</h3>
+      Open a Windows 11 ISO or download one from a link on microsoft.com, write an answer file and export a new ISO or a USB drive. It can skip the hardware checks and the online account screens and inject drivers.
+    </td>
+  </tr>
+</table>
 
 ## What it does
 
-| Page | Contents |
+WindowCraft has nine pages in one window, plus `windowcraft-cli.exe` for automated runs. The full guide is on [windowcraft.dev](https://windowcraft.dev).
+
+| Page | What it covers |
 | :--- | :--- |
-| Applications | 239 packages in 10 categories, installed, upgraded or removed through WinGet or Chocolatey |
-| Tweaks & Privacy | 68 tweaks and 34 removable AppX packages, with Minimal (6), Standard (13) and Advanced (21) presets |
-| System Config & Fixes | Optional Windows features, repairs, network and update resets, a PowerShell profile, OpenSSH Server, Control Panel applets |
-| Windows Updates | Default, Security (recommended) and Disabled update policies |
-| ISO Studio | Answer files, driver injection, app bundles, ISO output and USB writing |
+| Applications | 239 apps across 10 categories through WinGet or Chocolatey |
+| Tweaks &amp; Privacy | 68 tweaks, 34 removable AppX packages and the presets Minimal (6), Standard (13) and Advanced (21) |
+| System Config &amp; Fixes | 33 optional features and one-click repairs, Control Panel applets, a PowerShell profile and OpenSSH Server |
+| Windows Updates | Default, Security (recommended) and Disabled update modes |
+| ISO Studio | Answer files, driver injection, ISO export and USB writing |
 | Time Machine | Every session with its changes, rollback of a session or of one change, drift detection |
-| System & Gaming Inspector | MSI interrupt mode, autoruns, cache cleaner, DNS benchmark over UDP, TCP and DoH |
-| Extensions | Optional tools, none installed by default: metadata stripper, file converter, extra formats through ffmpeg, YouTube downloader |
-| Settings | Language, theme, an automatic check for reverted tweaks, the introduction and the tips again |
+| System &amp; Gaming Inspector | MSI interrupt mode, display timers, autoruns, a cache cleaner and a DNS benchmark over UDP, TCP and DoH |
+| Extensions | Optional metadata stripper, file converter for 21 formats, ffmpeg and YouTube downloader, none installed by default |
+| Settings | Eight interface languages, the theme, an optional scheduled drift check, support and website links |
 
-The X-Ray Inspector shows, for any tweak, each registry value or service it touches with its current, target and undo value. Ctrl+K searches apps, tweaks, registry keys, services, fixes and AppX packages.
-
-Windows updates sometimes set a changed value back. WindowCraft shows a banner when that happened and puts the values back with one click. The automatic check in Settings, off by default, does the same on a schedule through a per-user task that only reads the system.
-
-## First start
-
-On the first start four short questions ask what you want to do, whether you keep your files, whether you build your own ISO and how much should change. Each answer has a number key. Start ticks the matching preset and opens the first page; nothing changes on the computer until you run it. Skip or Escape closes the questions on any screen, and they do not come back.
-
-After that each page shows a short tip once. Next goes on to the next page, and Don't show again turns the tips off. Settings can bring back both.
-
-![The first question of the introduction](docs/screenshots/first-start.png)
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/applications.png" alt="The Applications page with the Browsers category and the WinGet source selected" width="100%">
+      <br>
+      <sub>Applications: 239 apps in 10 categories through WinGet or Chocolatey.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/system.png" alt="The System Config and Fixes page with system tools and fixes" width="100%">
+      <br>
+      <sub>System Config &amp; Fixes: optional Windows features and one-click repairs.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/extensions.png" alt="The Extensions page showing the four opt-in extensions" width="100%">
+      <br>
+      <sub>Extensions: tools you install one at a time; everything runs on the computer.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/settings.png" alt="The Settings page with language, theme, the automatic drift check and the About group" width="100%">
+      <br>
+      <sub>Settings: language, theme, the drift check and the support address.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center" valign="top">
+      <img src="docs/screenshots/first-start.png" alt="The first-start question screen with four numbered answers" width="50%">
+      <br>
+      <sub>First start: four questions pick a preset. Nothing changes until you run it.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Install
+
+The current release is 1.4.1 on Windows 11 (build 22000 or later). Downloads are on the [Releases page](https://github.com/windowcraftdev/WindowCraft/releases/latest), and [docs/RELEASE-NOTES-1.4.1.md](docs/RELEASE-NOTES-1.4.1.md) lists what changed.
 
 | File | Use it when |
 | :--- | :--- |
@@ -42,63 +115,13 @@ After that each page shows a short tip once. Next goes on to the next page, and 
 | `WindowCraft-<version>-<arch>.msi` | You deploy with Intune, GPO or `msiexec /qn`. |
 | `WindowCraft-<version>-<arch>-portable.exe` | You want to run it without installing. |
 
-WindowCraft starts as a standard user. The badge at the top of the sidebar restarts it as administrator, which most changes need. Checksums are in `SHA256SUMS.txt`. The builds are not code-signed, so SmartScreen warns on the first run.
+Checksums are in `SHA256SUMS.txt`. The builds are not code-signed, so SmartScreen warns on the first run. Create a restore point before you apply changes; every preset starts with one.
 
-It draws on the GPU through Direct3D 12 and on the CPU through tiny-skia where no Direct3D 12 GPU exists, for example in a virtual machine. `ICED_BACKEND=tiny-skia` forces the CPU path.
-
-Create a restore point before you apply changes. Every preset starts with one.
-
-## Languages
-
-The interface is in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian. It starts in the Windows display language when it is one of these, and Settings changes it at once. The names and descriptions of tweaks, applications, fixes and update modes follow the chosen language, and search finds them by their English words as well. Error details from Windows and the command line output stay in English.
-
-An administrator can preset the language for every user. A user's own choice in the app wins.
+An administrator can preset the interface language for every user with `WCLANGUAGE` (`en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` or `uk`). A user's own choice in the app wins.
 
 ```powershell
-msiexec /i WindowCraft-1.4.0-x64.msi WCLANGUAGE=pl /qn
-.\WindowCraft-1.4.0-x64-setup.exe WCLANGUAGE=de
+msiexec /i WindowCraft-1.4.1-x64.msi WCLANGUAGE=pl /qn
 ```
-
-The tags are `en`, `pl`, `de`, `fr`, `es`, `it`, `pt-BR` and `uk`.
-
-## Extensions
-
-| Extension | What it does | Downloads |
-| :--- | :--- | :--- |
-| Metadata stripper | Saves a copy of a photo, audio or video file without location, camera data, dates, author and similar metadata | Nothing |
-| File converter | Converts pictures, video and sound between 21 formats, without re-encoding video where the target allows | Nothing |
-| Additional formats | ffmpeg, for AVIF, AVI, OGG, WMA, HEIC and video re-encoding | About 90 MB |
-| YouTube downloader | Saves one video as MP4 or its sound as MP3, without an account or cookies | About 150 MB |
-
-Everything runs on the computer and no file is uploaded. Downloaded tools come from their GitHub releases and are checked against the SHA-256 the release publishes.
-
-![The Extensions page](docs/screenshots/extensions.png)
-
-## Command line
-
-```bash
-windowcraft-cli --preset standard --run
-windowcraft-cli --config "C:\path\to\config.json" --run
-windowcraft-cli --check-drift --fix
-windowcraft-cli --export-report "C:\report.json"
-windowcraft-cli --open tweaks --inspect telemetry
-```
-
-The installers put `windowcraft-cli.exe` next to `windowcraft.exe`; it waits and returns an exit code. `--config` takes a profile exported from the Tweaks page, and without `--run` it opens the selection for review. Commands that change the system need an elevated terminal. `--export-report` leaves out the user name, computer name and paths.
-
-## Safety
-
-- Every change writes its previous value to the snapshot database before the first write. A tweak that fails reverts itself, and a rollback lists what it could not undo.
-- Removed packages, uninstalled apps and BitLocker decryption cannot be undone. WindowCraft asks before an irreversible step.
-- `RpcSs`, `DcomLaunch`, `LSM`, `BFE`, `mpssvc`, `WinDefend` and `ProfSvc` can never be disabled, whatever a profile says.
-- Downloads that end up running are pinned to a SHA-256 hash or must pass Authenticode.
-- USB writing checks the bus, the volumes and the disk model again right before the first write. Answer files never configure disks.
-
-## Footprint and uninstall
-
-WindowCraft runs no background service, tray icon, update check or telemetry. It connects to the network only for an action you start, such as a package download. Its data lives in `%LOCALAPPDATA%\WindowCraft`: Time Machine snapshots, the job log, settings, downloaded tools and ISO Studio work files.
-
-Uninstalling from Installed apps removes that folder for every user, including the Time Machine history, so roll changes back first if you want them undone. An upgrade keeps the data. For the portable build, run `windowcraft.exe --purge-data` from an elevated terminal, then delete the file. Settings you changed in Windows stay after uninstalling.
 
 ## Privacy
 
@@ -114,10 +137,14 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-`./packaging/build.ps1` builds the installers into `dist/`; add `-Architecture arm64` for ARM64. It downloads WiX 3.14 into `target/tools` and installs nothing. Tests never change live settings: registry tests use a sandbox key, services run against an in-memory table and native operations go to a recording runner. Tests that change a real system run only in a VM, see [docs/VM-TEST-PLAN.md](docs/VM-TEST-PLAN.md).
+`./packaging/build.ps1` builds the installers into `dist/`; add `-Architecture arm64` for ARM64. Tests never change live settings. Tests that change a real system run only in a VM, see [docs/VM-TEST-PLAN.md](docs/VM-TEST-PLAN.md). [CONTRIBUTING.md](CONTRIBUTING.md) has the rules for pull requests.
+
+## Support
+
+Write to <support@windowcraft.dev> or open an issue on [GitHub Issues](https://github.com/windowcraftdev/WindowCraft/issues). Security reports go through [SECURITY.md](SECURITY.md).
 
 ## License
 
-WindowCraft is under the MIT License, see [LICENSE](LICENSE). [NOTICE.md](NOTICE.md) lists the third-party material in the repository and the installers, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) the licenses of the Rust crates.
+WindowCraft is under the MIT License, see [LICENSE](LICENSE). [NOTICE.md](NOTICE.md) lists the third-party material in the repository and the installers, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) the licenses of the Rust crates and LAME.
 
-Made by ycangignacy.
+Made by WindowCraft Dev Team.

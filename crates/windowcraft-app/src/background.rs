@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! The scheduled drift check and its notification.
 //!
 //! The task runs `windowcraft.exe --scheduled-check` as the signed-in user.

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Interactive surface that responds on pointer down, not on click.
 //!
 //! The highlight and `scale(0.98)` appear on the exact frame the button goes

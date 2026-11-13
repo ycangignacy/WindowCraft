@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Motion primitives for the WindowCraft interface.
 //!
 //! Everything here is pure arithmetic with no UI dependency, so the behaviour

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Console front end for `windowcraft.exe`.
 //!
 //! The main binary uses the GUI subsystem so a double click opens no console,

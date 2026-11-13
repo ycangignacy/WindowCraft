@@ -1,3 +1,4 @@
+// Made by WindowCraft Dev Team
 //! Unattended command line.
 
 use crate::actions::{preset_profile, run_profile};
@@ -15,7 +16,7 @@ use windowcraft_engine::{Engine, purge, report};
     name = "windowcraft",
     version,
     about = "Windows 11 administration, debloating and ISO mastering",
-    after_help = "Made by ycangignacy"
+    after_help = "Made by WindowCraft Dev Team"
 )]
 pub struct Cli {
     /// Preset to load: minimal, standard or advanced

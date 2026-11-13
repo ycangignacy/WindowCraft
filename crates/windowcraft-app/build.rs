@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Embeds the manifest, icon and version resource.
 //!
 //! The binary stays `asInvoker` and elevates at runtime, so read-only views
@@ -26,8 +26,8 @@ fn main() {
         .set_icon("assets/windowcraft.ico")
         .set("ProductName", "WindowCraft")
         .set("FileDescription", "WindowCraft")
-        .set("CompanyName", "ycangignacy")
-        .set("LegalCopyright", "Copyright (c) 2026 ycangignacy. MIT License.")
+        .set("CompanyName", "WindowCraft Dev Team")
+        .set("LegalCopyright", "Copyright (c) 2026 WindowCraft Dev Team. MIT License.")
         .set("OriginalFilename", "windowcraft.exe");
     if let Err(error) = resource.compile() {
         println!("cargo:warning=version resource not embedded: {error}");

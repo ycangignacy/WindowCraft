@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! YouTube downloads through yt-dlp, as MP4 video or MP3 audio.
 //!
 //! The tools (yt-dlp, ffmpeg, and Deno because yt-dlp needs a JavaScript

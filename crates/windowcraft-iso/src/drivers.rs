@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Driver export, deduplication and injection.
 
 use crate::error::Result;

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Made by ycangignacy -->
+<!-- Made by WindowCraft Dev Team -->
 <!--
   Per-machine MSI. Program Files is deliberate: this tool runs elevated, so it
   must live where standard users cannot replace the executable.
@@ -10,7 +10,7 @@
            Name="WindowCraft"
            Language="1033"
            Version="$(var.Version)"
-           Manufacturer="ycangignacy"
+           Manufacturer="WindowCraft Dev Team"
            UpgradeCode="7D3C2E61-4A0B-4F5E-9C21-6B1E8A4F0D37">
     <Package InstallerVersion="500"
              Compressed="yes"

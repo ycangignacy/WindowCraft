@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.3.0
 
 This release adds an introduction on the first start and a short tip on each page. The catalogs, the installers and the extensions work as in 1.2.1.
@@ -49,7 +50,7 @@ Not tested: the answers picked with the mouse in the VM (they were picked with t
 - If `settings.json` cannot be written, the questions come back on the next start.
 - A tip covers the lower right corner of the page until it is closed.
 - The builds are not code-signed, so SmartScreen warns on the first run.
-- The other limitations of [1.2.0](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.2.0) still apply.
+- The other limitations of [1.2.0](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.2.0) still apply.
 
 ## Downloads
 

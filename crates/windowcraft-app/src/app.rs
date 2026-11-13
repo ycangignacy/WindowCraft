@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Application state and message handling.
 
 use crate::actions::{self, detect_all, detect_options};
@@ -1235,6 +1235,19 @@ impl App {
         self.load_inspect_rows(inspected)
     }
 
+    /// The changes of one Time Machine session with their live values.
+    fn load_changes(&self, id: u64) -> Task<Message> {
+        let lang = self.language;
+        self.blocking(
+            move |engine| {
+                let records = engine.store.changes(id).unwrap_or_default();
+                let views = records.into_iter().map(|record| live_view(&engine, record, lang)).collect();
+                (id, views)
+            },
+            |(id, views)| Message::Changes(id, views),
+        )
+    }
+
     fn load_inspect_rows(&self, inspected: Inspected) -> Task<Message> {
         let Inspected::Tweak(id) = &inspected else {
             return Task::none();
@@ -1660,24 +1673,45 @@ impl App {
                 });
             }
             Message::InstallAppx => {
-                let ids: Vec<(String, Option<String>)> = self
+                let packages: Vec<(String, String, Option<String>)> = self
                     .selected_appx
                     .iter()
                     .filter_map(|id| self.catalog.appx_package(id))
-                    .map(|package| (package.name.clone(), package.store_id.clone()))
+                    .map(|package| (package.id.clone(), package.name.clone(), package.store_id.clone()))
                     .collect();
                 let engine = self.engine.clone();
                 let lang = self.language;
-                return self.start_queue_job(t(lang, Msg::JobInstallingAppx), Some(Queue::Appx), move |context| {
-                    let total = ids.len().max(1) as f32;
-                    for (index, (name, store)) in ids.iter().enumerate() {
+                // Only installed packages leave the selection. A package with no
+                // Store id cannot be installed and stays ticked.
+                let done = Arc::new(std::sync::Mutex::new(Vec::new()));
+                let installed = done.clone();
+                let busy = self.job.is_some();
+                let task = self.start_queue_job(t(lang, Msg::JobInstallingAppx), Some(Queue::Appx), move |context| {
+                    let total = packages.len().max(1) as f32;
+                    let mut skipped = Vec::new();
+                    for (index, (id, name, store)) in packages.iter().enumerate() {
                         context.progress(index as f32 / total, name);
-                        if let Some(store) = store {
-                            engine.native.run(&NativeOp::WingetInstall { id: store.clone() }, &context.cancel)?;
+                        let Some(store) = store else {
+                            skipped.push(name.as_str());
+                            continue;
+                        };
+                        engine.native.run(&NativeOp::WingetInstall { id: store.clone() }, &context.cancel)?;
+                        if let Ok(mut installed) = installed.lock() {
+                            installed.push(id.clone());
                         }
                     }
-                    Ok(format_1(t(lang, Msg::NoticeInstalledPackages), &ids.len().to_string()))
+                    let count = packages.len() - skipped.len();
+                    let mut notice = format_1(t(lang, Msg::NoticeInstalledPackages), &count.to_string());
+                    if !skipped.is_empty() {
+                        notice.push_str(". ");
+                        notice.push_str(&format_1(t(lang, Msg::NoticeAppxNoStore), &skipped.join(", ")));
+                    }
+                    Ok(notice)
                 });
+                if !busy && let Some(job) = &mut self.job {
+                    job.done = Some(done);
+                }
+                return task;
             }
             Message::ImportProfile => {
                 return Task::perform(
@@ -1690,7 +1724,11 @@ impl App {
                 );
             }
             Message::ProfilePicked(path) => {
-                if let Some(path) = path {
+                // A job that ends unticks what it applied from the imported
+                // choices, so a new import during it would lose those ids.
+                if path.is_some() && self.job.is_some() {
+                    self.notice = Some(t(self.language, Msg::NoticeAnotherOperationRunning).to_owned());
+                } else if let Some(path) = path {
                     match std::fs::read_to_string(&path)
                         .map_err(|error| error.to_string())
                         .and_then(|text| windowcraft_config::import_any(&text, &self.catalog).map_err(|e| e.to_string()))
@@ -1976,15 +2014,7 @@ impl App {
                 }
                 self.open_session = Some(id);
                 self.timeline.channels[ACCORDION].snap(0.0);
-                let lang = self.language;
-                return self.blocking(
-                    move |engine| {
-                        let records = engine.store.changes(id).unwrap_or_default();
-                        let views = records.into_iter().map(|record| live_view(&engine, record, lang)).collect();
-                        (id, views)
-                    },
-                    |(id, views)| Message::Changes(id, views),
-                );
+                return self.load_changes(id);
             }
             Message::Changes(id, views) => {
                 if self.open_session == Some(id) {
@@ -2534,6 +2564,14 @@ impl App {
                     platform::taskbar_progress(window, None);
                 }
                 let mut tasks = vec![self.refresh_all()];
+                // An open session or X-Ray drawer would keep the values from
+                // before the job, with an undo button for a change already undone.
+                if let Some(id) = self.open_session {
+                    tasks.push(self.load_changes(id));
+                }
+                if let Some(inspected) = self.inspected.clone() {
+                    tasks.push(self.load_inspect_rows(inspected));
+                }
                 if kind == JobKind::OpenIso {
                     let media = work_dir().join("media");
                     tasks.push(self.blocking(
@@ -3320,6 +3358,42 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_picked_while_a_job_runs_is_refused() {
+        let mut rig = rig("uiimportbusy");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("profile.json");
+        std::fs::write(&path, r#"{"version":1,"toggles":{"show-ext":false}}"#).unwrap();
+        rig.app.imported.toggles.insert("show-ext".to_owned(), true);
+        rig.app.job = Some(job("Applying"));
+        send(&mut rig.app, Message::ProfilePicked(Some(path.clone())));
+        assert_eq!(rig.app.imported.toggles.get("show-ext"), Some(&true));
+        assert_eq!(rig.app.notice.as_deref(), Some(t(Language::En, Msg::NoticeAnotherOperationRunning)));
+
+        send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok("Done".to_owned()) }));
+        send(&mut rig.app, Message::ProfilePicked(Some(path)));
+        assert_eq!(rig.app.imported.toggles.get("show-ext"), Some(&false));
+    }
+
+    #[test]
+    fn appx_install_leaves_a_package_without_a_store_id_ticked() {
+        let mut rig = rig("uiappxinstall");
+        let listed = rig.app.catalog.appx.iter().find(|package| package.store_id.is_some()).unwrap().id.clone();
+        let unlisted = "microsoft-xbox-speech-to-text-overlay".to_owned();
+        assert!(rig.app.catalog.appx_package(&unlisted).is_some_and(|package| package.store_id.is_none()));
+        rig.app.selected_appx.extend([listed.clone(), unlisted.clone()]);
+        send(&mut rig.app, Message::InstallAppx);
+        let done = rig.app.job.as_ref().and_then(|job| job.done.clone()).expect("the install reports what it installed");
+        let deadline = Instant::now() + std::time::Duration::from_secs(10);
+        while done.lock().unwrap().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(*done.lock().unwrap(), vec![listed]);
+        send(&mut rig.app, Message::Job(JobEvent::Finished { outcome: Ok("Done".to_owned()) }));
+        assert_eq!(rig.app.selected_appx.iter().collect::<Vec<_>>(), [&unlisted]);
+    }
+
+    #[test]
     fn a_tweak_ticked_while_a_job_runs_stays_ticked() {
         let mut rig = rig("uiticked");
         for id in ["activity", "teredo"] {
@@ -4001,5 +4075,49 @@ mod tests {
             settle(&mut rig.app);
             render(&rig.app, large, &out.join(format!("settings-guide-{suffix}.png")));
         }
+    }
+
+    /// Writes the README screenshots in docs/screenshots: English, dark, 1280x800,
+    /// on the test sandbox, so no data of this computer appears.
+    /// `cargo test -p windowcraft-app render_readme_screens -- --ignored`.
+    #[test]
+    #[ignore = "writes PNG files into docs/screenshots"]
+    fn render_readme_screens() {
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/screenshots");
+        std::fs::create_dir_all(&out).unwrap();
+        let size = iced::Size::new(1280.0, 800.0);
+        let mut rig = toured("render-readme");
+        rig.app.language = Language::En;
+        rig.app.appearance = Appearance::Dark;
+        let shot = |app: &mut App, name: &str| {
+            settle(app);
+            app.tip = None;
+            render(app, size, &out.join(format!("{name}.png")));
+        };
+
+        send(&mut rig.app, Message::Navigate(Page::Tweaks));
+        let telemetry = Inspected::Tweak("telemetry".to_owned());
+        send(&mut rig.app, Message::Inspect(telemetry.clone()));
+        let tweak = rig.app.find_tweak("telemetry").unwrap();
+        let rows = rig.app.engine.inspect(&tweak, &TweakAction::Apply).unwrap();
+        send(&mut rig.app, Message::InspectRows(telemetry.clone(), rows));
+        shot(&mut rig.app, "tweaks");
+        send(&mut rig.app, Message::Inspect(telemetry));
+
+        for (page, name) in [
+            (Page::Applications, "applications"),
+            (Page::System, "system"),
+            (Page::Extensions, "extensions"),
+            (Page::Settings, "settings"),
+        ] {
+            send(&mut rig.app, Message::Navigate(page));
+            shot(&mut rig.app, name);
+        }
+
+        let mut first = rig_with("render-readme-first", guided());
+        first.app.language = Language::En;
+        first.app.appearance = Appearance::Dark;
+        settle(&mut first.app);
+        render(&first.app, size, &out.join("first-start.png"));
     }
 }

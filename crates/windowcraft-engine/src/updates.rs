@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Windows Update policy modes.
 
 use crate::error::{EngineError, Result};

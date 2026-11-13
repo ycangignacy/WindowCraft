@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Pure-Rust FAT32 formatter.
 //!
 //! Windows refuses to format FAT32 above 32 GB and the undocumented `fmifs`

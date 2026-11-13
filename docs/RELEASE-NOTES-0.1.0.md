@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 0.1.0
 
 This is the first pre-release of WindowCraft, a Windows 11 administration tool written in Rust. It runs on x64 and ARM64.

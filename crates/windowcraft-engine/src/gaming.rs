@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! MSI mode, interrupt priority, GPU settings and timer resolution.
 
 use crate::dynlib::DynLib;

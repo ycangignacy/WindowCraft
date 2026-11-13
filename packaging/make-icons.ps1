@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 <#
 .SYNOPSIS
     Regenerates every icon and installer image from assets\logo-source.jpg.

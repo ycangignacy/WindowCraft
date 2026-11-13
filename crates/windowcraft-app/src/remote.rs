@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Hands a second launch over to the running window.
 //!
 //! The single-instance mutex stops a second GUI. Before it exits, the second

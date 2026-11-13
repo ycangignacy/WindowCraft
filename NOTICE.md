@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # Third-Party Notices
 
 ## WinUtil import table
@@ -79,7 +80,7 @@ General Public License, version 3. Both texts are in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). WindowCraft does not modify
 LAME. The LAME sources it builds are the ones published in `mp3lame-sys` 0.2.0
 on crates.io, and the complete source of WindowCraft is at
-<https://github.com/ycangignacy/WindowCraft>, so `windowcraft.exe` can be
+<https://github.com/windowcraftdev/WindowCraft>, so `windowcraft.exe` can be
 rebuilt with a changed LAME as described under "Build from source" in the
 README.
 

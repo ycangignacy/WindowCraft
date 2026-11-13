@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.0.2-rc1
 
 This is a pre-release of 1.0.2. It changes how the interface scrolls and animates and nothing that touches the system. If it holds up, this release becomes the stable 1.0.2 as it is, with the same files.
@@ -44,7 +45,7 @@ The VM has no GPU, so every frame is painted on a virtual CPU. In it, the frame 
 
 ## Known bugs and limitations
 
-Nothing changed here since 1.0.1; see the [1.0.1 release notes](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.0.1). SEC-3 and KB-9 are still open, and the builds are still not code-signed.
+Nothing changed here since 1.0.1; see the [1.0.1 release notes](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.0.1). SEC-3 and KB-9 are still open, and the builds are still not code-signed.
 
 ## Downloads
 

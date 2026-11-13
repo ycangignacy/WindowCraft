@@ -1,4 +1,4 @@
-﻿// Made by ycangignacy
+﻿// Made by WindowCraft Dev Team
 //! Native Windows engine behind WindowCraft.
 
 pub mod appx;

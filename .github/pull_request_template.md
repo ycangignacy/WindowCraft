@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 ## Description
 
 What changed, and which issue it fixes.

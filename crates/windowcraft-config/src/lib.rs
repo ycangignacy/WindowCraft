@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Typed schemas and embedded catalogs.
 //!
 //! The catalogs are written for WindowCraft, and every operation in them is a

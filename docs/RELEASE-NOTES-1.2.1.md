@@ -1,3 +1,4 @@
+<!-- Made by WindowCraft Dev Team -->
 # WindowCraft 1.2.1
 
 This release fixes what a full test of 1.2.0 found. Nothing new was added, and the catalogs, the installers and the extensions work as in 1.2.0.
@@ -51,7 +52,7 @@ Not tested: the update mode read-back while Windows really reverts a service. Wi
 
 ## Known limitations
 
-Names and descriptions of catalog entries stay in English in every language, so the Windows Update page is mostly English. The other limitations of [1.2.0](https://github.com/ycangignacy/WindowCraft/releases/tag/v1.2.0) still apply.
+Names and descriptions of catalog entries stay in English in every language, so the Windows Update page is mostly English. The other limitations of [1.2.0](https://github.com/windowcraftdev/WindowCraft/releases/tag/v1.2.0) still apply.
 
 ## Downloads
 

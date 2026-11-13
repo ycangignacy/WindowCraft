@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Extensions and the outside tools they need.
 //!
 //! WindowCraft ships none of these tools, and nothing is installed by default.

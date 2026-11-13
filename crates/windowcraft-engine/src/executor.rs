@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Applies, detects and reverts catalog entries transactionally.
 
 use crate::error::{EngineError, Result};
@@ -33,6 +33,8 @@ pub struct RecordingRunner {
     /// Features that report as already on.
     pub features_on: Mutex<Vec<String>>,
     pub fail_on: Mutex<Option<NativeOp>>,
+    /// An optional feature that fails to enable.
+    pub fail_feature: Mutex<Option<String>>,
     pub feature_query_fails: std::sync::atomic::AtomicBool,
 }
 
@@ -49,6 +51,9 @@ impl NativeRunner for RecordingRunner {
     }
 
     fn enable_feature(&self, name: &str, _cancel: &CancelToken) -> Result<()> {
+        if self.fail_feature.lock().is_ok_and(|fail| fail.as_deref() == Some(name)) {
+            return Err(EngineError::Process { program: "injected".into(), code: 1, detail: "fault".into() });
+        }
         if let Ok(mut features) = self.features.lock() {
             features.push(name.to_owned());
         }
@@ -209,7 +214,7 @@ impl Engine {
     /// Finds which segmented option the live registry corresponds to.
     pub fn current_option(&self, tweak: &Tweak) -> Result<Option<String>> {
         for option in &tweak.options {
-            let action = TweakAction::Select(option.label.clone());
+            let action = TweakAction::Select(option.value().to_owned());
             let mut all = true;
             for target in self.registry_targets(&tweak.registry, &action)? {
                 let live = self.scope.read(&target.path, &target.name)?;
@@ -220,7 +225,7 @@ impl Engine {
                 };
             }
             if all {
-                return Ok(Some(option.label.clone()));
+                return Ok(Some(option.value().to_owned()));
             }
         }
         Ok(None)
@@ -592,8 +597,14 @@ impl Engine {
         let records = self.store.changes(session)?;
         let partial = !self.irreversible_in_session(session)?.is_empty();
         self.revert_records(session, &records)?;
-        let mut owners: Vec<&str> = records.iter().map(|record| record.owner.as_str()).collect();
-        owners.dedup();
+        // Each owner once, in session order, even when its records are not
+        // next to each other: undo steps must not run twice.
+        let mut owners: Vec<&str> = Vec::new();
+        for record in &records {
+            if !owners.contains(&record.owner.as_str()) {
+                owners.push(record.owner.as_str());
+            }
+        }
         for owner in owners {
             self.run_undo_ops(owner, &records)?;
             if let Some(mut state) = self.store.applied_state(owner)? {

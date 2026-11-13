@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Authenticode signature verification and publisher lookup.
 
 use crate::win::{from_wide, pcwstr, wide};

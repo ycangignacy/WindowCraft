@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Explorer, processes, settings broadcasts and Shell launches.
 
 use crate::error::{EngineError, Result};

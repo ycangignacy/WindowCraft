@@ -1,4 +1,4 @@
-# Made by ycangignacy
+# Made by WindowCraft Dev Team
 [package]
 name = "windowcraft-physics"
 description = "Spring solver, velocity tracking, momentum projection and pointer gestures"

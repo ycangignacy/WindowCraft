@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Child processes, used only where Windows exposes no public API.
 //!
 //! Binaries are addressed by absolute path, windows stay hidden, and a guard

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Release velocity estimation from recent pointer samples.
 
 const CAPACITY: usize = 20;

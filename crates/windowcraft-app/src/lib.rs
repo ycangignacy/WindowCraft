@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! WindowCraft desktop application and CLI.
 
 pub mod actions;

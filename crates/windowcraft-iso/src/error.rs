@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 use thiserror::Error;
 use windowcraft_engine::EngineError;
 

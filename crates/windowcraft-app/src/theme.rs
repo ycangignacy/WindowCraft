@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Design tokens. Surfaces and ink come from one palette per appearance.
 
 use iced::{Color, Font};

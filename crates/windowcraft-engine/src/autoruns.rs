@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Startup entries across Run keys, Startup folders, tasks and services.
 //!
 //! Disabling never deletes anything: Run entries use the same `StartupApproved`
@@ -94,6 +94,14 @@ fn run_entries() -> Vec<AutorunEntry> {
     entries
 }
 
+/// Hive of the `StartupApproved\StartupFolder` key for a Startup folder:
+/// the common folder under ProgramData keeps its flags in HKLM, as Task
+/// Manager does, and the user's folder in HKCU.
+fn folder_hive(folder: &str) -> Hive {
+    let common = std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_owned());
+    if folder.to_lowercase().starts_with(&common.to_lowercase()) { Hive::LocalMachine } else { Hive::CurrentUser }
+}
+
 fn folder_entries() -> Vec<AutorunEntry> {
     let mut folders = Vec::new();
     if let Some(root) = std::env::var_os("APPDATA") {
@@ -105,18 +113,21 @@ fn folder_entries() -> Vec<AutorunEntry> {
     let mut entries = Vec::new();
     for folder in folders {
         let Ok(items) = std::fs::read_dir(&folder) else { continue };
+        let location = folder.display().to_string();
+        let approved = RegPath { hive: folder_hive(&location), subkey: APPROVED_FOLDER.to_owned() };
         for item in items.flatten() {
             let name = item.file_name().to_string_lossy().into_owned();
             if name.eq_ignore_ascii_case("desktop.ini") {
                 continue;
             }
+            let flag = RegistryScope::System.read(&approved, &name).ok().flatten();
             entries.push(AutorunEntry {
+                enabled: is_enabled_flag(flag.as_ref()),
                 name,
                 source: EntrySource::StartupFolder,
-                location: folder.display().to_string(),
+                location: location.clone(),
                 command: item.path().display().to_string(),
                 binary: None,
-                enabled: true,
                 publisher: None,
                 signed: false,
             });
@@ -209,7 +220,7 @@ fn approved_location(entry: &AutorunEntry) -> Option<RegPath> {
             let hive = if entry.location.starts_with("HKLM") { Hive::LocalMachine } else { Hive::CurrentUser };
             Some(RegPath { hive, subkey: APPROVED_RUN.to_owned() })
         }
-        EntrySource::StartupFolder => Some(RegPath { hive: Hive::CurrentUser, subkey: APPROVED_FOLDER.to_owned() }),
+        EntrySource::StartupFolder => Some(RegPath { hive: folder_hive(&entry.location), subkey: APPROVED_FOLDER.to_owned() }),
         EntrySource::Task | EntrySource::Service => None,
     }
 }
@@ -272,6 +283,28 @@ mod tests {
         assert!(is_enabled_flag(Some(&RegValue::Binary(approved_bytes(true)))));
         assert!(!is_enabled_flag(Some(&RegValue::Binary(approved_bytes(false)))));
         assert_eq!(approved_bytes(false).len(), 12);
+    }
+
+    /// Before 1.4.1 every Startup folder item showed as on, and turning off
+    /// one in the common folder wrote its flag to HKCU, where it does nothing.
+    #[test]
+    fn startup_folder_flags_live_in_the_hive_of_their_folder() {
+        let common = std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_owned());
+        let entry = |location: String| AutorunEntry {
+            name: "Tool.lnk".into(),
+            source: EntrySource::StartupFolder,
+            location,
+            command: String::new(),
+            binary: None,
+            enabled: true,
+            publisher: None,
+            signed: false,
+        };
+        let shared = entry(format!(r"{common}\Microsoft\Windows\Start Menu\Programs\Startup"));
+        let own = entry(r"C:\Users\someone\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup".to_owned());
+        assert_eq!(approved_location(&shared).map(|path| path.hive), Some(Hive::LocalMachine));
+        assert_eq!(approved_location(&own).map(|path| path.hive), Some(Hive::CurrentUser));
+        assert_eq!(approved_location(&own).unwrap().subkey, APPROVED_FOLDER);
     }
 
     #[test]

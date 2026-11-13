@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Pointer gesture state machines.
 //!
 //! The UI layer feeds raw pointer samples in and reads back decisions, which

@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Headless per-frame CPU cost of the desktop interface.
 //!
 //! Run in release with

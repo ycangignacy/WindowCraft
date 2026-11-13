@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! Moves video and sound between containers without re-encoding.
 //!
 //! MP4, MOV and M4A are read and written by `mp4`, MKV and WebM by `mkv`, and

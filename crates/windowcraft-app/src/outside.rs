@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! A layer that reports a press anywhere it is reached and lets the press go on.
 //!
 //! It sits in the window stack under a floating card and over the pages. A

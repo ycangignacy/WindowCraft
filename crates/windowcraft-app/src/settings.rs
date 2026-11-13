@@ -1,4 +1,4 @@
-// Made by ycangignacy
+// Made by WindowCraft Dev Team
 //! What the user chose on the Settings page, kept in
 //! `%LOCALAPPDATA%\WindowCraft\settings.json` next to the language.
 //!
