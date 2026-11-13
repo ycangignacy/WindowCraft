@@ -1,10 +1,12 @@
 <!-- Made by WindowCraft Dev Team -->
 # Release Checklist
 
-Status as of 2026-11-13: 1.4.1 is prepared and not published yet. It fixes the option lists in
-the translated languages and seven bugs from a code review of 1.4.0, and moves the credit to
-WindowCraft Dev Team, see `docs/RELEASE-NOTES-1.4.1.md`. A short VM pass (upgrade, uninstall, WCLANGUAGE, the fixes in Polish) passed 76 of 76. 1.4.0 is
-the current stable release, published with x64 and ARM64 files matching `SHA256SUMS.txt`. It
+Status as of 2026-11-13: 1.4.1 is the current stable release, published from
+github.com/windowcraftdev/WindowCraft with x64 and ARM64 files matching `SHA256SUMS.txt`. It
+fixes the option lists in the translated languages and seven bugs from a code review of 1.4.0,
+and moves the credit to WindowCraft Dev Team, see `docs/RELEASE-NOTES-1.4.1.md`. A short VM
+pass (upgrade, uninstall, WCLANGUAGE, the fixes in Polish) passed 76 of 76. 1.4.0 was
+published with x64 and ARM64 files matching `SHA256SUMS.txt`. It
 translates the catalog into the seven other interface languages and closes the rest of the
 1.3.0 audit (E10, E11, D1 to D12, offline t14), see `docs/RELEASE-NOTES-1.4.0.md`. 1.3.1
 fixed what a full audit of 1.3.0 found in the engine, ISO Studio, the interface, profiles and
