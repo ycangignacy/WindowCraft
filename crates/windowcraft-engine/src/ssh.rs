@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! OpenSSH Server setup.
 
 use crate::atomicfs::atomic_write;

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Rubber-banding past a boundary.
 
 /// Progressive resistance past a boundary. The default constant is `0.55`.

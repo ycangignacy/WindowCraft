@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Child processes, used only where Windows exposes no public API.
 //!
 //! Binaries are addressed by absolute path, windows stay hidden, and a guard

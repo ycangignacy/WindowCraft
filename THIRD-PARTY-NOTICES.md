@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # Third-Party Notices
 
 WindowCraft links the following third-party Rust crates.

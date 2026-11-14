@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Structural validation of catalogs. Only tests run this over the embedded data.
 
 use crate::catalog::Catalog;

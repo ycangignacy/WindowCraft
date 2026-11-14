@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Embedded catalogs, parsed once at startup.
 
 use crate::schema::*;

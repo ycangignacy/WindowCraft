@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Console front end for `windowcraft.exe`.
 //!
 //! The main binary uses the GUI subsystem so a double click opens no console,

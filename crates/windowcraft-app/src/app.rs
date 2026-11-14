@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Application state and message handling.
 
 use crate::actions::{self, detect_all, detect_options};

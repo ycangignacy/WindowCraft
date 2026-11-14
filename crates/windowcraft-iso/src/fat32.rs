@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Pure-Rust FAT32 formatter.
 //!
 //! Windows refuses to format FAT32 above 32 GB and the undocumented `fmifs`

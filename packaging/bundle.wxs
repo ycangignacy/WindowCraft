@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 <!-- setup.exe: a single download that carries the MSI and shows a simple UI. -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:bal="http://schemas.microsoft.com/wix/BalExtension">
   <Bundle Name="WindowCraft"
           Version="$(var.Version)"
-          Manufacturer="WindowCraft Dev Team"
+          Manufacturer="Nordan"
           UpgradeCode="1F4E9B72-5A1C-4D86-B3E7-8C2F60D1E948"
           IconSourceFile="$(var.Assets)\windowcraft.ico"
           AboutUrl="$(var.ProjectUrl)"

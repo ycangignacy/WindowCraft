@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.1.0
 
 This release adds a Settings page with an optional scheduled check for reverted tweaks, replaces the text of every catalog entry, and fixes the installer and the Start menu entry. The registry values, services and operations of the tweaks are the same as in 1.0.3.

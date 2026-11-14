@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Small RAII wrappers shared across the native adapters.
 
 use crate::error::{EngineError, Result};

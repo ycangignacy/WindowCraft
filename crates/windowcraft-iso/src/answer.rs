@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! `autounattend.xml`, `ei.cfg` and first-boot provisioning generation.
 
 use serde::{Deserialize, Serialize};

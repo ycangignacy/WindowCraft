@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! File and directory ACLs through the Win32 security APIs.
 //!
 //! All principals are SIDs, so behaviour does not change with the system locale.

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Frame pacing against the display refresh.
 //!
 //! The software renderer presents through GDI, which never waits for the

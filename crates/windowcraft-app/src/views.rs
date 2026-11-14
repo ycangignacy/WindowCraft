@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! The three-column workspace and its eight modules.
 
 use crate::app::*;

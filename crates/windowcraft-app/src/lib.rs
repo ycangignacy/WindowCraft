@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! WindowCraft desktop application and CLI.
 
 pub mod actions;

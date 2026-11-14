@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Converts pictures, video and audio between formats with ffmpeg.
 //!
 //! Everything happens on this machine: ffmpeg reads the source and writes the

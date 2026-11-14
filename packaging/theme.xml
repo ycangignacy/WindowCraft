@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WixStdBA RtfTheme.xml from WiX Toolset 3.14 (tag wix3141rtm), changed by the WindowCraft Dev Team:
+<!-- WixStdBA RtfTheme.xml from WiX Toolset 3.14 (tag wix3141rtm), changed by Nordan:
      the Install page has a LaunchWindowCraft checkbox. Copyright (c) .NET Foundation and
      contributors. Microsoft Reciprocal License, see packaging/lang/WIX-LICENSE.txt. -->
 <Theme xmlns="http://wixtoolset.org/schemas/thmutil/2010">

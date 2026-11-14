@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.2.1
 
 This release fixes what a full test of 1.2.0 found. Nothing new was added, and the catalogs, the installers and the extensions work as in 1.2.0.

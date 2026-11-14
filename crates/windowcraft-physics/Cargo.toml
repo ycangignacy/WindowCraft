@@ -1,4 +1,4 @@
-# Made by WindowCraft Dev Team
+# Made by Nordan
 [package]
 name = "windowcraft-physics"
 description = "Spring solver, velocity tracking, momentum projection and pointer gestures"

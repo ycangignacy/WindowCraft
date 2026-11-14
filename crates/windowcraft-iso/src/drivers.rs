@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Driver export, deduplication and injection.
 
 use crate::error::Result;

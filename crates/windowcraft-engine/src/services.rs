@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Windows Service Control Manager.
 
 use crate::error::{EngineError, Result};

@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.0.2-rc1
 
 This is a pre-release of 1.0.2. It changes how the interface scrolls and animates and nothing that touches the system. If it holds up, this release becomes the stable 1.0.2 as it is, with the same files.

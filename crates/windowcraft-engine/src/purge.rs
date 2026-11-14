@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Removes what WindowCraft itself keeps on the machine, for the uninstaller
 //! and for portable users. Settings a user chose to change stay as they are.
 //!

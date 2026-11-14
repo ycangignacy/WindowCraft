@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.3.0
 
 This release adds an introduction on the first start and a short tip on each page. The catalogs, the installers and the extensions work as in 1.2.1.

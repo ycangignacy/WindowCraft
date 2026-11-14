@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Translated catalog text.
 //!
 //! The catalog itself is English. `catalog/i18n/<tag>.json` holds the names,

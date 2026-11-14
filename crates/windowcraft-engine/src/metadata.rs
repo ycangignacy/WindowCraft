@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Removes metadata from photos, audio and video.
 //!
 //! Everything runs on this machine and nothing is sent anywhere. Images, MP3

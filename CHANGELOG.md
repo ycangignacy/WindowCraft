@@ -1,5 +1,9 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # Changelog
+
+## Unreleased
+
+- The credit is "Made by Nordan" in the app, the CLI help, the installers, the exe version data, `LICENSE`, `Cargo.toml`, the README and the website. Email addresses and links stay the same.
 
 ## 1.4.1 - 2026-11-13
 

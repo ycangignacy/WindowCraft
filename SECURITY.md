@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # Security Policy
 
 WindowCraft runs elevated and changes Windows system settings, so a vulnerability can affect the whole machine. Do not open a public issue for one.

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Startup entries across Run keys, Startup folders, tasks and services.
 //!
 //! Disabling never deletes anything: Run entries use the same `StartupApproved`

@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.0.1
 
 This is the first stable release of WindowCraft, a Windows 11 tool for apps, tweaks, Windows Update policy and custom installation media. It runs on x64 and ARM64, in English, Polish, German, French, Spanish, Italian, Brazilian Portuguese and Ukrainian.

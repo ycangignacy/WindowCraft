@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! ISO Studio pipeline: select, configure, export.
 //!
 //! The work directory persists between steps. `session.json` records the last

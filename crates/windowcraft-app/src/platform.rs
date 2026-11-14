@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Windows integration for the shell of the app: backdrop, accessibility
 //! settings, taskbar progress, file dialogs and the console.
 

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -149,7 +149,7 @@ for (const crate of crates) {
 
 // Build Markdown
 const out = [];
-out.push('<!-- Made by WindowCraft Dev Team -->');
+out.push('<!-- Made by Nordan -->');
 out.push('# Third-Party Notices');
 out.push('');
 out.push('WindowCraft links the following third-party Rust crates.');

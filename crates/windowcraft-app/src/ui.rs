@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Shared view building blocks: grouped inset lists, controls and text styles.
 
 use crate::app::Message;

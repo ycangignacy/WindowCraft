@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 <p align="center">
   <img src="crates/windowcraft-app/assets/logo-256.png" alt="WindowCraft logo" width="128">
 </p>
@@ -147,4 +147,4 @@ Write to <support@windowcraft.dev> or open an issue on [GitHub Issues](https://g
 
 WindowCraft is under the MIT License, see [LICENSE](LICENSE). [NOTICE.md](NOTICE.md) lists the third-party material in the repository and the installers, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) the licenses of the Rust crates and LAME.
 
-Made by WindowCraft Dev Team.
+Made by Nordan.

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Headless per-frame CPU cost of the desktop interface.
 //!
 //! Run in release with

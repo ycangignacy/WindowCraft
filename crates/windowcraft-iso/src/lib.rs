@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Windows 11 ISO Studio.
 
 pub mod answer;

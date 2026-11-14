@@ -1,4 +1,4 @@
-﻿// Made by WindowCraft Dev Team
+﻿// Made by Nordan
 //! Native Windows engine behind WindowCraft.
 
 pub mod appx;

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! What the first-start questions recorded and which page tips were seen.
 //!
 //! Parsed and written the same way as [`crate::Profile`]: a version number,

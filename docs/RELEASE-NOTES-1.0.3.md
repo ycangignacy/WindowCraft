@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.0.3
 
 This release fixes bugs. Nothing that changes the system is different from 1.0.2.

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! DISM API bindings.
 //!
 //! The DLL is loaded at runtime because the import library ships only with the

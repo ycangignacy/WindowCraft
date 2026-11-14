@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Sandboxed helpers shared by unit and integration tests.
 
 use crate::registry::{Hive, RegPath, RegistryScope};

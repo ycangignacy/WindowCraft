@@ -1,5 +1,5 @@
 # WindowCraft PowerShell profile
-# Made by WindowCraft Dev Team. Installed by WindowCraft from System, and removed there too,
+# Made by Nordan. Installed by WindowCraft from System, and removed there too,
 # which puts the previous profile back. It downloads nothing and changes nothing
 # outside the current PowerShell session.
 

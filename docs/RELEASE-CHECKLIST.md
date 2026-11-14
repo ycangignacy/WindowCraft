@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # Release Checklist
 
 Status as of 2026-11-13: 1.4.1 is the current stable release, published from

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! End-to-end engine tests against real registry calls, confined to
 //! `HKCU\Software\WindowCraft_TestSandbox` and an in-memory service table.
 

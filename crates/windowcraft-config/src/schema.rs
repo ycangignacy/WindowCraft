@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Declarative catalog entries. Unknown keys are rejected everywhere so a typo
 //! in a custom config fails loudly instead of silently doing nothing.
 

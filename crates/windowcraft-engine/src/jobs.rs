@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Background jobs with cooperative cancellation and bounded buffers.
 //!
 //! Progress flows through a bounded channel and logs through a ring buffer, so

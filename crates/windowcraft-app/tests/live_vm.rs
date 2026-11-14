@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Live tests for a disposable VirtualBox guest. They change the real system:
 //! registry, services, AppX packages, optional features, update policy, and
 //! with the ISO variables set, ISO builds and a USB disk.

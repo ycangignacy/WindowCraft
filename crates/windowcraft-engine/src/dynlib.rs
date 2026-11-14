@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Loads optional system DLLs from System32 only.
 //!
 //! `LOAD_LIBRARY_SEARCH_SYSTEM32` blocks DLL planting next to the portable

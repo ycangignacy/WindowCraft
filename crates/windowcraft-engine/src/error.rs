@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, EngineError>;

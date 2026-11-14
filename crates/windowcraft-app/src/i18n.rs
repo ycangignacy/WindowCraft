@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Translation tables, language detection and localization helpers.
 
 use std::fmt;
@@ -1454,7 +1454,7 @@ fn en(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Standard user",
-        Msg::MadeBy => "Made by WindowCraft Dev Team",
+        Msg::MadeBy => "Made by Nordan",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applications",
@@ -1955,7 +1955,7 @@ fn pl(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Użytkownik standardowy",
-        Msg::MadeBy => "Twórcy: WindowCraft Dev Team",
+        Msg::MadeBy => "Twórca: Nordan",
         Msg::BuildFormat => "Kompilacja {}",
 
         Msg::PageApplications => "Aplikacje",
@@ -2456,7 +2456,7 @@ fn de(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrator",
         Msg::StandardUser => "Standardbenutzer",
-        Msg::MadeBy => "Von WindowCraft Dev Team",
+        Msg::MadeBy => "Von Nordan",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Anwendungen",
@@ -2957,7 +2957,7 @@ fn fr(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrateur",
         Msg::StandardUser => "Utilisateur standard",
-        Msg::MadeBy => "Par WindowCraft Dev Team",
+        Msg::MadeBy => "Par Nordan",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applications",
@@ -3458,7 +3458,7 @@ fn es(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrador",
         Msg::StandardUser => "Usuario estándar",
-        Msg::MadeBy => "Por WindowCraft Dev Team",
+        Msg::MadeBy => "Por Nordan",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Aplicaciones",
@@ -3959,7 +3959,7 @@ fn it(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Amministratore",
         Msg::StandardUser => "Utente standard",
-        Msg::MadeBy => "Creato da WindowCraft Dev Team",
+        Msg::MadeBy => "Creato da Nordan",
         Msg::BuildFormat => "Build {}",
 
         Msg::PageApplications => "Applicazioni",
@@ -4460,7 +4460,7 @@ fn pt_br(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Administrador",
         Msg::StandardUser => "Usuário padrão",
-        Msg::MadeBy => "Criado por WindowCraft Dev Team",
+        Msg::MadeBy => "Criado por Nordan",
         Msg::BuildFormat => "Compilação {}",
 
         Msg::PageApplications => "Aplicativos",
@@ -4961,7 +4961,7 @@ fn uk(msg: Msg) -> &'static str {
     match msg {
         Msg::Administrator => "Адміністратор",
         Msg::StandardUser => "Звичайний користувач",
-        Msg::MadeBy => "Автори: WindowCraft Dev Team",
+        Msg::MadeBy => "Автор: Nordan",
         Msg::BuildFormat => "Збірка {}",
 
         Msg::PageApplications => "Програми",

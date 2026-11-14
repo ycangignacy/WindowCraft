@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Same DLL planting protection as the main binary: static imports resolve
 //! from System32 only.
 

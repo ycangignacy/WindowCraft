@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Eased mouse-wheel scrolling for any scrollable inside it.
 //!
 //! Iced moves a scrollable by a fixed 60 px on every wheel notch, so a list

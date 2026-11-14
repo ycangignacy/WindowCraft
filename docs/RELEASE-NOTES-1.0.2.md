@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.0.2
 
 This release makes scrolling and animation smooth. It moves drawing to the GPU and eases the mouse wheel. Nothing that changes the system is different from 1.0.1.

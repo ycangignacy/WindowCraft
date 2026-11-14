@@ -1,4 +1,4 @@
-# Made by WindowCraft Dev Team
+# Made by Nordan
 [package]
 name = "windowcraft-config"
 description = "Strongly typed schemas, embedded catalogs and profile parsers"

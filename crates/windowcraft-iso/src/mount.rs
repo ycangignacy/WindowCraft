@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Read-only ISO mounting through the virtual disk API.
 
 use crate::error::{IsoError, Result};

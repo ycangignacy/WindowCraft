@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Parallel DNS benchmark measuring real query latency over UDP, TCP and DoH.
 
 use crate::download::http_client;

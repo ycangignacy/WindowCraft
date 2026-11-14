@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Applies, detects and reverts catalog entries transactionally.
 
 use crate::error::{EngineError, Result};

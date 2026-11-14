@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! WindowCraft profiles and legacy WinUtil JSON compatibility.
 
 use crate::catalog::Catalog;

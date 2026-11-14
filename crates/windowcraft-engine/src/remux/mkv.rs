@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Reading and writing Matroska and WebM.
 //!
 //! The reader walks clusters header by header and records where each frame

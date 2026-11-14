@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Closed-form damped harmonic oscillator using Apple's parameterization.
 //!
 //! `omega_n = 2 * PI / response` and `c = 2 * damping * omega_n`, with unit

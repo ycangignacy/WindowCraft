@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Read-only checks against the live system. They guard against fixtures that
 //! drift from what Windows really stores. Nothing here writes anything.
 

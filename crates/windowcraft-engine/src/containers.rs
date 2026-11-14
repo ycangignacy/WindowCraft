@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Removes metadata from audio and video containers without ffmpeg.
 //!
 //! The streams are never touched. Most containers are cleaned in place on a

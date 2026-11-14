@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.4.1
 
 This release fixes option lists in the seven translated interface languages and seven smaller bugs found in a code review of 1.4.0 and one layout bug in the X-Ray Inspector, and moves the credit to WindowCraft Dev Team. No pages or extensions were added.

@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.2.0
 
 This release adds the Extensions page: a metadata stripper, a file converter, additional formats through ffmpeg and a YouTube downloader. None of them is installed until you choose it. Tweaks, applications, ISO Studio, Time Machine and the installers work as in 1.1.0.

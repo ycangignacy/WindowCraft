@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Parallel cache scanner and cleaner.
 //!
 //! Reparse points are never followed: a junction inside a temp folder could

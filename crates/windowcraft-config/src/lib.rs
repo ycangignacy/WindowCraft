@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Typed schemas and embedded catalogs.
 //!
 //! The catalogs are written for WindowCraft, and every operation in them is a

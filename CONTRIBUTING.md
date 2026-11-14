@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # Contributing to WindowCraft
 
 Send changes as GitHub pull requests. WindowCraft is written in Rust for Windows 11 on x64 and ARM64.

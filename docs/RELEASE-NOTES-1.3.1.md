@@ -1,4 +1,4 @@
-<!-- Made by WindowCraft Dev Team -->
+<!-- Made by Nordan -->
 # WindowCraft 1.3.1
 
 This release fixes what a full audit of 1.3.0 found across the engine, ISO Studio, the interface, profile handling and the eight interface languages. No new pages or extensions were added.

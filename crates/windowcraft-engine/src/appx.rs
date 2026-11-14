@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! AppX and MSIX packages through WinRT, without `Get-AppxPackage`.
 
 use crate::error::{EngineError, Result};

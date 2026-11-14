@@ -1,4 +1,4 @@
-# Made by WindowCraft Dev Team
+# Made by Nordan
 <#
 .SYNOPSIS
     Regenerates every icon and installer image from assets\logo-source.jpg.

@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Operating system facts used by the UI, reports and guards.
 
 use crate::error::{EngineError, Result};

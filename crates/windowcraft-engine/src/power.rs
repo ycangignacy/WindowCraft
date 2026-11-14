@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Power plans through PowrProf and System Restore through srclient.
 
 use crate::dynlib::DynLib;

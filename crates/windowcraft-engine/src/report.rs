@@ -1,4 +1,4 @@
-// Made by WindowCraft Dev Team
+// Made by Nordan
 //! Privacy-safe environment report.
 //!
 //! Only hardware class, OS build, tool versions and boolean tweak states go in.
